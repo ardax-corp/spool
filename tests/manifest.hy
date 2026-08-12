@@ -1,6 +1,6 @@
 use manifest::{
     deps_parse, dep_kind, dep_name, dep_git, dep_version, dep_path, deps_insert_line,
-    make_git_dep, format_dep_line, deps_has_name,
+    make_git_dep, format_dep_line, deps_has_name, package_name_parse,
 };
 use text::{contains};
 
@@ -49,4 +49,12 @@ http = { git = \"https://x\", version = \"*\" }
     let deps = deps_parse(body)?;
     assert(deps_has_name(deps, "http"))?;
     assert(deps_has_name(deps, "missing") == false)?;
+}
+
+test("package_name_parse reads [package] name") {
+    let body = "[package]
+name = \"app\"
+version = \"0.1.0\"
+";
+    assert(package_name_parse(body) == "app")?;
 }

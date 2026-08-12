@@ -1,5 +1,5 @@
 // Parse and update coil.toml [dependencies] (git / path inline tables).
-use text::{trim, starts_with, ends_with, split, join as text_join, slice};
+use text::{trim, starts_with, ends_with, split, join as text_join, slice, contains};
 use io::file::{read_text, write_text};
 use io::fs::{exists};
 use string::{format};
@@ -170,6 +170,68 @@ fn deps_parse(string body) -> Result<Vec<string>, string> {
         out.push(dep);
     }
     return out;
+}
+
+fn package_name_parse(string body) -> string {
+    let lines = match split(body, "\n") {
+        Result::Ok(ls) => ls,
+        Result::Err(_) => {
+            return "";
+        },
+    };
+    let in_pkg = false;
+    let i = 0;
+    while i < len(lines) {
+        let line = match trim(lines[i]) {
+            Result::Ok(t) => t,
+            Result::Err(_) => lines[i],
+        };
+        i = i + 1;
+        if len(line) == 0 {
+            continue;
+        }
+        if starts_with(line, "#") {
+            continue;
+        }
+        if starts_with(line, "[") {
+            in_pkg = line == "[package]";
+            continue;
+        }
+        if in_pkg == false {
+            continue;
+        }
+        if contains(line, "=") == false {
+            continue;
+        }
+        let kv_res = parse_kv_line(line);
+        match kv_res {
+            Result::Ok(kv) => {
+                let (k, v) = kv;
+                if k == "name" {
+                    return v;
+                }
+            },
+            Result::Err(_) => {},
+        };
+    }
+    return "";
+}
+
+fn package_name_read(string path) -> string {
+    let present = match exists(path) {
+        Result::Ok(v) => v,
+        Result::Err(_) => false,
+    };
+    if present == false {
+        return "";
+    }
+    let body = match read_text(path) {
+        Result::Ok(s) => s,
+        Result::Err(_) => {
+            return "";
+        },
+    };
+    return package_name_parse(body);
 }
 
 fn deps_read(string path) -> Result<Vec<string>, string> {
