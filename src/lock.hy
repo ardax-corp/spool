@@ -193,16 +193,16 @@ fn lock_serialize(Vec<string> packages) -> string {
 
 fn finish_pkg(string name, string git, string tag, string rev, string hash) -> Result<string, string> {
     if len(name) == 0 {
-        raise "package missing name";
+        raise "corrupt coil.lock: package missing name";
     }
     if len(git) == 0 {
-        raise "package missing git";
+        raise "corrupt coil.lock: package missing git";
     }
     if len(rev) == 0 {
-        raise "package missing rev";
+        raise "corrupt coil.lock: package missing rev";
     }
     if len(hash) == 0 {
-        raise "package missing content_hash";
+        raise "corrupt coil.lock: package missing content_hash";
     }
     return make_git_pkg(name, git, tag, rev, hash);
 }
@@ -247,7 +247,7 @@ fn lock_parse(string source) -> Result<Vec<string>, string> {
             continue;
         }
         if in_pkg == false {
-            raise format("unexpected lock line: %s", line);
+            raise format("corrupt coil.lock: unexpected line: %s", line);
         }
         let kv = parse_kv_line(line)?;
         let (k, v) = kv;
@@ -266,7 +266,7 @@ fn lock_parse(string source) -> Result<Vec<string>, string> {
                         if k == "content_hash" {
                             hash = v;
                         } else {
-                            raise format("unknown lock key %s", k);
+                            raise format("corrupt coil.lock: unknown key %s", k);
                         }
                     }
                 }
@@ -291,9 +291,20 @@ fn lock_write(string path, Vec<string> packages) -> Result<int, string> {
 fn lock_read(string path) -> Result<Vec<string>, string> {
     let body = match read_text(path) {
         Result::Ok(s) => s,
-        Result::Err(_) => raise format("failed to read %s", path),
+        Result::Err(_) => raise format("missing coil.lock: failed to read %s", path),
     };
     return lock_parse(body)?;
+}
+
+fn lock_find(Vec<string> packages, string name) -> string {
+    let i = 0;
+    while i < len(packages) {
+        if lock_pkg_name(packages[i]) == name {
+            return packages[i];
+        }
+        i = i + 1;
+    }
+    return "";
 }
 
 fn lock_read_or_empty(string path) -> Result<Vec<string>, string> {

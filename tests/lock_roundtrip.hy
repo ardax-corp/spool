@@ -2,6 +2,7 @@ use lock::{
     make_git_pkg, lock_serialize, lock_parse, lock_pkg_name, lock_pkg_hash, lock_hashes_match,
     lock_upsert,
 };
+use text::{contains};
 
 test("lock round-trip preserves fields and sorts by name") {
     let pkgs = Vec::new();
@@ -32,4 +33,16 @@ test("lock_upsert replaces by name") {
     pkgs = lock_upsert(pkgs, make_git_pkg("http", "https://x", "v2", "c2", "h2"));
     assert(len(pkgs) == 1)?;
     assert(lock_pkg_hash(pkgs[0]) == "h2")?;
+}
+
+test("lock_parse names corrupt files") {
+    let r = lock_parse("not a lock\n");
+    match r {
+        Result::Ok(_) => {
+            assert(false)?;
+        },
+        Result::Err(e) => {
+            assert(contains(e, "corrupt coil.lock"))?;
+        },
+    };
 }
