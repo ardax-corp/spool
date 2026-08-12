@@ -184,3 +184,54 @@ fn select_tag(string requirement, Vec<string> tags) -> Result<string, string> {
     }
     return best_tag;
 }
+
+fn tag_satisfies_all(string tag, Vec<string> reqs) -> Result<bool, string> {
+    let ver = parse_semver(tag)?;
+    let i = 0;
+    while i < len(reqs) {
+        let ok = satisfies_caret(reqs[i], ver)?;
+        if ok == false {
+            return false;
+        }
+        i = i + 1;
+    }
+    return true;
+}
+
+fn select_tag_all(Vec<string> reqs, Vec<string> tags) -> Result<string, string> {
+    if len(reqs) == 0 {
+        raise "no version requirements";
+    }
+    let best_tag = "";
+    let has_best = false;
+    let best = SemVer::Ver(0, 0, 0);
+    let i = 0;
+    while i < len(tags) {
+        let tag = tags[i];
+        i = i + 1;
+        let parsed = parse_semver(tag);
+        match parsed {
+            Result::Ok(ver) => {
+                let ok = tag_satisfies_all(tag, reqs)?;
+                if ok {
+                    if has_best == false {
+                        has_best = true;
+                        best = ver;
+                        best_tag = tag;
+                    } else {
+                        if cmp_semver(ver, best) > 0 {
+                            best = ver;
+                            best_tag = tag;
+                        }
+                    }
+                }
+            },
+            Result::Err(_) => {
+            },
+        };
+    }
+    if has_best == false {
+        raise "no tag matches combined requirements";
+    }
+    return best_tag;
+}

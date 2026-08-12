@@ -1,4 +1,4 @@
-use semver::{parse_semver, satisfies_caret, select_tag, cmp_semver, SemVer};
+use semver::{parse_semver, satisfies_caret, select_tag, select_tag_all, cmp_semver, SemVer};
 
 test("parse_semver accepts v prefix") {
     let a = parse_semver("v1.2.3")?;
@@ -36,4 +36,35 @@ test("star matches any semver tag") {
     tags.push("v2.0.0");
     let got = select_tag("*", tags)?;
     assert(got == "v2.0.0")?;
+}
+
+test("select_tag_all unifies compatible carets") {
+    let tags: Vec<string> = Vec::new();
+    tags.push("v1.0.0");
+    tags.push("v1.2.0");
+    tags.push("v1.5.0");
+    tags.push("v2.0.0");
+    let reqs: Vec<string> = Vec::new();
+    reqs.push("^1.0");
+    reqs.push("^1.2");
+    let got = select_tag_all(reqs, tags)?;
+    assert(got == "v1.5.0")?;
+}
+
+test("select_tag_all rejects incompatible carets") {
+    let tags: Vec<string> = Vec::new();
+    tags.push("v1.0.0");
+    tags.push("v2.0.0");
+    let reqs: Vec<string> = Vec::new();
+    reqs.push("^1.0");
+    reqs.push("^2.0");
+    let r = select_tag_all(reqs, tags);
+    match r {
+        Result::Ok(_) => {
+            assert(false)?;
+        },
+        Result::Err(_) => {
+            assert(true)?;
+        },
+    };
 }
