@@ -41,6 +41,10 @@ fn ensure_dir(string path) -> Result<int, string> {
     };
 }
 
+fn git_sh_preamble() -> string {
+    return "#!/bin/sh\nset -e\nexport GIT_TERMINAL_PROMPT=0\n";
+}
+
 fn write_status(string root, string msg) -> Result<int, string> {
     ensure_dir(join2(root, ".spool"))?;
     return match write_text(join2(root, ".spool/status"), msg) {

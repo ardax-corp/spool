@@ -11,18 +11,20 @@ use lock::{
     lock_read_or_empty, lock_pkg_name, lock_git_url, lock_git_rev, lock_git_hash,
 };
 use roots::{link_dep, ensure_roots_entry};
-use util::{join2, join3, join4, ensure_dir, write_status};
+use util::{join2, join3, join4, ensure_dir, write_status, git_sh_preamble};
 use config::{cache_root};
 use cache_url::{url_cache_key};
 use resolve::{
     run_add_manifest, run_pick, run_apply_resolved, run_list_git_deps, path_dep_links,
+    run_collect, run_check_install,
 };
 
 fn run_plan(string root) -> Result<int, string> {
     let packages = lock_read_or_empty(join2(root, "coil.lock"))?;
     ensure_dir(join2(root, ".spool"))?;
-    let script = "#!/bin/sh\nset -e\n";
+    let script = git_sh_preamble();
     let links = "";
+    let verify = "";
     let i = 0;
     while i < len(packages) {
         let p = packages[i];
@@ -76,6 +78,7 @@ fn run_plan(string root) -> Result<int, string> {
         }
 
         links = links + name + "\t" + dest + "\n";
+        verify = verify + name + "\t" + dest + "\t" + hash + "\n";
     }
 
     let path_links = path_dep_links(root)?;
@@ -88,6 +91,10 @@ fn run_plan(string root) -> Result<int, string> {
     match write_text(join2(root, ".spool/links.tsv"), links) {
         Result::Ok(_) => 0,
         Result::Err(_) => raise "write links.tsv failed",
+    };
+    match write_text(join2(root, ".spool/verify.tsv"), verify) {
+        Result::Ok(_) => 0,
+        Result::Err(_) => raise "write verify.tsv failed",
     };
     return 0;
 }
@@ -292,6 +299,30 @@ fn main() {
             },
             Result::Err(e) => {
                 finish_err(root, format("spool list_git_deps failed: %s\n", e));
+            },
+        };
+        return;
+    }
+
+    if cmd == "collect" {
+        match run_collect(root) {
+            Result::Ok(_) => {
+                finish_ok(root, "spool collect: ok\n");
+            },
+            Result::Err(e) => {
+                finish_err(root, format("spool collect failed: %s\n", e));
+            },
+        };
+        return;
+    }
+
+    if cmd == "check_install" {
+        match run_check_install(root) {
+            Result::Ok(_) => {
+                finish_ok(root, "spool check_install: ok\n");
+            },
+            Result::Err(e) => {
+                finish_err(root, format("spool check_install failed: %s\n", e));
             },
         };
         return;
