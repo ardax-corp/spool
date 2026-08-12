@@ -19,7 +19,7 @@ jobs:
       # Sibling of spool so coil.toml roots `../coil-lang/stdlib` resolve.
       - uses: actions/checkout@v4
         with:
-          repository: DaGhostman/coil-lang
+          repository: ardax-corp/coil-lang
           path: coil-lang
 
       # WORKAROUND (remove after COI-21): origin/main still errors E0900 on

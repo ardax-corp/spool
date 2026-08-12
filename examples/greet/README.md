@@ -1,6 +1,6 @@
 # greet
 
-Demo Coil library for [spool](https://github.com/DaGhostman/spool). Function-style on purpose: userland classes are not importable across modules yet (COI-12).
+Demo Coil library for [spool](https://github.com/ardax-corp/spool). Function-style on purpose: userland classes are not importable across modules yet (COI-12).
 
 ## Layout
 
@@ -15,11 +15,11 @@ src/hello.hy    # use greet::hello
 
 ```toml
 [dependencies]
-greet = { git = "https://github.com/DaGhostman/coil-greet.git", version = "^0.1" }
+greet = { git = "https://github.com/ardax-corp/coil-greet.git", version = "^0.1" }
 ```
 
 ```bash
-spool add greet --git https://github.com/DaGhostman/coil-greet.git --version '^0.1'
+spool add greet --git https://github.com/ardax-corp/coil-greet.git --version '^0.1'
 # or: spool add greet --path /path/to/coil-greet
 ```
 

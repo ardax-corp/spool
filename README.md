@@ -1,6 +1,6 @@
 # spool
 
-Git-based library dependency manager for [Coil](https://github.com/DaGhostman/coil-lang).
+Git-based library dependency manager for [Coil](https://github.com/ardax-corp/coil-lang).
 
 `spool` is a **Coil userland** project (not part of the `coil` Rust CLI). It resolves
 semver tags from git remotes, pins them in `coil.lock`, fetches into a shared
@@ -21,7 +21,7 @@ compiler already understands via `[module].roots`.
 - [x] Manage `.spool/deps` + ensure `./.spool/deps` in `[module].roots` (COI-6)
 - [x] `spool install` (COI-7) via `./spool install` (plan → fetch → link)
 - [x] `spool add` / `update` (COI-8–9)
-- [x] Demo package `greet` (`examples/greet`, also [coil-greet](https://github.com/DaGhostman/coil-greet) `v0.1.0`)
+- [x] Demo package `greet` (`examples/greet`, also [coil-greet](https://github.com/ardax-corp/coil-greet) `v0.1.0`)
 - [x] Consume smoke: install → `use` → compile/run (`scripts/smoke_consume.sh`)
 - [x] Private git via host credentials (COI-13)
 - [x] Lock integrity + diagnostics (COI-14)
@@ -85,7 +85,7 @@ Use whatever already works for `git clone` on your machine:
 exists, so `use greet::hello` maps to `hello.hy` in the package.
 
 ```bash
-./spool add greet --git https://github.com/DaGhostman/coil-greet.git --version '^0.1'
+./spool add greet --git https://github.com/ardax-corp/coil-greet.git --version '^0.1'
 ```
 
 ```coil
