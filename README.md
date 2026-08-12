@@ -32,7 +32,8 @@ compiler already understands via `[module].roots`.
 - Coil toolchain (`coil` on `PATH`, or set `COIL`) built with `[package]`/`[dependencies]`
   manifest support (coil-lang `feature/coi-3` or later)
 - Host `git` and `sh`
-- Coil stdlib: default `../coil-lang/stdlib` relative to this repo
+- Coil stdlib: default `../coil-stdlib/src` relative to this repo
+  ([coil-stdlib](https://github.com/ardax-corp/coil-stdlib))
 
 ## Cache
 

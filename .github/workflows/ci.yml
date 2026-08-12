@@ -16,7 +16,12 @@ jobs:
         with:
           path: spool
 
-      # Sibling of spool so coil.toml roots `../coil-lang/stdlib` resolve.
+      # Sibling of spool so coil.toml roots `../coil-stdlib/src` resolve.
+      - uses: actions/checkout@v4
+        with:
+          repository: ardax-corp/coil-stdlib
+          path: coil-stdlib
+
       - uses: actions/checkout@v4
         with:
           repository: ardax-corp/coil-lang

@@ -3,7 +3,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 COIL_BIN="${COIL:-coil}"
-STDLIB="$(cd "$ROOT/../coil-lang/stdlib" && pwd)"
+STDLIB="$(cd "$ROOT/../coil-stdlib/src" && pwd)"
 GREET_SRC="$ROOT/examples/greet"
 FIX="$ROOT/scratch/greet_repo"
 CACHE="$ROOT/scratch/cache_consume"
