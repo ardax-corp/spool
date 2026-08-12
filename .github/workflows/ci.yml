@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: spool
+
+      # Sibling of spool so coil.toml roots `../coil-stdlib/src` resolve.
+      - uses: actions/checkout@v4
+        with:
+          repository: ardax-corp/coil-stdlib
+          path: coil-stdlib
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ardax-corp/coil-lang
+          path: coil-lang
+
+      # WORKAROUND (remove after COI-21): origin/main still errors E0900 on
+      # origin/main still errors E0900 on [package]/[dependencies]. The patch is
+      # feature/coi-3's compiler-only diff vs e277c20b. If it no longer applies,
+      # assume main already parses those tables.
+      - name: Patch coil-lang [package] support
+        working-directory: coil-lang
+        run: |
+          if git apply --check ../spool/ci/coil-package-manifest.patch; then
+            git apply ../spool/ci/coil-package-manifest.patch
+            echo "applied spool/ci/coil-package-manifest.patch"
+          else
+            echo "patch skipped (coil-lang likely already has [package] support)"
+          fi
+
+      - name: Install system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libffi-dev libpcre2-dev build-essential
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Build coil
+        working-directory: coil-lang
+        run: cargo build --release --bin coil
+
+      - name: Unit tests
+        working-directory: spool
+        env:
+          COIL: ${{ github.workspace }}/coil-lang/target/release/coil
+        run: "$COIL" test
+
+      - name: Smoke install / add / consume
+        working-directory: spool
+        env:
+          COIL: ${{ github.workspace }}/coil-lang/target/release/coil
+        run: |
+          ./scripts/smoke_install.sh
+          ./scripts/smoke_add.sh
+          ./scripts/smoke_consume.sh
+          ./scripts/smoke_integrity.sh
+          ./scripts/smoke_auth.sh
+          ./scripts/smoke_transitive.sh

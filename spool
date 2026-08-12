@@ -1,0 +1,233 @@
+#!/usr/bin/env bash
+# spool — Coil library dependency manager (bash driver + Coil plan/link).
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")" && pwd)"
+COIL_BIN="${COIL:-coil}"
+CMD="${1:-help}"
+shift || true
+
+export SPOOL_PROJECT="${SPOOL_PROJECT:-$(pwd)}"
+# Fail closed on missing credentials instead of hanging on a TTY prompt.
+export GIT_TERMINAL_PROMPT="${GIT_TERMINAL_PROMPT:-0}"
+
+GIT_AUTH_HINT="Private remotes use ssh-agent, GIT_ASKPASS, git credential helpers, or url.insteadOf in ~/.gitconfig. spool does not store credentials. GIT_TERMINAL_PROMPT=0 so a missing credential fails instead of hanging."
+
+run_coil() {
+  local sub="$1"
+  export SPOOL_CMD="$sub"
+  "$COIL_BIN" "$ROOT/spool.hy"
+}
+
+check_status() {
+  local st="$SPOOL_PROJECT/.spool/status"
+  if [[ ! -f "$st" ]]; then
+    echo "spool: missing status file" >&2
+    exit 1
+  fi
+  local msg
+  msg="$(cat "$st")"
+  if [[ "$msg" != "ok" ]]; then
+    echo "spool: $msg" >&2
+    exit 1
+  fi
+}
+
+git_failed() {
+  local url="${1:-}"
+  if [[ -n "$url" ]]; then
+    echo "spool: git failed for $url" >&2
+  else
+    echo "spool: git failed" >&2
+  fi
+  echo "$GIT_AUTH_HINT" >&2
+  exit 1
+}
+
+run_git_script() {
+  local f="$1"
+  if ! sh "$f"; then
+    git_failed
+  fi
+}
+
+ls_remote_tags() {
+  local url="$1"
+  local out="$2"
+  if ! git ls-remote --tags "$url" > "$out"; then
+    git_failed "$url"
+  fi
+}
+
+verify_checkouts() {
+  local f="$SPOOL_PROJECT/.spool/verify.tsv"
+  if [[ ! -f "$f" ]]; then
+    return 0
+  fi
+  while IFS=$'\t' read -r name dest hash; do
+    [[ -z "${name:-}" ]] && continue
+    if [[ ! -d "$dest" ]]; then
+      echo "spool: missing package $name (expected checkout $dest)" >&2
+      exit 1
+    fi
+    local actual
+    actual="$(git -C "$dest" rev-parse 'HEAD^{tree}')"
+    if [[ "$actual" != "$hash" ]]; then
+      echo "spool: integrity mismatch for $name: expected $hash, got $actual" >&2
+      exit 1
+    fi
+  done < "$f"
+}
+
+resolve_git_dep() {
+  local name="$1"
+  local url="$2"
+  mkdir -p "$SPOOL_PROJECT/.spool"
+  ls_remote_tags "$url" "$SPOOL_PROJECT/.spool/tags.tsv"
+  export SPOOL_ADD_NAME="$name"
+  run_coil pick
+  check_status
+  run_git_script "$SPOOL_PROJECT/.spool/resolve.sh"
+  run_coil apply_resolved
+  check_status
+}
+
+walk_transitives() {
+  local i=0
+  while [[ $i -lt 32 ]]; do
+    i=$((i + 1))
+    run_coil collect
+    check_status
+    if [[ ! -s "$SPOOL_PROJECT/.spool/todo.tsv" ]]; then
+      return 0
+    fi
+    while IFS=$'\t' read -r name url; do
+      [[ -z "${name:-}" ]] && continue
+      resolve_git_dep "$name" "$url"
+    done < "$SPOOL_PROJECT/.spool/todo.tsv"
+  done
+  echo "spool: resolve loop exceeded 32 passes" >&2
+  exit 1
+}
+
+materialize() {
+  run_coil plan
+  run_git_script "$SPOOL_PROJECT/.spool/fetch.sh"
+  verify_checkouts
+  run_coil link
+}
+
+case "$CMD" in
+  help|--help|-h)
+    run_coil help
+    ;;
+  install)
+    run_coil check_install
+    check_status
+    materialize
+    echo "spool install: ok"
+    ;;
+  plan)
+    run_coil plan
+    ;;
+  link)
+    run_coil link
+    ;;
+  add)
+    NAME=""
+    GIT=""
+    PATH_DEP=""
+    VERSION="*"
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --git)
+          GIT="${2:-}"
+          shift 2
+          ;;
+        --path)
+          PATH_DEP="${2:-}"
+          shift 2
+          ;;
+        --version)
+          VERSION="${2:-}"
+          shift 2
+          ;;
+        --help|-h)
+          run_coil help
+          exit 0
+          ;;
+        -*)
+          echo "unknown flag: $1" >&2
+          exit 1
+          ;;
+        *)
+          if [[ -z "$NAME" ]]; then
+            NAME="$1"
+            shift
+          else
+            echo "unexpected argument: $1" >&2
+            exit 1
+          fi
+          ;;
+      esac
+    done
+    if [[ -z "$NAME" ]]; then
+      echo "usage: spool add <name> --git <url> [--version <req>]" >&2
+      echo "       spool add <name> --path <path>" >&2
+      exit 1
+    fi
+    if [[ -n "$GIT" && -n "$PATH_DEP" ]]; then
+      echo "spool add: --git and --path are mutually exclusive" >&2
+      exit 1
+    fi
+    if [[ -z "$GIT" && -z "$PATH_DEP" ]]; then
+      echo "spool add: need --git or --path" >&2
+      exit 1
+    fi
+    export SPOOL_ADD_NAME="$NAME"
+    export SPOOL_ADD_GIT="$GIT"
+    export SPOOL_ADD_PATH="$PATH_DEP"
+    export SPOOL_ADD_VERSION="$VERSION"
+    run_coil add_manifest
+    check_status
+    if [[ -n "$GIT" ]]; then
+      resolve_git_dep "$NAME" "$GIT"
+    fi
+    walk_transitives
+    materialize
+    echo "spool add: ok"
+    ;;
+  update)
+    ONLY="${1:-}"
+    run_coil list_git_deps
+    check_status
+    if [[ ! -s "$SPOOL_PROJECT/.spool/git-deps.tsv" ]]; then
+      if [[ -n "$ONLY" ]]; then
+        echo "spool update: \`$ONLY\` is not a git dependency" >&2
+        exit 1
+      fi
+      echo "spool update: no git dependencies" >&2
+      exit 1
+    fi
+    found=0
+    while IFS=$'\t' read -r name url _version; do
+      [[ -z "${name:-}" ]] && continue
+      if [[ -n "$ONLY" && "$name" != "$ONLY" ]]; then
+        continue
+      fi
+      found=1
+      resolve_git_dep "$name" "$url"
+    done < "$SPOOL_PROJECT/.spool/git-deps.tsv"
+    if [[ -n "$ONLY" && "$found" -eq 0 ]]; then
+      echo "spool update: \`$ONLY\` is not a git dependency" >&2
+      exit 1
+    fi
+    walk_transitives
+    materialize
+    echo "spool update: ok"
+    ;;
+  *)
+    echo "unknown command: $CMD" >&2
+    run_coil help
+    exit 1
+    ;;
+esac
