@@ -1,0 +1,14 @@
+[package]
+name = "spool"
+version = "0.1.0"
+
+[module]
+# Sibling checkout of coil-lang stdlib for local development.
+# Override the second root if your layout differs.
+roots = ["./src", "../coil-lang/stdlib"]
+
+# No [entry]: running the same path as [entry].file breaks `extern "c"`
+# (invalid library handle). Always invoke via ./spool or `coil spool.hy`.
+
+[env]
+allow_exec = true

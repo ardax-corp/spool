@@ -1,0 +1,6 @@
+/target/
+*.hyc
+out.hyc
+.spool/
+/tmp/
+/scratch/
