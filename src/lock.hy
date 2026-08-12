@@ -3,6 +3,7 @@
 //   name \t git \t tag \t rev \t content_hash
 use text::{trim, starts_with, split, contains, ends_with, slice, join as text_join};
 use io::file::{read_text, write_text};
+use io::fs::{exists};
 use string::{format, to_bytes};
 
 fn make_git_pkg(string name, string git, string tag, string rev, string hash) -> string {
@@ -293,6 +294,32 @@ fn lock_read(string path) -> Result<Vec<string>, string> {
         Result::Err(_) => raise format("failed to read %s", path),
     };
     return lock_parse(body)?;
+}
+
+fn lock_read_or_empty(string path) -> Result<Vec<string>, string> {
+    let present = match exists(path) {
+        Result::Ok(v) => v,
+        Result::Err(_) => false,
+    };
+    if present == false {
+        let empty: Vec<string> = Vec::new();
+        return empty;
+    }
+    return lock_read(path)?;
+}
+
+fn lock_upsert(Vec<string> packages, string pkg) -> Vec<string> {
+    let name = lock_pkg_name(pkg);
+    let out: Vec<string> = Vec::new();
+    let i = 0;
+    while i < len(packages) {
+        if lock_pkg_name(packages[i]) != name {
+            out.push(packages[i]);
+        }
+        i = i + 1;
+    }
+    out.push(pkg);
+    return out;
 }
 
 fn lock_hashes_match(Vec<string> packages, Vec<(string, string)> expected) -> bool {

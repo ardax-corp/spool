@@ -1,5 +1,6 @@
 use lock::{
     make_git_pkg, lock_serialize, lock_parse, lock_pkg_name, lock_pkg_hash, lock_hashes_match,
+    lock_upsert,
 };
 
 test("lock round-trip preserves fields and sorts by name") {
@@ -23,4 +24,12 @@ test("lock_hashes_match detects mismatch") {
     let bad = Vec::new();
     bad.push(("http", "h2"));
     assert(lock_hashes_match(pkgs, bad) == false)?;
+}
+
+test("lock_upsert replaces by name") {
+    let pkgs = Vec::new();
+    pkgs.push(make_git_pkg("http", "https://x", "v1", "c1", "h1"));
+    pkgs = lock_upsert(pkgs, make_git_pkg("http", "https://x", "v2", "c2", "h2"));
+    assert(len(pkgs) == 1)?;
+    assert(lock_pkg_hash(pkgs[0]) == "h2")?;
 }
