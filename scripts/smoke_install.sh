@@ -54,7 +54,7 @@ export SPOOL_PROJECT="$PROJ"
 "$ROOT/spool" install
 
 test -L "$PROJ/.spool/deps/fixture"
-test -f "$PROJ/.spool/deps/fixture/README.md"
+test -f "$PROJ/.spool/deps/fixture/lib.hy"
 grep -q '.spool/deps' "$PROJ/coil.toml"
 
 echo "smoke_install: ok (rev=$REV tree=$TREE)"

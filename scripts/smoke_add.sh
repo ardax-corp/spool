@@ -54,7 +54,7 @@ grep -q '.spool/deps' "$PROJ/coil.toml"
 "$ROOT/spool" add local_lib --path "$PATHLIB"
 test -L "$PROJ/.spool/deps/local_lib"
 grep -q 'local_lib = { path =' "$PROJ/coil.toml"
-test -f "$PROJ/.spool/deps/local_lib/src/lib.hy"
+test -f "$PROJ/.spool/deps/local_lib/lib.hy"
 
 echo "v1.2" > "$FIX/README.md"
 git -C "$FIX" add -A

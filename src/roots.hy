@@ -1,5 +1,5 @@
 // Manage project .spool/deps symlink farm and [module].roots.
-use io::fs::{exists, remove_file, symlink};
+use io::fs::{exists, is_dir, remove_file, symlink};
 use io::file::{read_text, write_text};
 use text::{trim, starts_with, ends_with, split, contains, join as text_join};
 use string::{format};
@@ -64,6 +64,28 @@ fn inject_spool_root(string body) -> Result<string, string> {
     return text_join(out, "\n");
 }
 
+// Coil resolves `use greet::hello` as `<root>/greet/hello.hy`. Packages keep
+// sources under `src/`, so the dep symlink points at that directory when present.
+fn checkout_module_root(string checkout_path) -> string {
+    let src = join2(checkout_path, "src");
+    let present = match exists(src) {
+        Result::Ok(v) => v,
+        Result::Err(_) => false,
+    };
+    if present == false {
+        return checkout_path;
+    }
+    match is_dir(src) {
+        Result::Ok(d) => {
+            if d {
+                return src;
+            }
+        },
+        Result::Err(_) => {},
+    };
+    return checkout_path;
+}
+
 fn link_dep(string project_root, string name, string checkout_path) -> Result<int, string> {
     let deps = spool_deps_dir(project_root);
     ensure_dir(join2(project_root, ".spool"))?;
@@ -79,9 +101,10 @@ fn link_dep(string project_root, string name, string checkout_path) -> Result<in
             Result::Err(_) => 0,
         };
     }
-    return match symlink(checkout_path, link) {
+    let target = checkout_module_root(checkout_path);
+    return match symlink(target, link) {
         Result::Ok(_) => 0,
-        Result::Err(_) => raise format("symlink %s -> %s failed", link, checkout_path),
+        Result::Err(_) => raise format("symlink %s -> %s failed", link, target),
     };
 }
 
