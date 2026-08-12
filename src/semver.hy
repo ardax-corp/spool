@@ -113,6 +113,12 @@ fn satisfies_caret(string requirement, SemVer version) -> Result<bool, string> {
         Result::Ok(t) => t,
         Result::Err(_) => requirement,
     };
+    if req == "*" {
+        return true;
+    }
+    if len(req) == 0 {
+        return true;
+    }
     if starts_with(req, "^") == false {
         let exact = parse_semver(req)?;
         return cmp_semver(exact, version) == 0;

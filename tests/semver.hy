@@ -27,3 +27,13 @@ test("select_tag picks highest matching") {
     let got = select_tag("^0.2", tags)?;
     assert(got == "v0.2.1")?;
 }
+
+test("star matches any semver tag") {
+    let v = parse_semver("2.0.0")?;
+    assert(satisfies_caret("*", v)?)?;
+    let tags: Vec<string> = Vec::new();
+    tags.push("v0.1.0");
+    tags.push("v2.0.0");
+    let got = select_tag("*", tags)?;
+    assert(got == "v2.0.0")?;
+}
