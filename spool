@@ -14,6 +14,33 @@ run_coil() {
   "$COIL_BIN" "$ROOT/spool.hy"
 }
 
+check_status() {
+  local st="$SPOOL_PROJECT/.spool/status"
+  if [[ ! -f "$st" ]]; then
+    echo "spool: missing status file" >&2
+    exit 1
+  fi
+  local msg
+  msg="$(cat "$st")"
+  if [[ "$msg" != "ok" ]]; then
+    echo "spool: $msg" >&2
+    exit 1
+  fi
+}
+
+resolve_git_dep() {
+  local name="$1"
+  local url="$2"
+  mkdir -p "$SPOOL_PROJECT/.spool"
+  git ls-remote --tags "$url" > "$SPOOL_PROJECT/.spool/tags.tsv"
+  export SPOOL_ADD_NAME="$name"
+  run_coil pick
+  check_status
+  sh "$SPOOL_PROJECT/.spool/resolve.sh"
+  run_coil apply_resolved
+  check_status
+}
+
 case "$CMD" in
   help|--help|-h)
     run_coil help
@@ -29,6 +56,101 @@ case "$CMD" in
     ;;
   link)
     run_coil link
+    ;;
+  add)
+    NAME=""
+    GIT=""
+    PATH_DEP=""
+    VERSION="*"
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --git)
+          GIT="${2:-}"
+          shift 2
+          ;;
+        --path)
+          PATH_DEP="${2:-}"
+          shift 2
+          ;;
+        --version)
+          VERSION="${2:-}"
+          shift 2
+          ;;
+        --help|-h)
+          run_coil help
+          exit 0
+          ;;
+        -*)
+          echo "unknown flag: $1" >&2
+          exit 1
+          ;;
+        *)
+          if [[ -z "$NAME" ]]; then
+            NAME="$1"
+            shift
+          else
+            echo "unexpected argument: $1" >&2
+            exit 1
+          fi
+          ;;
+      esac
+    done
+    if [[ -z "$NAME" ]]; then
+      echo "usage: spool add <name> --git <url> [--version <req>]" >&2
+      echo "       spool add <name> --path <path>" >&2
+      exit 1
+    fi
+    if [[ -n "$GIT" && -n "$PATH_DEP" ]]; then
+      echo "spool add: --git and --path are mutually exclusive" >&2
+      exit 1
+    fi
+    if [[ -z "$GIT" && -z "$PATH_DEP" ]]; then
+      echo "spool add: need --git or --path" >&2
+      exit 1
+    fi
+    export SPOOL_ADD_NAME="$NAME"
+    export SPOOL_ADD_GIT="$GIT"
+    export SPOOL_ADD_PATH="$PATH_DEP"
+    export SPOOL_ADD_VERSION="$VERSION"
+    run_coil add_manifest
+    check_status
+    if [[ -n "$GIT" ]]; then
+      resolve_git_dep "$NAME" "$GIT"
+    fi
+    run_coil plan
+    sh "$SPOOL_PROJECT/.spool/fetch.sh"
+    run_coil link
+    echo "spool add: ok"
+    ;;
+  update)
+    ONLY="${1:-}"
+    run_coil list_git_deps
+    check_status
+    if [[ ! -s "$SPOOL_PROJECT/.spool/git-deps.tsv" ]]; then
+      if [[ -n "$ONLY" ]]; then
+        echo "spool update: \`$ONLY\` is not a git dependency" >&2
+        exit 1
+      fi
+      echo "spool update: no git dependencies" >&2
+      exit 1
+    fi
+    found=0
+    while IFS=$'\t' read -r name url _version; do
+      [[ -z "${name:-}" ]] && continue
+      if [[ -n "$ONLY" && "$name" != "$ONLY" ]]; then
+        continue
+      fi
+      found=1
+      resolve_git_dep "$name" "$url"
+    done < "$SPOOL_PROJECT/.spool/git-deps.tsv"
+    if [[ -n "$ONLY" && "$found" -eq 0 ]]; then
+      echo "spool update: \`$ONLY\` is not a git dependency" >&2
+      exit 1
+    fi
+    run_coil plan
+    sh "$SPOOL_PROJECT/.spool/fetch.sh"
+    run_coil link
+    echo "spool update: ok"
     ;;
   *)
     echo "unknown command: $CMD" >&2

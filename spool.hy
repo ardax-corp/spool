@@ -8,15 +8,18 @@ use path::{dirname};
 use string::{format, to_bytes};
 use text::{split, trim};
 use lock::{
-    lock_read, lock_pkg_name, lock_git_url, lock_git_rev, lock_git_hash,
+    lock_read_or_empty, lock_pkg_name, lock_git_url, lock_git_rev, lock_git_hash,
 };
 use roots::{link_dep, ensure_roots_entry};
-use util::{join2, join3, join4, ensure_dir};
+use util::{join2, join3, join4, ensure_dir, write_status};
 use config::{cache_root};
 use cache_url::{url_cache_key};
+use resolve::{
+    run_add_manifest, run_pick, run_apply_resolved, run_list_git_deps, path_dep_links,
+};
 
 fn run_plan(string root) -> Result<int, string> {
-    let packages = lock_read(join2(root, "coil.lock"))?;
+    let packages = lock_read_or_empty(join2(root, "coil.lock"))?;
     ensure_dir(join2(root, ".spool"))?;
     let script = "#!/bin/sh\nset -e\n";
     let links = "";
@@ -75,6 +78,9 @@ fn run_plan(string root) -> Result<int, string> {
         links = links + name + "\t" + dest + "\n";
     }
 
+    let path_links = path_dep_links(root)?;
+    links = links + path_links;
+
     match write_text(join2(root, ".spool/fetch.sh"), script) {
         Result::Ok(_) => 0,
         Result::Err(_) => raise "write fetch.sh failed",
@@ -121,6 +127,39 @@ fn run_link(string root) -> Result<int, string> {
     return 0;
 }
 
+fn env_or_empty(string key) -> string {
+    match var(key) {
+        Result::Ok(c) => {
+            return c;
+        },
+        Result::Err(_) => {
+            return "";
+        },
+    };
+}
+
+fn finish_ok(string root, string msg) {
+    match write_status(root, "ok") {
+        Result::Ok(_) => 0,
+        Result::Err(_) => 0,
+    };
+    match write_all(stdout(), to_bytes(msg)) {
+        Result::Ok(_) => 0,
+        Result::Err(_) => 0,
+    };
+}
+
+fn finish_err(string root, string msg) {
+    match write_status(root, msg) {
+        Result::Ok(_) => 0,
+        Result::Err(_) => 0,
+    };
+    match write_all(stdout(), to_bytes(msg)) {
+        Result::Ok(_) => 0,
+        Result::Err(_) => 0,
+    };
+}
+
 fn main() {
     let cmd = "help";
     match var("SPOOL_CMD") {
@@ -137,7 +176,7 @@ fn main() {
             Result::Ok(_) => 0,
             Result::Err(_) => 0,
         };
-        match write_all(stdout(), to_bytes("Usage:\n  spool install\n  spool help\n")) {
+        match write_all(stdout(), to_bytes("Usage:\n  spool install\n  spool add <name> --git <url> [--version <req>]\n  spool add <name> --path <path>\n  spool update [name]\n  spool help\n")) {
             Result::Ok(_) => 0,
             Result::Err(_) => 0,
         };
@@ -199,6 +238,60 @@ fn main() {
                     Result::Ok(_) => 0,
                     Result::Err(_) => 0,
                 };
+            },
+        };
+        return;
+    }
+
+    if cmd == "add_manifest" {
+        match run_add_manifest(
+            root,
+            env_or_empty("SPOOL_ADD_NAME"),
+            env_or_empty("SPOOL_ADD_GIT"),
+            env_or_empty("SPOOL_ADD_PATH"),
+            env_or_empty("SPOOL_ADD_VERSION"),
+        ) {
+            Result::Ok(_) => {
+                finish_ok(root, "spool add_manifest: ok\n");
+            },
+            Result::Err(e) => {
+                finish_err(root, format("spool add_manifest failed: %s\n", e));
+            },
+        };
+        return;
+    }
+
+    if cmd == "pick" {
+        match run_pick(root, env_or_empty("SPOOL_ADD_NAME")) {
+            Result::Ok(_) => {
+                finish_ok(root, "spool pick: ok\n");
+            },
+            Result::Err(e) => {
+                finish_err(root, format("spool pick failed: %s\n", e));
+            },
+        };
+        return;
+    }
+
+    if cmd == "apply_resolved" {
+        match run_apply_resolved(root) {
+            Result::Ok(_) => {
+                finish_ok(root, "spool apply_resolved: ok\n");
+            },
+            Result::Err(e) => {
+                finish_err(root, format("spool apply_resolved failed: %s\n", e));
+            },
+        };
+        return;
+    }
+
+    if cmd == "list_git_deps" {
+        match run_list_git_deps(root) {
+            Result::Ok(_) => {
+                finish_ok(root, "spool list_git_deps: ok\n");
+            },
+            Result::Err(e) => {
+                finish_err(root, format("spool list_git_deps failed: %s\n", e));
             },
         };
         return;
