@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# spool — Coil library dependency manager (bash driver + Coil plan/link).
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")" && pwd)"
+COIL_BIN="${COIL:-coil}"
+CMD="${1:-help}"
+shift || true
+
+export SPOOL_PROJECT="${SPOOL_PROJECT:-$(pwd)}"
+
+run_coil() {
+  local sub="$1"
+  export SPOOL_CMD="$sub"
+  "$COIL_BIN" "$ROOT/spool.hy"
+}
+
+case "$CMD" in
+  help|--help|-h)
+    run_coil help
+    ;;
+  install)
+    run_coil plan
+    sh "$SPOOL_PROJECT/.spool/fetch.sh"
+    run_coil link
+    echo "spool install: ok"
+    ;;
+  plan)
+    run_coil plan
+    ;;
+  link)
+    run_coil link
+    ;;
+  *)
+    echo "unknown command: $CMD" >&2
+    run_coil help
+    exit 1
+    ;;
+esac
