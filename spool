@@ -4,17 +4,27 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 COIL_BIN="${COIL:-coil}"
 
-# Hooks default off. --ignore-scripts forces the same (CI).
-# Do not start host sh for [scripts] or [package].include.
-IGNORE_SCRIPTS=1
+# Hooks default off. --enable-scripts opts in. --ignore-scripts always wins (CI).
+# allow_exec is not the gate. Every user-script sh goes through may_run_hook.
+FORCE_OFF=0
+WANT_ON=0
 ARGS=()
 for arg in "$@"; do
   if [[ "$arg" == "--ignore-scripts" ]]; then
-    IGNORE_SCRIPTS=1
+    FORCE_OFF=1
+  elif [[ "$arg" == "--enable-scripts" ]]; then
+    WANT_ON=1
   else
     ARGS+=("$arg")
   fi
 done
+if [[ "$FORCE_OFF" -eq 1 ]]; then
+  IGNORE_SCRIPTS=1
+elif [[ "$WANT_ON" -eq 1 ]]; then
+  IGNORE_SCRIPTS=0
+else
+  IGNORE_SCRIPTS="${SPOOL_IGNORE_SCRIPTS:-1}"
+fi
 if [[ ${#ARGS[@]} -gt 0 ]]; then
   set -- "${ARGS[@]}"
 else
@@ -146,6 +156,48 @@ materialize() {
   run_coil link
 }
 
+# Current-project [scripts] only. Missing key is a no-op. Dep scripts are COI-104.
+run_project_script() {
+  local slot="$1"
+  case "$IGNORE_SCRIPTS" in
+    0|false) ;;
+    *) return 0 ;;
+  esac
+  export SPOOL_SCRIPT_SLOT="$slot"
+  run_coil script_lookup
+  check_status
+  local rel
+  rel="$(tr -d '\n' < "$SPOOL_PROJECT/.spool/script-rel" 2>/dev/null || true)"
+  if [[ -z "$rel" ]]; then
+    return 0
+  fi
+  local file="$SPOOL_PROJECT/$rel"
+  if [[ ! -f "$file" ]]; then
+    echo "spool: missing script $rel" >&2
+    exit 1
+  fi
+  local hash
+  hash="$(git hash-object "$file")"
+  export SPOOL_SCRIPT_REL="$rel"
+  export SPOOL_SCRIPT_HASH="$hash"
+  run_coil script_gate
+  check_status
+  local runf
+  runf="$(tr -d '\n' < "$SPOOL_PROJECT/.spool/script-run" 2>/dev/null || true)"
+  if [[ "$runf" != "1" ]]; then
+    return 0
+  fi
+  local rc=0
+  set +e
+  ( cd "$SPOOL_PROJECT" && sh "$rel" )
+  rc=$?
+  set -e
+  if [[ "$rc" -ne 0 ]]; then
+    echo "spool: $rel exited $rc" >&2
+    exit 1
+  fi
+}
+
 case "$CMD" in
   help|--help|-h)
     run_coil help
@@ -154,7 +206,9 @@ case "$CMD" in
     run_coil check_install
     check_status
     check_engine
+    run_project_script pre_install
     materialize
+    run_project_script post_install
     echo "spool install: ok"
     ;;
   plan)
@@ -233,11 +287,13 @@ case "$CMD" in
     run_coil add_manifest
     check_status
     check_engine
+    run_project_script pre_install
     if [[ -n "$GIT" ]]; then
       resolve_git_dep "$NAME" "$GIT"
     fi
     walk_transitives
     materialize
+    run_project_script post_install
     echo "spool add: ok"
     ;;
   update)
@@ -260,14 +316,22 @@ case "$CMD" in
         continue
       fi
       found=1
-      resolve_git_dep "$name" "$url"
     done < "$SPOOL_PROJECT/.spool/git-deps.tsv"
     if [[ -n "$ONLY" && "$found" -eq 0 ]]; then
       echo "spool update: \`$ONLY\` is not a git dependency" >&2
       exit 1
     fi
+    run_project_script pre_update
+    while IFS=$'\t' read -r name url _version; do
+      [[ -z "${name:-}" ]] && continue
+      if [[ -n "$ONLY" && "$name" != "$ONLY" ]]; then
+        continue
+      fi
+      resolve_git_dep "$name" "$url"
+    done < "$SPOOL_PROJECT/.spool/git-deps.tsv"
     walk_transitives
     materialize
+    run_project_script post_update
     echo "spool update: ok"
     ;;
   *)
