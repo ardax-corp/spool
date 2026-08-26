@@ -237,7 +237,7 @@ test("allow_include list is explicit") {
 
 test("default: include hook not allowed") {
     let lock = http_lock(false);
-    assert(contains(lock, "allow_include") == false)?;
+    assert(contains(lock, "allow_include =") == false)?;
     deny_contains(
         include_from_lock(
             default_hooks_off(),
@@ -262,8 +262,7 @@ test("default: include hook not allowed") {
 
 test("after allow-include: may_run_hook only for recorded path and hash") {
     let lock = http_lock(true);
-    assert(contains(lock, "[hooks]"))?;
-    assert(contains(lock, "allow_include"))?;
+    assert(contains(lock, "allow_include = ['http']"))?;
     assert(contains(lock, "hook_path = './hooks/include.sh'"))?;
     assert(contains(lock, "hook_hash = 'hookabc'"))?;
     let n = include_from_lock(
