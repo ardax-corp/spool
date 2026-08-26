@@ -1,6 +1,6 @@
 use hooks::{
     may_run_hook, hooks_are_off, default_hooks_off, ignore_scripts_flag,
-    git_identity_trusted, allow_include_has, allow_include_add,
+    enable_scripts_flag, git_identity_trusted, allow_include_has, allow_include_add,
     hook_kind_include, hook_kind_script,
 };
 use lock::{
@@ -72,6 +72,8 @@ test("default and --ignore-scripts are hooks-off") {
     assert(ignore_scripts_flag("--ignore-scripts"))?;
     assert(ignore_scripts_flag("--hooks") == false)?;
     assert(hooks_are_off("0") == false)?;
+    assert(enable_scripts_flag("--enable-scripts"))?;
+    assert(enable_scripts_flag("--ignore-scripts") == false)?;
 }
 
 test("hooks-off denies before allowlist or hash") {

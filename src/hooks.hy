@@ -30,6 +30,10 @@ fn ignore_scripts_flag(string arg) -> bool {
     return arg == "--ignore-scripts";
 }
 
+fn enable_scripts_flag(string arg) -> bool {
+    return arg == "--enable-scripts";
+}
+
 /// Unsigned git remotes are never a trust signal. Missing lock hash stays deny.
 fn git_identity_trusted(string url) -> bool {
     if len(url) == 0 {
