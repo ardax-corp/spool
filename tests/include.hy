@@ -6,6 +6,7 @@ use hooks::{
 use lock::{
     make_git_pkg, make_git_pkg_hook, lock_serialize_full, lock_parse, lock_parse_allow,
     lock_find, lock_pkg_hook_path, lock_pkg_hook_hash, lock_upsert, lock_pkg_with_hook,
+    lock_write, lock_read,
 };
 use manifest::{package_include_parse, scripts_parse, scripts_path_of};
 use io::file::{write_text};
@@ -24,6 +25,7 @@ fn deny_contains(Result<int, string> r, string needle) -> Result<int, string> {
     return 0;
 }
 
+/// Same as the spool driver: `--ignore-scripts` wins; else `--enable-scripts` sets `0`.
 fn ignore_env(bool force_off, bool want_on) -> string {
     if force_off {
         return "1";
@@ -52,6 +54,7 @@ fn http_lock(string path, string hash, bool allowlisted) -> string {
     return lock_serialize_full(pkgs, allow);
 }
 
+/// Gate an include-hook from lock fields. First-pin in memory only. Does not exec.
 fn include_from_lock(
     bool hooks_off,
     string lock_text,
@@ -110,6 +113,14 @@ fn clear_marker(string p) {
     };
 }
 
+fn write_lock_text(string path, string body) -> Result<int, string> {
+    return match write_text(path, body) {
+        Result::Ok(_) => 0,
+        Result::Err(_) => raise "lock write failed",
+    };
+}
+
+/// Marker only. Does not exec. Writes INCLUDE_RAN when the gate would allow `sh`.
 fn mark_if_allowed(string marker, Result<int, string> gated) -> Result<int, string> {
     match gated {
         Result::Ok(_) => {
@@ -125,9 +136,9 @@ fn mark_if_allowed(string marker, Result<int, string> gated) -> Result<int, stri
     return 0;
 }
 
-test("default: declared include does not run") {
+test("default: include does not run") {
     ensure_dir("scratch/coi104/default")?;
-    let marker = "scratch/coi104/default/HOOK_RAN";
+    let marker = "scratch/coi104/default/INCLUDE_RAN";
     clear_marker(marker);
     let lock = http_lock("./hooks/include.sh", "abc", true);
     assert(default_hooks_off())?;
@@ -145,9 +156,29 @@ test("default: declared include does not run") {
     assert(marker_exists(marker) == false)?;
 }
 
-test("opt-in without allowlist denies and does not sh") {
+test("allowlisted + matching lock hash: may run") {
+    ensure_dir("scratch/coi104/ok")?;
+    let marker = "scratch/coi104/ok/INCLUDE_RAN";
+    clear_marker(marker);
+    let lock = http_lock("./hooks/include.sh", "abc", true);
+    assert(enable_scripts_flag("--enable-scripts"))?;
+    assert(contains(lock, "allow_include = ['http']"))?;
+    mark_if_allowed(
+        marker,
+        include_from_lock(
+            hooks_are_off(ignore_env(false, true)),
+            lock,
+            "http",
+            "./hooks/include.sh",
+            "abc",
+        ),
+    )?;
+    assert(marker_exists(marker))?;
+}
+
+test("not allowlisted: does not run even if hash matches") {
     ensure_dir("scratch/coi104/noallow")?;
-    let marker = "scratch/coi104/noallow/HOOK_RAN";
+    let marker = "scratch/coi104/noallow/INCLUDE_RAN";
     clear_marker(marker);
     let lock = http_lock("./hooks/include.sh", "abc", false);
     assert(enable_scripts_flag("--enable-scripts"))?;
@@ -164,119 +195,9 @@ test("opt-in without allowlist denies and does not sh") {
     assert(marker_exists(marker) == false)?;
 }
 
-test("opt-in + allowlist + matching hash is eligible") {
-    ensure_dir("scratch/coi104/ok")?;
-    let marker = "scratch/coi104/ok/HOOK_RAN";
-    clear_marker(marker);
-    let lock = http_lock("./hooks/include.sh", "abc", true);
-    mark_if_allowed(
-        marker,
-        include_from_lock(
-            hooks_are_off(ignore_env(false, true)),
-            lock,
-            "http",
-            "./hooks/include.sh",
-            "abc",
-        ),
-    )?;
-    assert(marker_exists(marker))?;
-}
-
-test("changed include.sh with a lock pin mismatches and does not sh") {
-    ensure_dir("scratch/coi104/mismatch")?;
-    let marker = "scratch/coi104/mismatch/HOOK_RAN";
-    clear_marker(marker);
-    let lock = http_lock("./hooks/include.sh", "abc", true);
-    let pkgs = lock_parse(lock)?;
-    let rec = lock_find(pkgs, "http");
-    let decided = include_gate_lock(
-        true,
-        lock_pkg_hook_path(rec),
-        lock_pkg_hook_hash(rec),
-        "./hooks/include.sh",
-        "changed",
-    );
-    let (lp, lh, first_pin) = decided;
-    assert(first_pin == false)?;
-    assert(lh == "abc")?;
-    deny_contains(
-        include_from_lock(
-            hooks_are_off(ignore_env(false, true)),
-            lock,
-            "http",
-            "./hooks/include.sh",
-            "changed",
-        ),
-        "hook hash mismatch",
-    )?;
-    assert(lock_pkg_hook_hash(lock_find(pkgs, "http")) == "abc")?;
-    assert(marker_exists(marker) == false)?;
-}
-
-test("empty lock hash first-pins then gates; a present hash is not refreshed") {
-    ensure_dir("scratch/coi104/first")?;
-    let marker = "scratch/coi104/first/HOOK_RAN";
-    clear_marker(marker);
-    let lock = http_lock("./hooks/include.sh", "", true);
-    let pkgs = lock_parse(lock)?;
-    let rec = lock_find(pkgs, "http");
-    deny_contains(
-        may_run_hook(
-            false,
-            hook_kind_include(),
-            "http",
-            "./hooks/include.sh",
-            "abc",
-            lock_pkg_hook_path(rec),
-            lock_pkg_hook_hash(rec),
-            true,
-        ),
-        "missing lock hash",
-    )?;
-    let decided = include_gate_lock(
-        true,
-        lock_pkg_hook_path(rec),
-        lock_pkg_hook_hash(rec),
-        "./hooks/include.sh",
-        "abc",
-    );
-    let (lp, lh, first_pin) = decided;
-    assert(first_pin)?;
-    rec = lock_pkg_with_hook(rec, lp, lh);
-    pkgs = lock_upsert(pkgs, rec);
-    assert(lock_pkg_hook_hash(lock_find(pkgs, "http")) == "abc")?;
-    mark_if_allowed(
-        marker,
-        may_run_hook(
-            false,
-            hook_kind_include(),
-            "http",
-            "./hooks/include.sh",
-            "abc",
-            lp,
-            lh,
-            true,
-        ),
-    )?;
-    assert(marker_exists(marker))?;
-    pkgs = lock_upsert(
-        pkgs,
-        make_git_pkg_hook(
-            "http",
-            "https://x/y.git",
-            "v2.0.0",
-            "rev2",
-            "tree2",
-            "./hooks/include.sh",
-            "stale",
-        ),
-    );
-    assert(lock_pkg_hook_hash(lock_find(pkgs, "http")) == "abc")?;
-}
-
-test("allowlisted + opted-in include with no lock row is deny, no sh") {
+test("no lock row / missing hash: deny, no sh") {
     ensure_dir("scratch/coi104/norow")?;
-    let marker = "scratch/coi104/norow/HOOK_RAN";
+    let marker = "scratch/coi104/norow/INCLUDE_RAN";
     clear_marker(marker);
     let pkgs = Vec::new();
     let allow = Vec::new();
@@ -324,6 +245,125 @@ test("allowlisted + opted-in include with no lock row is deny, no sh") {
     assert(marker_exists(marker) == false)?;
 }
 
+test("changed include after pin: fail closed, no sh") {
+    ensure_dir("scratch/coi104/mismatch")?;
+    let marker = "scratch/coi104/mismatch/INCLUDE_RAN";
+    clear_marker(marker);
+    let lock = http_lock("./hooks/include.sh", "abc", true);
+    let pkgs = lock_parse(lock)?;
+    let rec = lock_find(pkgs, "http");
+    let decided = include_gate_lock(
+        true,
+        lock_pkg_hook_path(rec),
+        lock_pkg_hook_hash(rec),
+        "./hooks/include.sh",
+        "changed",
+    );
+    let (lp, lh, first_pin) = decided;
+    assert(first_pin == false)?;
+    assert(lh == "abc")?;
+    deny_contains(
+        include_from_lock(
+            hooks_are_off(ignore_env(false, true)),
+            lock,
+            "http",
+            "./hooks/include.sh",
+            "changed",
+        ),
+        "hook hash mismatch",
+    )?;
+    assert(lock_pkg_hook_hash(lock_find(pkgs, "http")) == "abc")?;
+    assert(marker_exists(marker) == false)?;
+}
+
+test("--ignore-scripts: stays off even if allowlisted") {
+    ensure_dir("scratch/coi104/ignore")?;
+    let marker = "scratch/coi104/ignore/INCLUDE_RAN";
+    clear_marker(marker);
+    let lock = http_lock("./hooks/include.sh", "abc", true);
+    assert(ignore_scripts_flag("--ignore-scripts"))?;
+    assert(enable_scripts_flag("--enable-scripts"))?;
+    assert(hooks_are_off(ignore_env(true, true)))?;
+    deny_contains(
+        include_from_lock(
+            hooks_are_off(ignore_env(true, true)),
+            lock,
+            "http",
+            "./hooks/include.sh",
+            "abc",
+        ),
+        "hooks are off",
+    )?;
+    assert(marker_exists(marker) == false)?;
+}
+
+test("first-pin must write a lock row; empty hash without pin is deny") {
+    ensure_dir("scratch/coi104/first")?;
+    let marker = "scratch/coi104/first/INCLUDE_RAN";
+    let lock_path = "scratch/coi104/first/coil.lock";
+    clear_marker(marker);
+    let lock = http_lock("./hooks/include.sh", "", true);
+    write_lock_text(lock_path, lock)?;
+    let pkgs = lock_parse(lock)?;
+    let rec = lock_find(pkgs, "http");
+    deny_contains(
+        may_run_hook(
+            false,
+            hook_kind_include(),
+            "http",
+            "./hooks/include.sh",
+            "abc",
+            lock_pkg_hook_path(rec),
+            lock_pkg_hook_hash(rec),
+            true,
+        ),
+        "missing lock hash",
+    )?;
+    assert(marker_exists(marker) == false)?;
+    let decided = include_gate_lock(
+        true,
+        lock_pkg_hook_path(rec),
+        lock_pkg_hook_hash(rec),
+        "./hooks/include.sh",
+        "abc",
+    );
+    let (lp, lh, first_pin) = decided;
+    assert(first_pin)?;
+    rec = lock_pkg_with_hook(rec, lp, lh);
+    pkgs = lock_upsert(pkgs, rec);
+    lock_write(lock_path, pkgs)?;
+    let written = lock_read(lock_path)?;
+    assert(lock_pkg_hook_path(lock_find(written, "http")) == "./hooks/include.sh")?;
+    assert(lock_pkg_hook_hash(lock_find(written, "http")) == "abc")?;
+    mark_if_allowed(
+        marker,
+        may_run_hook(
+            false,
+            hook_kind_include(),
+            "http",
+            "./hooks/include.sh",
+            "abc",
+            lp,
+            lh,
+            true,
+        ),
+    )?;
+    assert(marker_exists(marker))?;
+    pkgs = lock_upsert(
+        pkgs,
+        make_git_pkg_hook(
+            "http",
+            "https://x/y.git",
+            "v2.0.0",
+            "rev2",
+            "tree2",
+            "./hooks/include.sh",
+            "stale",
+        ),
+    );
+    assert(lock_pkg_hook_hash(lock_find(pkgs, "http")) == "abc")?;
+}
+
 test("dependency [scripts] are not the include gate") {
     let body = "[package]
 name = \"http\"
@@ -348,21 +388,6 @@ pre_install = \"./scripts/pre-install.sh\"
             true,
         ),
         "missing lock hash",
-    )?;
-}
-
-test("--ignore-scripts wins over enable for include-hooks") {
-    let lock = http_lock("./hooks/include.sh", "abc", true);
-    assert(ignore_scripts_flag("--ignore-scripts"))?;
-    deny_contains(
-        include_from_lock(
-            hooks_are_off(ignore_env(true, true)),
-            lock,
-            "http",
-            "./hooks/include.sh",
-            "abc",
-        ),
-        "hooks are off",
     )?;
 }
 
