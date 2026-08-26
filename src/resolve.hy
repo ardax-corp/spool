@@ -1,10 +1,9 @@
 // Resolve git deps: pick a tag from ls-remote, write resolve.sh, merge coil.lock.
 use io::file::{write_text, read_text};
 use io::fs::{exists};
-use path::{dirname, is_absolute};
-use text::{trim, split, contains, starts_with, slice};
+use text::{trim, split, contains};
 use string::{format};
-use util::{join2, join3, join4, ensure_dir, git_sh_preamble};
+use util::{join2, join3, join4, ensure_dir, git_sh_preamble, path_dirname, path_is_absolute};
 use config::{cache_root};
 use cache_url::{url_cache_key};
 use lock::{
@@ -17,7 +16,8 @@ use manifest::{
     package_name_parse, package_coil_parse,
 };
 use tags::{parse_ls_remote, ls_remote_tag_names, ls_remote_sha};
-use semver::{select_tag, select_tag_all, tag_satisfies_all, parse_semver, satisfies_range};
+use semver::{select_tag, select_tag_all, tag_satisfies_all};
+use engine::{parse_coil_version_output, enforce_engine};
 
 fn sh_quote(string s) -> string {
     return "'" + s + "'";
@@ -32,10 +32,7 @@ fn write_resolve_script(string root, string name, string url, string tag, string
     let key = url_cache_key(url)?;
     let (host, owner, repo) = key;
     let bare = join4(join2(cache, "git"), host, owner, repo);
-    let bare_parent = match dirname(bare) {
-        Result::Ok(d) => d,
-        Result::Err(_) => ".",
-    };
+    let bare_parent = path_dirname(bare);
     ensure_dir(bare_parent)?;
     let checkouts = join3(cache, "git", "checkouts");
     ensure_dir(checkouts)?;
@@ -160,7 +157,7 @@ fn run_list_git_deps(string root) -> Result<int, string> {
 }
 
 fn resolve_dep_path(string root, string p) -> string {
-    if is_absolute(p) {
+    if path_is_absolute(p) {
         return p;
     }
     return join2(root, p);
@@ -438,76 +435,6 @@ fn run_collect(string root) -> Result<int, string> {
     return match write_text(join2(root, ".spool/todo.tsv"), todo) {
         Result::Ok(_) => 0,
         Result::Err(_) => raise "write todo.tsv failed",
-    };
-}
-
-fn parse_coil_version_output(string raw) -> Result<string, string> {
-    let s = match trim(raw) {
-        Result::Ok(t) => t,
-        Result::Err(_) => raw,
-    };
-    if starts_with(s, "coil") == false {
-        raise "unrecognized coil --version output";
-    }
-    let rest = match slice(s, 4, len(s)) {
-        Result::Ok(r) => r,
-        Result::Err(_) => raise "unrecognized coil --version output",
-    };
-    rest = match trim(rest) {
-        Result::Ok(t) => t,
-        Result::Err(_) => rest,
-    };
-    if len(rest) == 0 {
-        raise "unrecognized coil --version output";
-    }
-    let parts = match split(rest, " ") {
-        Result::Ok(p) => p,
-        Result::Err(_) => raise "unrecognized coil --version output",
-    };
-    if len(parts) < 1 {
-        raise "unrecognized coil --version output";
-    }
-    if len(parts[0]) == 0 {
-        raise "unrecognized coil --version output";
-    }
-    return parts[0];
-}
-
-fn enforce_engine(string pkg, string range, string running) -> Result<int, string> {
-    let req = match trim(range) {
-        Result::Ok(t) => t,
-        Result::Err(_) => range,
-    };
-    if len(req) == 0 {
-        return 0;
-    }
-    let label = running;
-    if len(label) == 0 {
-        label = "unknown";
-    }
-    let msg = "package " + pkg + " requires coil " + req + ", running " + label;
-    if len(running) == 0 {
-        raise msg;
-    }
-    let ver_res = parse_semver(running);
-    match ver_res {
-        Result::Ok(ver) => {
-            let ok_res = satisfies_range(req, ver);
-            match ok_res {
-                Result::Ok(ok) => {
-                    if ok == false {
-                        raise msg;
-                    }
-                    return 0;
-                },
-                Result::Err(_) => {
-                    raise msg;
-                },
-            };
-        },
-        Result::Err(_) => {
-            raise msg;
-        },
     };
 }
 

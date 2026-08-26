@@ -1,4 +1,4 @@
-use resolve::{parse_coil_version_output, enforce_engine};
+use engine::{parse_coil_version_output, enforce_engine};
 use text::{contains};
 
 test("parse_coil_version_output reads coil --version") {
