@@ -101,8 +101,8 @@ expect_fail() {
     exit 1
   fi
   echo "$out" | grep -q "package $pkg"
-  echo "$out" | grep -q "$range"
-  echo "$out" | grep -q "$COIL_VER"
+  echo "$out" | grep -Fq "$range"
+  echo "$out" | grep -Fq "$COIL_VER"
 }
 
 assert_hooks_idle() {
