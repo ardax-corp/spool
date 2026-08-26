@@ -73,7 +73,6 @@ write_lib() {
 [package]
 name = "$name"
 version = "1.0.0"
-include = "./scripts/include.sh"
 
 [module]
 roots = ["./src"]
@@ -91,11 +90,7 @@ EOS
 #!/bin/sh
 touch "${SPOOL_PROJECT:-.}/DEP_SCRIPT_RAN"
 EOS
-  cat > "$dest/scripts/include.sh" <<'EOS'
-#!/bin/sh
-touch "${SPOOL_PROJECT:-.}/DEP_INCLUDE_RAN"
-EOS
-  chmod +x "$dest/scripts/pre-install.sh" "$dest/scripts/post-install.sh" "$dest/scripts/include.sh"
+  chmod +x "$dest/scripts/pre-install.sh" "$dest/scripts/post-install.sh"
 }
 
 assert_no_file() {
@@ -168,17 +163,16 @@ assert_no_file "$APP/SCRIPT_RAN" "--ignore-scripts did not win"
 "$ROOT/spool" --ignore-scripts --enable-scripts install
 assert_no_file "$APP/SCRIPT_RAN" "--ignore-scripts did not win (flag order)"
 
-# Path dep with its own [scripts] / include: never run during consumer install.
+# Path dep with its own [scripts]: never run during consumer install.
 LIB="$BASE/httplib"
 write_lib "$LIB" "http"
-rm -f "$APP/SCRIPT_RAN" "$APP/DEP_SCRIPT_RAN" "$APP/DEP_INCLUDE_RAN"
+rm -f "$APP/SCRIPT_RAN" "$APP/DEP_SCRIPT_RAN"
 "$ROOT/spool" add http --path "$LIB" --enable-scripts
 test -L "$APP/.spool/deps/http"
 test -f "$APP/SCRIPT_RAN"
 grep -q "pre_install" "$APP/SCRIPT_RAN"
 grep -q "post_install" "$APP/SCRIPT_RAN"
 assert_no_file "$APP/DEP_SCRIPT_RAN" "dependency [scripts] ran"
-assert_no_file "$APP/DEP_INCLUDE_RAN" "dependency include-hook ran"
 
 # Git fixture for update + add-from-scratch.
 FIX="$BASE/fixture"
@@ -203,7 +197,6 @@ test -L "$GITAPP/.spool/deps/fixture"
 grep -q "pre_install" "$GITAPP/SCRIPT_RAN"
 grep -q "post_install" "$GITAPP/SCRIPT_RAN"
 assert_no_file "$GITAPP/DEP_SCRIPT_RAN" "git dep [scripts] ran on add"
-assert_no_file "$GITAPP/DEP_INCLUDE_RAN" "git dep include-hook ran on add"
 
 echo "v1.2" > "$FIX/README.md"
 git -C "$FIX" add -A

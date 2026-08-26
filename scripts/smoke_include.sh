@@ -106,6 +106,7 @@ init_git() {
 
 export COIL="$COIL_BIN"
 export COIL_CACHE_DIR="$CACHE"
+unset SPOOL_IGNORE_SCRIPTS
 
 LEAF="$BASE/leaf"
 write_lib "$LEAF" "leaf"
@@ -135,7 +136,8 @@ if grep -q "hook_path" "$APP/coil.lock"; then
   exit 1
 fi
 
-# Opt-in without allowlist: deny, no sh.
+# Opt-in without allowlist: deny, no sh. pre_install may already have run.
+rm -f "$APP/SCRIPT_RAN"
 set +e
 NOALLOW_OUT="$("$ROOT/spool" install --enable-scripts 2>&1)"
 NOALLOW_RC=$?
@@ -147,7 +149,11 @@ if [[ "$NOALLOW_RC" -eq 0 ]]; then
 fi
 echo "$NOALLOW_OUT" | grep -q "not allowlisted"
 assert_no_file "$APP/INCLUDE_mid" "opt-in without allowlist ran include-hook"
-assert_no_file "$APP/SCRIPT_RAN" "consumer scripts ran after include deny"
+assert_no_file "$APP/INCLUDE_leaf" "opt-in without allowlist ran transitive include-hook"
+if [[ -f "$APP/SCRIPT_RAN" ]] && grep -q "post_install" "$APP/SCRIPT_RAN"; then
+  echo "smoke_include: consumer post_install ran after include deny" >&2
+  exit 1
+fi
 
 "$ROOT/spool" allow-include mid
 "$ROOT/spool" allow-include leaf
@@ -155,8 +161,16 @@ assert_no_file "$APP/SCRIPT_RAN" "consumer scripts ran after include deny"
 # Opt-in + allowlist + matching hash: runs after link, transitives too.
 rm -f "$APP/INCLUDE_mid" "$APP/INCLUDE_leaf" "$APP/SCRIPT_RAN" "$APP/DEP_SCRIPT_RAN"
 "$ROOT/spool" install --enable-scripts
-test -f "$APP/INCLUDE_mid"
-test -f "$APP/INCLUDE_leaf"
+if [[ ! -f "$APP/INCLUDE_mid" ]]; then
+  echo "smoke_include: expected INCLUDE_mid after opted-in allowlisted install" >&2
+  ls -la "$APP" >&2
+  exit 1
+fi
+if [[ ! -f "$APP/INCLUDE_leaf" ]]; then
+  echo "smoke_include: expected INCLUDE_leaf after opted-in allowlisted install" >&2
+  ls -la "$APP" >&2
+  exit 1
+fi
 test -f "$APP/SCRIPT_RAN"
 grep -q "pre_install" "$APP/SCRIPT_RAN"
 grep -q "post_install" "$APP/SCRIPT_RAN"
@@ -178,15 +192,24 @@ if grep "pre_install" "$APP/coil.lock" | grep -q include; then
   exit 1
 fi
 
+# update also runs include-hooks for linked deps (and transitives).
+rm -f "$APP/INCLUDE_mid" "$APP/INCLUDE_leaf" "$APP/SCRIPT_RAN"
+"$ROOT/spool" update mid --enable-scripts
+if [[ ! -f "$APP/INCLUDE_mid" || ! -f "$APP/INCLUDE_leaf" ]]; then
+  echo "smoke_include: update did not run include-hooks" >&2
+  ls -la "$APP" >&2
+  exit 1
+fi
+assert_no_file "$APP/DEP_SCRIPT_RAN" "dependency [scripts] ran on update"
+
 # Changed include.sh with an existing lock hash: mismatch, no sh, pin unchanged.
+# Mutate the materialized checkout (same pin). `update` only takes direct git deps.
 OLD_HASH="$(grep "hook_hash" "$APP/coil.lock")"
-write_include "$LEAF" "touch \"\${SPOOL_PROJECT:-.}/INCLUDE_leaf_changed\""
-git -C "$LEAF" add -A
-git -C "$LEAF" commit -q -m "change include"
-git -C "$LEAF" tag v1.1.0
+LEAF_DEST="$(awk -F'\t' '$1=="leaf"{print $2}' "$APP/.spool/links.tsv")"
+write_include "$LEAF_DEST" "touch \"\${SPOOL_PROJECT:-.}/INCLUDE_leaf_changed\""
 rm -f "$APP/INCLUDE_mid" "$APP/INCLUDE_leaf" "$APP/INCLUDE_leaf_changed"
 set +e
-CHG_OUT="$("$ROOT/spool" update leaf --enable-scripts 2>&1)"
+CHG_OUT="$("$ROOT/spool" install --enable-scripts 2>&1)"
 CHG_RC=$?
 set -e
 if [[ "$CHG_RC" -eq 0 ]]; then
@@ -194,19 +217,18 @@ if [[ "$CHG_RC" -eq 0 ]]; then
   echo "$CHG_OUT" >&2
   exit 1
 fi
-echo "$CHG_OUT" | grep -q "hook hash mismatch"
+if ! echo "$CHG_OUT" | grep -q "hook hash mismatch"; then
+  echo "smoke_include: expected hook hash mismatch" >&2
+  echo "$CHG_OUT" >&2
+  exit 1
+fi
 assert_no_file "$APP/INCLUDE_leaf_changed" "changed include.sh still ran"
 NEW_HASH="$(grep "hook_hash" "$APP/coil.lock")"
 if [[ "$OLD_HASH" != "$NEW_HASH" ]]; then
   echo "smoke_include: lock hash was refreshed on mismatch" >&2
   exit 1
 fi
-
-# Restore leaf include so later commands can succeed if needed.
-write_include "$LEAF" "touch \"\${SPOOL_PROJECT:-.}/INCLUDE_leaf\""
-git -C "$LEAF" add -A
-git -C "$LEAF" commit -q -m "restore include"
-# Keep the original pin; do not update. Use a fresh app for the failing hook.
+write_include "$LEAF_DEST" "touch \"\${SPOOL_PROJECT:-.}/INCLUDE_leaf\""
 
 # Failing hook names package, path, and exit status.
 FAIL="$BASE/failib"
