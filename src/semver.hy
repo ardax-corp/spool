@@ -198,7 +198,7 @@ fn satisfies_range(string requirement, SemVer version) -> Result<bool, string> {
 }
 
 fn satisfies_caret(string requirement, SemVer version) -> Result<bool, string> {
-    return satisfies_range(requirement, version);
+    return satisfies_range(requirement, version)?;
 }
 
 fn select_tag(string requirement, Vec<string> tags) -> Result<string, string> {

@@ -531,7 +531,7 @@ fn check_one_toml(string toml_path, string fallback_name, string running) -> Res
         name = toml_path;
     }
     let range = package_coil_parse(body);
-    return enforce_engine(name, range, running);
+    return enforce_engine(name, range, running)?;
 }
 
 fn run_check_engine(string root, string version_output) -> Result<int, string> {
@@ -553,6 +553,7 @@ fn run_check_engine(string root, string version_output) -> Result<int, string> {
     };
     let i = 0;
     if present == false {
+        i = 0;
     } else {
         let deps = deps_read(toml)?;
         while i < len(deps) {
