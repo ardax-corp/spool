@@ -551,9 +551,10 @@ fn run_check_engine(string root, string version_output) -> Result<int, string> {
         Result::Ok(v) => v,
         Result::Err(_) => false,
     };
-    if present {
+    let i = 0;
+    if present == false {
+    } else {
         let deps = deps_read(toml)?;
-        let i = 0;
         while i < len(deps) {
             let d = deps[i];
             i = i + 1;
@@ -566,7 +567,7 @@ fn run_check_engine(string root, string version_output) -> Result<int, string> {
     }
 
     let packages = lock_read_or_empty(join2(root, "coil.lock"))?;
-    let i = 0;
+    i = 0;
     while i < len(packages) {
         let p = packages[i];
         i = i + 1;
