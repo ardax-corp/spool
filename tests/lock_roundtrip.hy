@@ -76,6 +76,23 @@ test("lock omits empty hook fields") {
     assert(contains(text, "hook_hash") == false)?;
 }
 
+test("lock without [hooks] has empty allow_include") {
+    let pkgs = Vec::new();
+    pkgs.push(make_git_pkg_hook(
+        "http",
+        "https://x",
+        "v1",
+        "c",
+        "h1",
+        "./hooks/include.sh",
+        "hookabc",
+    ));
+    let text = lock_serialize(pkgs);
+    assert(contains(text, "[hooks]") == false)?;
+    let names = lock_parse_allow(text)?;
+    assert(len(names) == 0)?;
+}
+
 test("lock allow_include round-trip") {
     let pkgs = Vec::new();
     pkgs.push(make_git_pkg("http", "https://x", "v1", "c", "h1"));
