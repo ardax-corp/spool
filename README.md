@@ -52,11 +52,8 @@ flag and for `-V`. Spool takes the token after `coil` and compares it to the
 range. It uses the `coil` binary already selected by `COIL` or `PATH`.
 
 `spool install`, `add`, and `update` check the current project, path deps, and
-locked git checkouts that already exist:
-
-- omitted key: no-op
-- in-range: no-op
-- out-of-range: fail closed before git fetch
+locked git checkouts that already exist. Missing key and in-range `>=0.1.0` are
+no-ops. Out-of-range `>=0.2.0` and `^0.2` fail closed before git fetch.
 
 A git dep whose `coil.toml` is not on disk yet is checked after checkout, before
 `link`.
@@ -64,7 +61,7 @@ A git dep whose `coil.toml` is not on disk yet is checked after checkout, before
 The diagnostic names the package, the range, and the running version:
 
 ```text
-package http requires coil >=99.0.0, running 0.1.0
+package http requires coil >=0.2.0, running 0.1.0
 ```
 
 Range language is the same as git-dep `version`: caret (`^`), `>=`, `>`, `<=`,
