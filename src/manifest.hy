@@ -229,6 +229,145 @@ fn package_include_parse(string body) -> string {
     return package_field_parse(body, "include");
 }
 
+fn script_slot_known(string k) -> bool {
+    if k == "pre_install" {
+        return true;
+    }
+    if k == "post_install" {
+        return true;
+    }
+    if k == "pre_update" {
+        return true;
+    }
+    if k == "post_update" {
+        return true;
+    }
+    return false;
+}
+
+fn script_rel_ok(string p) -> bool {
+    if len(p) == 0 {
+        return false;
+    }
+    if starts_with(p, "/") {
+        return false;
+    }
+    let parts = match split(p, "/") {
+        Result::Ok(v) => v,
+        Result::Err(_) => {
+            return false;
+        },
+    };
+    let i = 0;
+    while i < len(parts) {
+        if parts[i] == ".." {
+            return false;
+        }
+        i = i + 1;
+    }
+    return true;
+}
+
+fn scripts_field(string rec, int idx) -> string {
+    let parts = match split(rec, "\t") {
+        Result::Ok(v) => v,
+        Result::Err(_) => {
+            let empty: Vec<string> = Vec::new();
+            empty
+        },
+    };
+    if idx < len(parts) {
+        return parts[idx];
+    }
+    return "";
+}
+
+fn scripts_slot(string rec) -> string {
+    return scripts_field(rec, 0);
+}
+
+fn scripts_rel(string rec) -> string {
+    return scripts_field(rec, 1);
+}
+
+fn scripts_path_of(Vec<string> recs, string slot) -> string {
+    let i = 0;
+    while i < len(recs) {
+        if scripts_slot(recs[i]) == slot {
+            return scripts_rel(recs[i]);
+        }
+        i = i + 1;
+    }
+    return "";
+}
+
+/// Current-project `[scripts]` only. Unknown keys hard-error. Missing keys omitted.
+fn scripts_parse(string body) -> Result<Vec<string>, string> {
+    let lines = match split(body, "\n") {
+        Result::Ok(ls) => ls,
+        Result::Err(_) => raise "split manifest failed",
+    };
+    let out: Vec<string> = Vec::new();
+    let in_scripts = false;
+    let i = 0;
+    while i < len(lines) {
+        let line = match trim(lines[i]) {
+            Result::Ok(t) => t,
+            Result::Err(_) => lines[i],
+        };
+        i = i + 1;
+        if len(line) == 0 {
+            continue;
+        }
+        if starts_with(line, "#") {
+            continue;
+        }
+        if starts_with(line, "[") {
+            in_scripts = line == "[scripts]";
+            continue;
+        }
+        if in_scripts == false {
+            continue;
+        }
+        let kv = parse_kv_line(line)?;
+        let (k, v) = kv;
+        if script_slot_known(k) == false {
+            raise format("unknown scripts key %s", k);
+        }
+        if len(v) == 0 {
+            continue;
+        }
+        if script_rel_ok(v) == false {
+            raise format("script path must be relative to the project root: %s", v);
+        }
+        let j = 0;
+        while j < len(out) {
+            if scripts_slot(out[j]) == k {
+                raise format("duplicate scripts key %s", k);
+            }
+            j = j + 1;
+        }
+        out.push(k + "\t" + v);
+    }
+    return out;
+}
+
+fn scripts_read(string path) -> Result<Vec<string>, string> {
+    let present = match exists(path) {
+        Result::Ok(v) => v,
+        Result::Err(_) => false,
+    };
+    if present == false {
+        let empty: Vec<string> = Vec::new();
+        return empty;
+    }
+    let body = match read_text(path) {
+        Result::Ok(s) => s,
+        Result::Err(_) => raise format("failed to read %s", path),
+    };
+    return scripts_parse(body)?;
+}
+
 fn package_name_read(string path) -> string {
     let present = match exists(path) {
         Result::Ok(v) => v,

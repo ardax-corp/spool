@@ -1,7 +1,7 @@
 use manifest::{
     deps_parse, dep_kind, dep_name, dep_git, dep_version, dep_path, deps_insert_line,
     make_git_dep, format_dep_line, deps_has_name, package_name_parse, package_coil_parse,
-    package_include_parse,
+    package_include_parse, scripts_parse, scripts_path_of, script_rel_ok,
 };
 use text::{contains};
 
@@ -118,4 +118,51 @@ roots = [\"./src\"]
 ";
     assert(contains(body, "[hooks]") == false)?;
     assert(package_include_parse(body) == "./hooks/include.sh")?;
+}
+
+test("scripts_parse reads current-project lifecycle paths") {
+    let body = "[package]
+name = \"app\"
+version = \"0.0.1\"
+
+[scripts]
+pre_install = \"./scripts/pre-install.sh\"
+post_install = \"./scripts/post-install.sh\"
+pre_update = \"./scripts/pre-update.sh\"
+post_update = \"./scripts/post-update.sh\"
+";
+    let recs = scripts_parse(body)?;
+    assert(scripts_path_of(recs, "pre_install") == "./scripts/pre-install.sh")?;
+    assert(scripts_path_of(recs, "post_install") == "./scripts/post-install.sh")?;
+    assert(scripts_path_of(recs, "pre_update") == "./scripts/pre-update.sh")?;
+    assert(scripts_path_of(recs, "post_update") == "./scripts/post-update.sh")?;
+}
+
+test("scripts_parse missing keys are omitted") {
+    let body = "[scripts]
+pre_install = \"./scripts/pre-install.sh\"
+";
+    let recs = scripts_parse(body)?;
+    assert(len(recs) == 1)?;
+    assert(scripts_path_of(recs, "post_install") == "")?;
+}
+
+test("scripts_parse unknown key hard-errors") {
+    let r = scripts_parse("[scripts]
+preinstall = \"./hooks/preinstall.sh\"
+");
+    match r {
+        Result::Ok(_) => {
+            assert(false)?;
+        },
+        Result::Err(e) => {
+            assert(contains(e, "unknown scripts key"))?;
+        },
+    };
+}
+
+test("script paths stay in the project tree") {
+    assert(script_rel_ok("./scripts/pre-install.sh"))?;
+    assert(script_rel_ok("../evil.sh") == false)?;
+    assert(script_rel_ok("/tmp/x.sh") == false)?;
 }
