@@ -30,8 +30,7 @@ compiler already understands via `[module].roots`.
 
 ## Requirements
 
-- Coil toolchain (`coil` on `PATH`, or set `COIL`) built with `[package]`/`[dependencies]`
-  manifest support (coil-lang `feature/coi-3` or later)
+- Coil toolchain (`coil` on `PATH`, or set `COIL`)
 - Host `git` and `sh`
 - Coil stdlib: default `../coil-stdlib/src` relative to this repo
   ([coil-stdlib](https://github.com/ardax-corp/coil-stdlib))
@@ -122,7 +121,3 @@ Design: Linear project **Git-based package manager** (COI-1 design doc).
 - `env::exec` / `env::exit` warnings fail in-memory compile; `extern` in imported
   modules panics (`invalid library handle`); `system(3)` breaks after `Vec` alloc
 - So git stays in the bash driver; Coil does plan/pick/lock/link only
-- **coil-lang `main` rejects `[package]` / `[dependencies]` (E0900, COI-21).** Local and CI
-  builds use a compiler with those tables (coil-lang `feature/coi-3`, or the
-  patch in `ci/coil-package-manifest.patch`). Drop the patch once that lands on
-  `main`.
