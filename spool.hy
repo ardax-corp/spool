@@ -8,6 +8,7 @@ use string::{format, to_bytes};
 use text::{split, trim};
 use lock::{
     lock_read_or_empty, lock_pkg_name, lock_git_url, lock_git_rev, lock_git_hash,
+    lock_add_allow_include,
 };
 use roots::{link_dep, ensure_roots_entry};
 use util::{join2, join3, join4, ensure_dir, write_status, git_sh_preamble, path_dirname};
@@ -179,7 +180,7 @@ fn main() {
             Result::Ok(_) => 0,
             Result::Err(_) => 0,
         };
-        match write_all(stdout(), to_bytes("Usage:\n  spool install\n  spool add <name> --git <url> [--version <req>]\n  spool add <name> --path <path>\n  spool update [name]\n  spool help\n")) {
+        match write_all(stdout(), to_bytes("Usage:\n  spool install [--ignore-scripts]\n  spool add <name> --git <url> [--version <req>] [--ignore-scripts]\n  spool add <name> --path <path> [--ignore-scripts]\n  spool update [name] [--ignore-scripts]\n  spool allow-include <name>\n  spool help\n")) {
             Result::Ok(_) => 0,
             Result::Err(_) => 0,
         };
@@ -331,6 +332,18 @@ fn main() {
             },
             Result::Err(e) => {
                 finish_err(root, format("spool check_engine failed: %s\n", e));
+            },
+        };
+        return;
+    }
+
+    if cmd == "allow_include" {
+        match lock_add_allow_include(join2(root, "coil.lock"), env_or_empty("SPOOL_ALLOW_INCLUDE")) {
+            Result::Ok(_) => {
+                finish_ok(root, "spool allow_include: ok\n");
+            },
+            Result::Err(e) => {
+                finish_err(root, format("spool allow_include failed: %s\n", e));
             },
         };
         return;
