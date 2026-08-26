@@ -8,7 +8,9 @@ use string::{format, to_bytes};
 use text::{split, trim};
 use lock::{
     lock_read_or_empty, lock_pkg_name, lock_git_url, lock_git_rev, lock_git_hash,
-    lock_add_allow_include,
+    lock_add_allow_include, lock_read_scripts_or_empty, lock_write_scripts,
+    lock_find_script, lock_script_path, lock_script_hash, lock_upsert_script,
+    make_lock_script,
 };
 use roots::{link_dep, ensure_roots_entry};
 use util::{join2, join3, join4, ensure_dir, write_status, git_sh_preamble, path_dirname};
@@ -18,6 +20,8 @@ use resolve::{
     run_add_manifest, run_pick, run_apply_resolved, run_list_git_deps, path_dep_links,
     run_collect, run_check_install, run_check_engine,
 };
+use manifest::{scripts_read, scripts_path_of, package_name_read};
+use hooks::{may_run_hook, hooks_are_off, hook_kind_script, script_gate_lock};
 
 fn run_plan(string root) -> Result<int, string> {
     let packages = lock_read_or_empty(join2(root, "coil.lock"))?;
@@ -131,6 +135,81 @@ fn run_link(string root) -> Result<int, string> {
     return 0;
 }
 
+fn write_spool_file(string root, string name, string body) -> Result<int, string> {
+    ensure_dir(join2(root, ".spool"))?;
+    return match write_text(join2(root, name), body) {
+        Result::Ok(_) => 0,
+        Result::Err(_) => raise format("write %s failed", name),
+    };
+}
+
+fn run_script_lookup(string root, string slot) -> Result<int, string> {
+    let recs = scripts_read(join2(root, "coil.toml"))?;
+    let rel = scripts_path_of(recs, slot);
+    write_spool_file(root, ".spool/script-rel", rel)?;
+    if len(rel) == 0 {
+        return 0;
+    }
+    let abs = join2(root, rel);
+    let present = match exists(abs) {
+        Result::Ok(v) => v,
+        Result::Err(_) => false,
+    };
+    if present == false {
+        raise format("missing script %s", rel);
+    }
+    return 0;
+}
+
+fn run_script_gate(
+    string root,
+    string slot,
+    string rel,
+    string hash,
+    string ignore_scripts,
+) -> Result<int, string> {
+    if hooks_are_off(ignore_scripts) {
+        write_spool_file(root, ".spool/script-run", "0")?;
+        return 0;
+    }
+    if len(rel) == 0 {
+        write_spool_file(root, ".spool/script-run", "0")?;
+        return 0;
+    }
+    let pkg = package_name_read(join2(root, "coil.toml"));
+    if len(pkg) == 0 {
+        pkg = "app";
+    }
+    let lock_path = join2(root, "coil.lock");
+    let scripts = lock_read_scripts_or_empty(lock_path)?;
+    let rec = lock_find_script(scripts, slot);
+    let decided = script_gate_lock(
+        lock_script_path(rec),
+        lock_script_hash(rec),
+        rel,
+        hash,
+    );
+    let (lp, lh, first_pin) = decided;
+    if first_pin {
+        if len(lh) > 0 {
+            scripts = lock_upsert_script(scripts, make_lock_script(slot, lp, lh));
+            lock_write_scripts(lock_path, scripts)?;
+        }
+    }
+    may_run_hook(
+        false,
+        hook_kind_script(),
+        pkg,
+        rel,
+        hash,
+        lp,
+        lh,
+        false,
+    )?;
+    write_spool_file(root, ".spool/script-run", "1")?;
+    return 0;
+}
+
 fn env_or_empty(string key) -> string {
     match var(key) {
         Result::Ok(c) => {
@@ -180,7 +259,7 @@ fn main() {
             Result::Ok(_) => 0,
             Result::Err(_) => 0,
         };
-        match write_all(stdout(), to_bytes("Usage:\n  spool install [--ignore-scripts]\n  spool add <name> --git <url> [--version <req>] [--ignore-scripts]\n  spool add <name> --path <path> [--ignore-scripts]\n  spool update [name] [--ignore-scripts]\n  spool allow-include <name>\n  spool help\n")) {
+        match write_all(stdout(), to_bytes("Usage:\n  spool install [--enable-scripts] [--ignore-scripts]\n  spool add <name> --git <url> [--version <req>] [--enable-scripts] [--ignore-scripts]\n  spool add <name> --path <path> [--enable-scripts] [--ignore-scripts]\n  spool update [name] [--enable-scripts] [--ignore-scripts]\n  spool allow-include <name>\n  spool help\n")) {
             Result::Ok(_) => 0,
             Result::Err(_) => 0,
         };
@@ -344,6 +423,36 @@ fn main() {
             },
             Result::Err(e) => {
                 finish_err(root, format("spool allow_include failed: %s\n", e));
+            },
+        };
+        return;
+    }
+
+    if cmd == "script_lookup" {
+        match run_script_lookup(root, env_or_empty("SPOOL_SCRIPT_SLOT")) {
+            Result::Ok(_) => {
+                finish_ok(root, "spool script_lookup: ok\n");
+            },
+            Result::Err(e) => {
+                finish_err(root, format("spool script_lookup failed: %s\n", e));
+            },
+        };
+        return;
+    }
+
+    if cmd == "script_gate" {
+        match run_script_gate(
+            root,
+            env_or_empty("SPOOL_SCRIPT_SLOT"),
+            env_or_empty("SPOOL_SCRIPT_REL"),
+            env_or_empty("SPOOL_SCRIPT_HASH"),
+            env_or_empty("SPOOL_IGNORE_SCRIPTS"),
+        ) {
+            Result::Ok(_) => {
+                finish_ok(root, "spool script_gate: ok\n");
+            },
+            Result::Err(e) => {
+                finish_err(root, format("spool script_gate failed: %s\n", e));
             },
         };
         return;

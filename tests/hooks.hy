@@ -1,7 +1,7 @@
 use hooks::{
     may_run_hook, hooks_are_off, default_hooks_off, ignore_scripts_flag,
-    git_identity_trusted, allow_include_has, allow_include_add,
-    hook_kind_include, hook_kind_script,
+    enable_scripts_flag, git_identity_trusted, allow_include_has, allow_include_add,
+    hook_kind_include, hook_kind_script, script_gate_lock,
 };
 use lock::{
     make_git_pkg_hook, lock_serialize_full, lock_parse, lock_parse_allow,
@@ -72,6 +72,8 @@ test("default and --ignore-scripts are hooks-off") {
     assert(ignore_scripts_flag("--ignore-scripts"))?;
     assert(ignore_scripts_flag("--hooks") == false)?;
     assert(hooks_are_off("0") == false)?;
+    assert(enable_scripts_flag("--enable-scripts"))?;
+    assert(enable_scripts_flag("--ignore-scripts") == false)?;
 }
 
 test("hooks-off denies before allowlist or hash") {
@@ -224,6 +226,63 @@ test("consumer scripts skip allowlist but still need a lock hash") {
         false,
     )?;
     assert(n == 0)?;
+}
+
+test("changed script with an existing lock hash is a mismatch") {
+    let decided = script_gate_lock(
+        "./scripts/pre-install.sh",
+        "abc",
+        "./scripts/pre-install.sh",
+        "changed",
+    );
+    let (lp, lh, first_pin) = decided;
+    assert(first_pin == false)?;
+    assert(lh == "abc")?;
+    deny_contains(
+        may_run_hook(
+            false,
+            hook_kind_script(),
+            "app",
+            "./scripts/pre-install.sh",
+            "changed",
+            lp,
+            lh,
+            false,
+        ),
+        "hook hash mismatch",
+    )?;
+}
+
+test("empty lock hash is first-pin then gate, not a silent refresh") {
+    let decided = script_gate_lock("", "", "./scripts/pre-install.sh", "abc");
+    let (lp, lh, first_pin) = decided;
+    assert(first_pin)?;
+    assert(lp == "./scripts/pre-install.sh")?;
+    assert(lh == "abc")?;
+    let n = may_run_hook(
+        false,
+        hook_kind_script(),
+        "app",
+        "./scripts/pre-install.sh",
+        "abc",
+        lp,
+        lh,
+        false,
+    )?;
+    assert(n == 0)?;
+    deny_contains(
+        may_run_hook(
+            false,
+            hook_kind_script(),
+            "app",
+            "./scripts/pre-install.sh",
+            "abc",
+            "",
+            "",
+            false,
+        ),
+        "missing lock hash",
+    )?;
 }
 
 test("allow_include list is explicit") {
