@@ -30,11 +30,42 @@ compiler already understands via `[module].roots`.
 
 ## Requirements
 
-- Coil toolchain (`coil` on `PATH`, or set `COIL`) built with `[package]`/`[dependencies]`
-  manifest support (coil-lang `feature/coi-3` or later)
+- Coil toolchain (`coil` on `PATH`, or set `COIL`)
 - Host `git` and `sh`
 - Coil stdlib: default `../coil-stdlib/src` relative to this repo
   ([coil-stdlib](https://github.com/ardax-corp/coil-stdlib))
+
+## Engine range
+
+A package may set `[package].coil` to a semver range against the running Coil
+toolchain. The key is optional. Spool stores the string as written.
+
+```toml
+[package]
+name = "http"
+version = "1.2.0"
+coil = ">=0.1.0"
+```
+
+The engine string is `coil --version`. coil-lang prints `coil 0.1.0` for that
+flag and for `-V`. Spool takes the token after `coil` and compares it to the
+range. It uses the `coil` binary already selected by `COIL` or `PATH`.
+
+`spool install`, `add`, and `update` check the current project, path deps, and
+locked git checkouts that already exist. Missing key and in-range `>=0.1.0` are
+no-ops. Out-of-range `>=0.2.0` and `^0.2` fail closed before git fetch.
+
+A git dep whose `coil.toml` is not on disk yet is checked after checkout, before
+`link`.
+
+The diagnostic names the package, the range, and the running version:
+
+```text
+package http requires coil >=0.2.0, running 0.1.0
+```
+
+Range language is the same as git-dep `version`: caret (`^`), `>=`, `>`, `<=`,
+`<`, `=`, exact, or `*`.
 
 ## Cache
 
@@ -122,7 +153,3 @@ Design: Linear project **Git-based package manager** (COI-1 design doc).
 - `env::exec` / `env::exit` warnings fail in-memory compile; `extern` in imported
   modules panics (`invalid library handle`); `system(3)` breaks after `Vec` alloc
 - So git stays in the bash driver; Coil does plan/pick/lock/link only
-- **coil-lang `main` rejects `[package]` / `[dependencies]` (E0900, COI-21).** Local and CI
-  builds use a compiler with those tables (coil-lang `feature/coi-3`, or the
-  patch in `ci/coil-package-manifest.patch`). Drop the patch once that lands on
-  `main`.
