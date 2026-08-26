@@ -95,9 +95,8 @@ allow_include = ['http']
 ```
 
 `[[package]]` may also store `hook_path` and `hook_hash` for include-hooks.
-Those still do not run (COI-104). An include-hook is eligible only when that
-package is on `allow_include` and both the path and the content hash match the
-lock.
+Those still do not run. An include-hook is eligible only when that package is
+on `allow_include` and both the path and the content hash match the lock.
 
 `may_run_hook` raises these strings:
 
@@ -123,19 +122,38 @@ pre_update = "./scripts/pre-update.sh"
 post_update = "./scripts/post-update.sh"
 ```
 
+Default is still off. `--enable-scripts` opts in on `install`, `add`, and
+`update`. `--ignore-scripts` wins even when both flags are present.
+
 With `--enable-scripts`:
 
 - `spool install` runs `pre_install` then fetch/link, then `post_install`
 - `spool update` runs `pre_update` / `post_update`
-- `spool add` that materializes deps uses the install pair
+- `spool add` uses the install pair
 
-`pre_*` runs before fetch/link for that command. `post_*` runs after a
-successful link. Non-zero exit aborts with the script path and exit status.
+`pre_*` runs after engine checks and before fetch/link. `post_*` runs after a
+successful link. `sh` runs from the project root. Non-zero exit is
+`spool: <path> exited <status>` and aborts. A missing file is
+`spool: missing script <path>`.
 
-Hashes are stored in lock `[scripts]` (`pre_install` / `pre_install_hash`, …),
-not on a `[[package]]` row. The current project is not a git pin. First opted-in
-run records the hash. After that, a changed file is a hash mismatch and does
-not run.
+Every `sh` goes through `may_run_hook` first (`kind` `script`). Scripts skip
+the include allowlist. They still need a lock hash.
+
+Hashes live in lock `[scripts]`, not on a `[[package]]` row. The hash is
+`git hash-object` of the file. First opted-in run records path and hash.
+After that, the existing pin is checked first. A changed file is a hash
+mismatch. It does not `sh` and does not rewrite the lock:
+
+```toml
+[scripts]
+pre_install = './scripts/pre-install.sh'
+pre_install_hash = 'abc123'
+post_install = './scripts/post-install.sh'
+post_install_hash = 'def456'
+```
+
+That diagnostic is `hook hash mismatch for <package>`, using the current
+`[package].name` (or `app` if the name is empty).
 
 A dependency's `[scripts]` and `[package].include` are not executed during a
 consumer install.
