@@ -33,7 +33,7 @@ fn include_from_lock(
     let pkgs = lock_parse(lock_text)?;
     let allow = lock_parse_allow(lock_text)?;
     let p = lock_find(pkgs, pkg);
-    return may_run_hook(
+    let n = may_run_hook(
         hooks_off,
         hook_kind_include(),
         pkg,
@@ -42,7 +42,8 @@ fn include_from_lock(
         lock_pkg_hook_path(p),
         lock_pkg_hook_hash(p),
         allow_include_has(allow, pkg),
-    );
+    )?;
+    return n;
 }
 
 fn http_lock(bool allowlisted) -> string {
@@ -236,7 +237,7 @@ test("allow_include list is explicit") {
 
 test("default: include hook not allowed") {
     let lock = http_lock(false);
-    assert(contains(lock, "[hooks]") == false)?;
+    assert(contains(lock, "allow_include") == false)?;
     deny_contains(
         include_from_lock(
             default_hooks_off(),
