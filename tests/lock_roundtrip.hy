@@ -119,6 +119,18 @@ test("lock_upsert keeps hook fields when the new pin omits them") {
     assert(lock_pkg_hook_hash(pkgs[0]) == "abc")?;
 }
 
+test("lock_upsert does not refresh a present hook hash") {
+    let pkgs = Vec::new();
+    pkgs.push(make_git_pkg_hook("http", "https://x", "v1", "c1", "h1", "./h.sh", "abc"));
+    pkgs = lock_upsert(
+        pkgs,
+        make_git_pkg_hook("http", "https://x", "v2", "c2", "h2", "./h.sh", "changed"),
+    );
+    assert(lock_pkg_hash(pkgs[0]) == "h2")?;
+    assert(lock_pkg_hook_path(pkgs[0]) == "./h.sh")?;
+    assert(lock_pkg_hook_hash(pkgs[0]) == "abc")?;
+}
+
 test("lock [scripts] round-trip is not a package row") {
     let pkgs = Vec::new();
     pkgs.push(make_git_pkg("http", "https://x", "v1", "c", "h1"));

@@ -72,3 +72,4 @@ jobs:
           ./scripts/smoke_engine.sh
           ./scripts/smoke_hooks.sh
           ./scripts/smoke_scripts.sh
+          ./scripts/smoke_include.sh

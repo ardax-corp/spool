@@ -798,9 +798,14 @@ fn lock_upsert(Vec<string> packages, string pkg) -> Vec<string> {
     let name = lock_pkg_name(pkg);
     let old = lock_find(packages, name);
     if len(old) > 0 {
-        if len(lock_pkg_hook_path(pkg)) == 0 {
-            if len(lock_pkg_hook_hash(pkg)) == 0 {
-                pkg = lock_pkg_with_hook(pkg, lock_pkg_hook_path(old), lock_pkg_hook_hash(old));
+        let old_hash = lock_pkg_hook_hash(old);
+        if len(old_hash) > 0 {
+            pkg = lock_pkg_with_hook(pkg, lock_pkg_hook_path(old), old_hash);
+        } else {
+            if len(lock_pkg_hook_path(pkg)) == 0 {
+                if len(lock_pkg_hook_hash(pkg)) == 0 {
+                    pkg = lock_pkg_with_hook(pkg, lock_pkg_hook_path(old), lock_pkg_hook_hash(old));
+                }
             }
         }
     }

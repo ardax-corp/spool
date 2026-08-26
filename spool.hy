@@ -10,7 +10,8 @@ use lock::{
     lock_read_or_empty, lock_pkg_name, lock_git_url, lock_git_rev, lock_git_hash,
     lock_add_allow_include, lock_read_scripts_or_empty, lock_write_scripts,
     lock_find_script, lock_script_path, lock_script_hash, lock_upsert_script,
-    make_lock_script,
+    make_lock_script, lock_read_allow_or_empty, lock_find, lock_pkg_hook_path,
+    lock_pkg_hook_hash, lock_pkg_with_hook, lock_upsert, lock_write,
 };
 use roots::{link_dep, ensure_roots_entry};
 use util::{join2, join3, join4, ensure_dir, write_status, git_sh_preamble, path_dirname};
@@ -20,8 +21,11 @@ use resolve::{
     run_add_manifest, run_pick, run_apply_resolved, run_list_git_deps, path_dep_links,
     run_collect, run_check_install, run_check_engine,
 };
-use manifest::{scripts_read, scripts_path_of, package_name_read};
-use hooks::{may_run_hook, hooks_are_off, hook_kind_script, script_gate_lock};
+use manifest::{scripts_read, scripts_path_of, package_name_read, package_include_read};
+use hooks::{
+    may_run_hook, hooks_are_off, hook_kind_script, hook_kind_include, script_gate_lock,
+    include_gate_lock, allow_include_has,
+};
 
 fn run_plan(string root) -> Result<int, string> {
     let packages = lock_read_or_empty(join2(root, "coil.lock"))?;
@@ -219,6 +223,76 @@ fn env_or_empty(string key) -> string {
             return "";
         },
     };
+}
+
+fn run_include_lookup(string root, string pkg, string dest) -> Result<int, string> {
+    let rel = package_include_read(join2(dest, "coil.toml"))?;
+    write_spool_file(root, ".spool/include-rel", rel)?;
+    if len(rel) == 0 {
+        return 0;
+    }
+    let abs = join2(dest, rel);
+    let present = match exists(abs) {
+        Result::Ok(v) => v,
+        Result::Err(_) => false,
+    };
+    if present == false {
+        raise format("missing include-hook %s %s", pkg, rel);
+    }
+    return 0;
+}
+
+fn run_include_gate(
+    string root,
+    string pkg,
+    string rel,
+    string hash,
+    string ignore_scripts,
+) -> Result<int, string> {
+    if hooks_are_off(ignore_scripts) {
+        write_spool_file(root, ".spool/include-run", "0")?;
+        return 0;
+    }
+    if len(rel) == 0 {
+        write_spool_file(root, ".spool/include-run", "0")?;
+        return 0;
+    }
+    if len(pkg) == 0 {
+        raise "missing package name";
+    }
+    let lock_path = join2(root, "coil.lock");
+    let packages = lock_read_or_empty(lock_path)?;
+    let allow = lock_read_allow_or_empty(lock_path)?;
+    let rec = lock_find(packages, pkg);
+    let decided = include_gate_lock(
+        len(rec) > 0,
+        lock_pkg_hook_path(rec),
+        lock_pkg_hook_hash(rec),
+        rel,
+        hash,
+    );
+    let (lp, lh, first_pin) = decided;
+    if first_pin {
+        if len(lh) > 0 {
+            if len(rec) > 0 {
+                let pinned = lock_pkg_with_hook(rec, lp, lh);
+                packages = lock_upsert(packages, pinned);
+                lock_write(lock_path, packages)?;
+            }
+        }
+    }
+    may_run_hook(
+        false,
+        hook_kind_include(),
+        pkg,
+        rel,
+        hash,
+        lp,
+        lh,
+        allow_include_has(allow, pkg),
+    )?;
+    write_spool_file(root, ".spool/include-run", "1")?;
+    return 0;
 }
 
 fn finish_ok(string root, string msg) {
@@ -453,6 +527,36 @@ fn main() {
             },
             Result::Err(e) => {
                 finish_err(root, format("spool script_gate failed: %s\n", e));
+            },
+        };
+        return;
+    }
+
+    if cmd == "include_lookup" {
+        match run_include_lookup(root, env_or_empty("SPOOL_INCLUDE_NAME"), env_or_empty("SPOOL_INCLUDE_DEST")) {
+            Result::Ok(_) => {
+                finish_ok(root, "spool include_lookup: ok\n");
+            },
+            Result::Err(e) => {
+                finish_err(root, format("spool include_lookup failed: %s\n", e));
+            },
+        };
+        return;
+    }
+
+    if cmd == "include_gate" {
+        match run_include_gate(
+            root,
+            env_or_empty("SPOOL_INCLUDE_NAME"),
+            env_or_empty("SPOOL_INCLUDE_REL"),
+            env_or_empty("SPOOL_INCLUDE_HASH"),
+            env_or_empty("SPOOL_IGNORE_SCRIPTS"),
+        ) {
+            Result::Ok(_) => {
+                finish_ok(root, "spool include_gate: ok\n");
+            },
+            Result::Err(e) => {
+                finish_err(root, format("spool include_gate failed: %s\n", e));
             },
         };
         return;

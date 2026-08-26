@@ -75,6 +75,21 @@ fn script_gate_lock(
     return (lock_path, lock_hash, false);
 }
 
+/// Include-hooks first-pin only on an existing `[[package]]` row.
+/// No row is missing lock hash, not an in-memory pin.
+fn include_gate_lock(
+    bool have_row,
+    string lock_path,
+    string lock_hash,
+    string path,
+    string actual_hash,
+) -> (string, string, bool) {
+    if have_row == false {
+        return ("", "", false);
+    }
+    return script_gate_lock(lock_path, lock_hash, path, actual_hash);
+}
+
 fn may_run_hook(
     bool hooks_off,
     string kind,

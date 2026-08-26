@@ -268,6 +268,28 @@ fn script_rel_ok(string p) -> bool {
     return true;
 }
 
+fn package_include_read(string path) -> Result<string, string> {
+    let present = match exists(path) {
+        Result::Ok(v) => v,
+        Result::Err(_) => false,
+    };
+    if present == false {
+        return "";
+    }
+    let body = match read_text(path) {
+        Result::Ok(s) => s,
+        Result::Err(_) => raise format("failed to read %s", path),
+    };
+    let rel = package_include_parse(body);
+    if len(rel) == 0 {
+        return "";
+    }
+    if script_rel_ok(rel) == false {
+        raise format("include path must be relative to the package checkout: %s", rel);
+    }
+    return rel;
+}
+
 fn scripts_field(string rec, int idx) -> string {
     let parts = match split(rec, "\t") {
         Result::Ok(v) => v,
