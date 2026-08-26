@@ -8,7 +8,7 @@ use lock::{
     lock_pkg_hook_path, lock_pkg_hook_hash,
 };
 use io::file::{write_text};
-use io::fs::{exists, create_dir_all};
+use io::fs::{exists, create_dir_all, remove_file};
 use text::{contains};
 
 fn deny_contains(Result<int, string> r, string needle) -> Result<int, string> {
@@ -86,6 +86,13 @@ fn ensure_dir(string p) -> Result<int, string> {
     };
 }
 
+fn clear_marker(string p) {
+    match remove_file(p) {
+        Result::Ok(_) => 0,
+        Result::Err(_) => 0,
+    };
+}
+
 /// Marker only. Does not exec. Writes HOOK_RAN when the gate would allow `sh`.
 fn mark_if_allowed(string marker, Result<int, string> gated) -> Result<int, string> {
     match gated {
@@ -105,6 +112,7 @@ fn mark_if_allowed(string marker, Result<int, string> gated) -> Result<int, stri
 test("default: consumer scripts do not run") {
     ensure_dir("scratch/coi103/default")?;
     let marker = "scratch/coi103/default/HOOK_RAN";
+    clear_marker(marker);
     let lock = app_lock_scripts("./scripts/pre-install.sh", "abc");
     assert(default_hooks_off())?;
     assert(hooks_are_off(ignore_env(false, false)))?;
@@ -123,6 +131,7 @@ test("default: consumer scripts do not run") {
 test("--enable-scripts: allowed script may run") {
     ensure_dir("scratch/coi103/enable")?;
     let marker = "scratch/coi103/enable/HOOK_RAN";
+    clear_marker(marker);
     let lock = app_lock_scripts("./scripts/pre-install.sh", "abc");
     assert(enable_scripts_flag("--enable-scripts"))?;
     assert(hooks_are_off(ignore_env(false, true)) == false)?;
@@ -141,6 +150,7 @@ test("--enable-scripts: allowed script may run") {
 test("--ignore-scripts wins over --enable-scripts") {
     ensure_dir("scratch/coi103/ignore")?;
     let marker = "scratch/coi103/ignore/HOOK_RAN";
+    clear_marker(marker);
     let lock = app_lock_scripts("./scripts/pre-install.sh", "abc");
     assert(ignore_scripts_flag("--ignore-scripts"))?;
     assert(enable_scripts_flag("--enable-scripts"))?;
@@ -176,6 +186,7 @@ test("lock [scripts] hash lives off the package row") {
 test("changed script with a lock pin mismatches and does not sh") {
     ensure_dir("scratch/coi103/mismatch")?;
     let marker = "scratch/coi103/mismatch/HOOK_RAN";
+    clear_marker(marker);
     let lock = app_lock_scripts("./scripts/pre-install.sh", "abc");
     let scripts = lock_parse_scripts(lock)?;
     let rec = lock_find_script(scripts, "pre_install");
@@ -216,6 +227,7 @@ test("changed script with a lock pin mismatches and does not sh") {
 test("missing lock pin first-pins then gates; empty hash does not skip the gate") {
     ensure_dir("scratch/coi103/first")?;
     let marker = "scratch/coi103/first/HOOK_RAN";
+    clear_marker(marker);
     let lock = empty_scripts_lock();
     assert(contains(lock, "pre_install_hash") == false)?;
     let scripts = lock_parse_scripts(lock)?;
