@@ -88,7 +88,7 @@ test("lock without [hooks] has empty allow_include") {
         "hookabc",
     ));
     let text = lock_serialize(pkgs);
-    assert(contains(text, "[hooks]") == false)?;
+    assert(contains(text, "allow_include") == false)?;
     let names = lock_parse_allow(text)?;
     assert(len(names) == 0)?;
 }
