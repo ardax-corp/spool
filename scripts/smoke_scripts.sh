@@ -139,6 +139,28 @@ if grep -q "name = 'app'" "$APP/coil.lock"; then
   exit 1
 fi
 
+# Changed script with an existing pin: deny, do not sh, do not refresh the hash.
+OLD_HASH="$(grep "pre_install_hash" "$APP/coil.lock")"
+write_marker_script "$APP/scripts/pre-install.sh" "pre_install_changed"
+rm -f "$APP/SCRIPT_RAN"
+set +e
+CHG_OUT="$("$ROOT/spool" install --enable-scripts 2>&1)"
+CHG_RC=$?
+set -e
+if [[ "$CHG_RC" -eq 0 ]]; then
+  echo "smoke_scripts: expected hash mismatch after script change" >&2
+  echo "$CHG_OUT" >&2
+  exit 1
+fi
+echo "$CHG_OUT" | grep -q "hook hash mismatch"
+assert_no_file "$APP/SCRIPT_RAN" "changed script still ran"
+NEW_HASH="$(grep "pre_install_hash" "$APP/coil.lock")"
+if [[ "$OLD_HASH" != "$NEW_HASH" ]]; then
+  echo "smoke_scripts: lock hash was refreshed on mismatch" >&2
+  exit 1
+fi
+write_marker_script "$APP/scripts/pre-install.sh" "pre_install"
+
 # --ignore-scripts wins over --enable-scripts.
 rm -f "$APP/SCRIPT_RAN"
 "$ROOT/spool" --enable-scripts --ignore-scripts install
