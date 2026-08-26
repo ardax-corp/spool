@@ -70,3 +70,4 @@ jobs:
           ./scripts/smoke_auth.sh
           ./scripts/smoke_transitive.sh
           ./scripts/smoke_engine.sh
+          ./scripts/smoke_hooks.sh

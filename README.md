@@ -27,6 +27,7 @@ compiler already understands via `[module].roots`.
 - [x] Lock integrity + diagnostics (COI-14)
 - [x] Transitive deps and diamond errors (COI-15)
 - [x] Engine range `[package].coil` fail-closed on install/add/update (COI-105)
+- [x] Hook trust: `--ignore-scripts`, lock hook hash, consumer allowlist (COI-227)
 
 ## Requirements
 
@@ -67,6 +68,26 @@ package http requires coil >=0.2.0, running 0.1.0
 Range language is the same as git-dep `version`: caret (`^`), `>=`, `>`, `<=`,
 `<`, `=`, exact, or `*`.
 
+## Hook trust
+
+Hooks are off by default. `allow_exec` is not the gate. Unsigned git identity
+is not a substitute for an explicit consumer allowlist plus a lock hash.
+
+`[package].include` on a dependency is not eligible unless the consumer
+allowlists that package. `--ignore-scripts` forces hooks off (CI). Default
+install/add/update is already hooks-off without the flag.
+
+```bash
+./spool install --ignore-scripts
+./spool allow-include http
+```
+
+`coil.lock` may record `hook_path` and `hook_hash` on `[[package]]`, and a
+consumer `[hooks] allow_include` list. `may_run_hook` fail-closes on
+hooks-off, a missing allowlist, or a missing/mismatched lock hash. The only
+eligible path is allowlisted plus a matching path and content hash. This
+release still does not start host `sh` for `[scripts]` or `[package].include`.
+
 ## Cache
 
 Default root: `$XDG_CACHE_HOME/coil` or `~/.cache/coil`.
@@ -98,6 +119,7 @@ $COIL test
 ./scripts/smoke_auth.sh      # git auth failure message
 ./scripts/smoke_transitive.sh # unify compatible pins, diamond error
 ./scripts/smoke_engine.sh     # [package].coil range: omit / in-range / too-old
+./scripts/smoke_hooks.sh      # --ignore-scripts, allow-include, hooks stay off
 ```
 
 ## Private git

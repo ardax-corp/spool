@@ -225,6 +225,10 @@ fn package_coil_parse(string body) -> string {
     return package_field_parse(body, "coil");
 }
 
+fn package_include_parse(string body) -> string {
+    return package_field_parse(body, "include");
+}
+
 fn package_name_read(string path) -> string {
     let present = match exists(path) {
         Result::Ok(v) => v,

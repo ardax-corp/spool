@@ -3,6 +3,25 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 COIL_BIN="${COIL:-coil}"
+
+# Hooks default off. --ignore-scripts forces the same (CI).
+# Do not start host sh for [scripts] or [package].include.
+IGNORE_SCRIPTS=1
+ARGS=()
+for arg in "$@"; do
+  if [[ "$arg" == "--ignore-scripts" ]]; then
+    IGNORE_SCRIPTS=1
+  else
+    ARGS+=("$arg")
+  fi
+done
+if [[ ${#ARGS[@]} -gt 0 ]]; then
+  set -- "${ARGS[@]}"
+else
+  set --
+fi
+export SPOOL_IGNORE_SCRIPTS="$IGNORE_SCRIPTS"
+
 CMD="${1:-help}"
 shift || true
 
@@ -143,6 +162,17 @@ case "$CMD" in
     ;;
   link)
     run_coil link
+    ;;
+  allow-include)
+    NAME="${1:-}"
+    if [[ -z "$NAME" ]]; then
+      echo "usage: spool allow-include <name>" >&2
+      exit 1
+    fi
+    export SPOOL_ALLOW_INCLUDE="$NAME"
+    run_coil allow_include
+    check_status
+    echo "spool allow-include: $NAME"
     ;;
   add)
     NAME=""
