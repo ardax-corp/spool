@@ -1,6 +1,7 @@
 use manifest::{
     deps_parse, dep_kind, dep_name, dep_git, dep_version, dep_path, deps_insert_line,
     make_git_dep, format_dep_line, deps_has_name, package_name_parse, package_coil_parse,
+    package_include_parse,
 };
 use text::{contains};
 
@@ -87,4 +88,21 @@ include = \"./hooks/include.sh\"
 preinstall = \"./hooks/preinstall.sh\"
 ";
     assert(package_coil_parse(body) == ">=0.1.0")?;
+}
+
+test("package_include_parse reads include-hook path") {
+    let body = "[package]
+name = \"http\"
+version = \"0.1.0\"
+include = \"./hooks/include.sh\"
+";
+    assert(package_include_parse(body) == "./hooks/include.sh")?;
+}
+
+test("package_include_parse omitted is empty") {
+    let body = "[package]
+name = \"http\"
+version = \"0.1.0\"
+";
+    assert(package_include_parse(body) == "")?;
 }
