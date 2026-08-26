@@ -156,7 +156,7 @@ materialize() {
   run_coil link
 }
 
-# Current-project [scripts] only. Missing key is a no-op. Dep scripts are COI-104.
+# Current-project [scripts] only. Missing key is a no-op. Dep include-hooks are run_include_hooks.
 run_project_script() {
   local slot="$1"
   case "$IGNORE_SCRIPTS" in
@@ -198,6 +198,55 @@ run_project_script() {
   fi
 }
 
+# Dependency [package].include after checkout+link. Does not run dep [scripts].
+run_include_hooks() {
+  case "$IGNORE_SCRIPTS" in
+    0|false) ;;
+    *) return 0 ;;
+  esac
+  local f="$SPOOL_PROJECT/.spool/links.tsv"
+  if [[ ! -f "$f" ]]; then
+    return 0
+  fi
+  while IFS=$'\t' read -r name dest; do
+    [[ -z "${name:-}" ]] && continue
+    export SPOOL_INCLUDE_NAME="$name"
+    export SPOOL_INCLUDE_DEST="$dest"
+    run_coil include_lookup
+    check_status
+    local rel
+    rel="$(tr -d '\n' < "$SPOOL_PROJECT/.spool/include-rel" 2>/dev/null || true)"
+    if [[ -z "$rel" ]]; then
+      continue
+    fi
+    local file="$dest/$rel"
+    if [[ ! -f "$file" ]]; then
+      echo "spool: missing include-hook $name $rel" >&2
+      exit 1
+    fi
+    local hash
+    hash="$(git hash-object "$file")"
+    export SPOOL_INCLUDE_REL="$rel"
+    export SPOOL_INCLUDE_HASH="$hash"
+    run_coil include_gate
+    check_status
+    local runf
+    runf="$(tr -d '\n' < "$SPOOL_PROJECT/.spool/include-run" 2>/dev/null || true)"
+    if [[ "$runf" != "1" ]]; then
+      continue
+    fi
+    local rc=0
+    set +e
+    ( cd "$dest" && sh "$rel" )
+    rc=$?
+    set -e
+    if [[ "$rc" -ne 0 ]]; then
+      echo "spool: include-hook $name $rel exited $rc" >&2
+      exit 1
+    fi
+  done < "$f"
+}
+
 case "$CMD" in
   help|--help|-h)
     run_coil help
@@ -208,6 +257,7 @@ case "$CMD" in
     check_engine
     run_project_script pre_install
     materialize
+    run_include_hooks
     run_project_script post_install
     echo "spool install: ok"
     ;;
@@ -293,6 +343,7 @@ case "$CMD" in
     fi
     walk_transitives
     materialize
+    run_include_hooks
     run_project_script post_install
     echo "spool add: ok"
     ;;
@@ -331,6 +382,7 @@ case "$CMD" in
     done < "$SPOOL_PROJECT/.spool/git-deps.tsv"
     walk_transitives
     materialize
+    run_include_hooks
     run_project_script post_update
     echo "spool update: ok"
     ;;
