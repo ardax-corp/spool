@@ -27,7 +27,7 @@ compiler already understands via `[module].roots`.
 - [x] Lock integrity + diagnostics (COI-14)
 - [x] Transitive deps and diamond errors (COI-15)
 - [x] Engine range `[package].coil` fail-closed on install/add/update (COI-105)
-- [x] Hook trust: `--ignore-scripts`, lock hook hash, consumer allowlist (COI-227)
+- [x] Hook trust gate: `--ignore-scripts`, lock `hook_path` / `hook_hash`, `allow-include` (COI-227). Hooks do not run yet.
 
 ## Requirements
 
@@ -70,23 +70,42 @@ Range language is the same as git-dep `version`: caret (`^`), `>=`, `>`, `<=`,
 
 ## Hook trust
 
-Hooks are off by default. `allow_exec` is not the gate. Unsigned git identity
-is not a substitute for an explicit consumer allowlist plus a lock hash.
+Hooks are off by default. This cut is the gate only. `may_run_hook` answers
+whether a hook may run. `install`, `add`, and `update` do not execute a hook.
 
-`[package].include` on a dependency is not eligible unless the consumer
-allowlists that package. `--ignore-scripts` forces hooks off (CI). Default
-install/add/update is already hooks-off without the flag.
+`--ignore-scripts` is accepted on `install`, `add`, and `update`. Use it in CI.
+The default is already off without the flag.
 
 ```bash
 ./spool install --ignore-scripts
 ./spool allow-include http
 ```
 
-`coil.lock` may record `hook_path` and `hook_hash` on `[[package]]`, and a
-consumer `[hooks] allow_include` list. `may_run_hook` fail-closes on
-hooks-off, a missing allowlist, or a missing/mismatched lock hash. The only
-eligible path is allowlisted plus a matching path and content hash. This
-release still does not start host `sh` for `[scripts]` or `[package].include`.
+`spool allow-include <name>` records the consumer allowlist in `coil.lock`,
+not in `coil.toml`. coil-lang still errors on unknown manifest sections, so do
+not add a `[hooks]` table there. `[package].include` is the include path on a
+package. The allowlist is the lock `[hooks]` table:
+
+```toml
+[hooks]
+allow_include = ['http']
+```
+
+`[[package]]` may also store `hook_path` and `hook_hash`. An include-hook is
+eligible only when that package is on `allow_include` and both the path and
+the content hash match the lock. A hash mismatch fails closed.
+
+`may_run_hook` raises these strings:
+
+```text
+hooks are off (--ignore-scripts)
+include-hook for http is not allowlisted
+untrusted hook: missing lock hash for http
+hook path mismatch for http
+hook hash mismatch for http
+```
+
+Passing the gate means the hook may run. Nothing in this cut runs it.
 
 ## Cache
 
