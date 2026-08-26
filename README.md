@@ -186,7 +186,8 @@ is not the gate.
 
 Every include `sh` goes through `may_run_hook` first (`kind` `include`). The
 pin is `hook_path` / `hook_hash` on that dep's `[[package]]` row. First opted-in
-run records them when the lock slot was empty. After that the existing pin is
+run records them when that row exists and `hook_hash` is empty. No row is
+missing lock hash: no in-memory first-pin, no `sh`. After a pin exists, it is
 checked first. A changed `include.sh` is a hash mismatch. It does not `sh` and
 does not rewrite the lock.
 
