@@ -172,7 +172,7 @@ fn deps_parse(string body) -> Result<Vec<string>, string> {
     return out;
 }
 
-fn package_name_parse(string body) -> string {
+fn package_field_parse(string body, string key) -> string {
     let lines = match split(body, "\n") {
         Result::Ok(ls) => ls,
         Result::Err(_) => {
@@ -207,7 +207,7 @@ fn package_name_parse(string body) -> string {
         match kv_res {
             Result::Ok(kv) => {
                 let (k, v) = kv;
-                if k == "name" {
+                if k == key {
                     return v;
                 }
             },
@@ -215,6 +215,14 @@ fn package_name_parse(string body) -> string {
         };
     }
     return "";
+}
+
+fn package_name_parse(string body) -> string {
+    return package_field_parse(body, "name");
+}
+
+fn package_coil_parse(string body) -> string {
+    return package_field_parse(body, "coil");
 }
 
 fn package_name_read(string path) -> string {
