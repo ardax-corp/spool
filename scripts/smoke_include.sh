@@ -279,4 +279,25 @@ export SPOOL_PROJECT="$PLAINAPP"
 test -L "$PLAINAPP/.spool/deps/plain"
 assert_no_file "$PLAINAPP/INCLUDE_plain" "missing include wrote a marker"
 
+# Path dep: no [[package]] row. Allowlisted + opted-in is missing lock hash, no sh.
+PATHLIB="$BASE/pathlib"
+write_lib "$PATHLIB" "pathlib"
+PATHAPP="$BASE/pathapp"
+write_app "$PATHAPP" "pathapp"
+export SPOOL_PROJECT="$PATHAPP"
+"$ROOT/spool" add pathlib --path "$PATHLIB"
+"$ROOT/spool" allow-include pathlib
+rm -f "$PATHAPP/INCLUDE_pathlib"
+set +e
+PATH_OUT="$("$ROOT/spool" install --enable-scripts 2>&1)"
+PATH_RC=$?
+set -e
+if [[ "$PATH_RC" -eq 0 ]]; then
+  echo "smoke_include: expected missing lock hash for path dep" >&2
+  echo "$PATH_OUT" >&2
+  exit 1
+fi
+echo "$PATH_OUT" | grep -q "missing lock hash"
+assert_no_file "$PATHAPP/INCLUDE_pathlib" "path dep include-hook ran without a lock row"
+
 echo "smoke_include: ok"

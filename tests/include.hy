@@ -1,6 +1,6 @@
 use hooks::{
     may_run_hook, hooks_are_off, default_hooks_off, ignore_scripts_flag,
-    enable_scripts_flag, hook_kind_include, hook_kind_script, script_gate_lock,
+    enable_scripts_flag, hook_kind_include, hook_kind_script, include_gate_lock,
     allow_include_has,
 };
 use lock::{
@@ -62,7 +62,8 @@ fn include_from_lock(
     let pkgs = lock_parse(lock_text)?;
     let allow = lock_parse_allow(lock_text)?;
     let p = lock_find(pkgs, pkg);
-    let decided = script_gate_lock(
+    let decided = include_gate_lock(
+        len(p) > 0,
         lock_pkg_hook_path(p),
         lock_pkg_hook_hash(p),
         path,
@@ -188,7 +189,8 @@ test("changed include.sh with a lock pin mismatches and does not sh") {
     let lock = http_lock("./hooks/include.sh", "abc", true);
     let pkgs = lock_parse(lock)?;
     let rec = lock_find(pkgs, "http");
-    let decided = script_gate_lock(
+    let decided = include_gate_lock(
+        true,
         lock_pkg_hook_path(rec),
         lock_pkg_hook_hash(rec),
         "./hooks/include.sh",
@@ -231,7 +233,8 @@ test("empty lock hash first-pins then gates; a present hash is not refreshed") {
         ),
         "missing lock hash",
     )?;
-    let decided = script_gate_lock(
+    let decided = include_gate_lock(
+        true,
         lock_pkg_hook_path(rec),
         lock_pkg_hook_hash(rec),
         "./hooks/include.sh",
@@ -269,6 +272,56 @@ test("empty lock hash first-pins then gates; a present hash is not refreshed") {
         ),
     );
     assert(lock_pkg_hook_hash(lock_find(pkgs, "http")) == "abc")?;
+}
+
+test("allowlisted + opted-in include with no lock row is deny, no sh") {
+    ensure_dir("scratch/coi104/norow")?;
+    let marker = "scratch/coi104/norow/HOOK_RAN";
+    clear_marker(marker);
+    let pkgs = Vec::new();
+    let allow = Vec::new();
+    allow.push("http");
+    let lock = lock_serialize_full(pkgs, allow);
+    assert(contains(lock, "allow_include"))?;
+    let parsed = lock_parse(lock)?;
+    assert(len(parsed) == 0)?;
+    let rec = lock_find(parsed, "http");
+    assert(len(rec) == 0)?;
+    let decided = include_gate_lock(
+        len(rec) > 0,
+        lock_pkg_hook_path(rec),
+        lock_pkg_hook_hash(rec),
+        "./hooks/include.sh",
+        "abc",
+    );
+    let (lp, lh, first_pin) = decided;
+    assert(first_pin == false)?;
+    assert(lp == "")?;
+    assert(lh == "")?;
+    deny_contains(
+        include_from_lock(
+            hooks_are_off(ignore_env(false, true)),
+            lock,
+            "http",
+            "./hooks/include.sh",
+            "abc",
+        ),
+        "missing lock hash",
+    )?;
+    deny_contains(
+        may_run_hook(
+            false,
+            hook_kind_include(),
+            "http",
+            "./hooks/include.sh",
+            "abc",
+            lp,
+            lh,
+            true,
+        ),
+        "missing lock hash",
+    )?;
+    assert(marker_exists(marker) == false)?;
 }
 
 test("dependency [scripts] are not the include gate") {
