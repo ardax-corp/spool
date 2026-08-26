@@ -106,3 +106,16 @@ version = \"0.1.0\"
 ";
     assert(package_include_parse(body) == "")?;
 }
+
+test("include-hook path is read without a [hooks] table") {
+    let body = "[package]
+name = \"http\"
+version = \"0.1.0\"
+include = \"./hooks/include.sh\"
+
+[module]
+roots = [\"./src\"]
+";
+    assert(contains(body, "[hooks]") == false)?;
+    assert(package_include_parse(body) == "./hooks/include.sh")?;
+}
