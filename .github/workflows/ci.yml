@@ -69,3 +69,4 @@ jobs:
           ./scripts/smoke_integrity.sh
           ./scripts/smoke_auth.sh
           ./scripts/smoke_transitive.sh
+          ./scripts/smoke_engine.sh

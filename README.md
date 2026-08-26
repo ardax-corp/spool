@@ -26,6 +26,7 @@ compiler already understands via `[module].roots`.
 - [x] Private git via host credentials (COI-13)
 - [x] Lock integrity + diagnostics (COI-14)
 - [x] Transitive deps and diamond errors (COI-15)
+- [x] Engine range `[package].coil` fail-closed on install/add/update (COI-105)
 
 ## Requirements
 
@@ -65,6 +66,7 @@ $COIL test
 ./scripts/smoke_integrity.sh # hash mismatch, missing/corrupt lock
 ./scripts/smoke_auth.sh      # git auth failure message
 ./scripts/smoke_transitive.sh # unify compatible pins, diamond error
+./scripts/smoke_engine.sh     # [package].coil range: omit / in-range / too-old
 ```
 
 ## Private git
@@ -98,17 +100,19 @@ module boundaries (COI-12). Enums and functions in a git/path dep compile and ru
 
 `install` flow:
 
-1. Coil `plan` — read `coil.lock`, write `.spool/fetch.sh` + `.spool/links.tsv`
-2. Bash runs `fetch.sh` (git clone/fetch + worktree)
-3. Coil `link` — symlink `.spool/deps/<name>` and ensure roots
+1. Coil `check_install` + `[package].coil` engine range (current project and cached checkouts)
+2. Coil `plan` — read `coil.lock`, write `.spool/fetch.sh` + `.spool/links.tsv`
+3. Bash runs `fetch.sh` (git clone/fetch + worktree)
+4. Coil engine range again for newly fetched `coil.toml` files, then `link`
 
 `add` / `update` flow:
 
-1. Coil upserts `[dependencies]` (`add`) or lists git deps (`update`)
-2. Bash `git ls-remote --tags`; Coil picks the highest matching semver tag
-3. Bash `resolve.sh` fetches a worktree and records the tree hash
-4. Coil merges `coil.lock`, then the usual plan → fetch → verify tree hash → link
-5. `add` / `update` then walk each package `coil.toml` for transitive git deps (unify compatible pins, error on diamonds)
+1. Coil checks `[package].coil` on the current project (and path deps / cached checkouts)
+2. Coil upserts `[dependencies]` (`add`) or lists git deps (`update`)
+3. Bash `git ls-remote --tags`; Coil picks the highest matching semver tag
+4. Bash `resolve.sh` fetches a worktree and records the tree hash
+5. Coil merges `coil.lock`, then the usual plan → fetch → verify tree hash → engine range → link
+6. `add` / `update` then walk each package `coil.toml` for transitive git deps (unify compatible pins, error on diamonds)
 
 Design: Linear project **Git-based package manager** (COI-1 design doc).
 
