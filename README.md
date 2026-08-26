@@ -96,11 +96,10 @@ package. The allowlist is the lock `[hooks]` table:
 allow_include = ['http']
 ```
 
-`[[package]]` stores `hook_path` and `hook_hash` for include-hooks. An
-include-hook is eligible only when that package is on `allow_include` and
-both the path and the content hash match the lock. Empty hash is first-pin
-then the same gate. A present hash is never rewritten on `lock_upsert` or
-before `may_run_hook`.
+`[[package]]` stores `hook_path` and `hook_hash` for include-hooks. Those
+run after link when opted in. They still need `allow_include` plus a matching
+path and hash. Empty hash is first-pin then the same gate. A present hash is
+never rewritten. A missing lock row is deny, no `sh`.
 
 `may_run_hook` raises these strings:
 
@@ -173,23 +172,32 @@ include = "./hooks/include.sh"
 ```
 
 The path is relative to that package's checkout, not the consumer. Missing
-`include` is a no-op. The runner does not change coil-lang.
+`include` is a no-op. A declared file that is not on disk is
+`spool: missing include-hook <name> <path>`.
 
-`spool install`, `add`, and `update` run include-hooks after that package is
-checked out and linked, including transitives. `sh` runs from the checkout so
-the script can see its own files. `SPOOL_PROJECT` is still the consumer.
+`spool install`, `add`, and `update` run include-hooks after link, including
+transitives. `sh` runs from the checkout. `SPOOL_PROJECT` is still the
+consumer.
 
 Default is still off. `--enable-scripts` / `SPOOL_IGNORE_SCRIPTS=0` opt in.
-`--ignore-scripts` wins. Include-hooks also need `spool allow-include <name>`
-on the consumer. Opt-in without that allowlist is deny, no `sh`. `allow_exec`
-is not the gate.
+`--ignore-scripts` wins even when both flags are present. Include-hooks also
+need `spool allow-include <name>` on the consumer. Opt-in without that
+allowlist is deny, no `sh`. `allow_exec` is not the gate.
 
 Every include `sh` goes through `may_run_hook` first (`kind` `include`). The
-pin is `hook_path` / `hook_hash` on that dep's `[[package]]` row. First opted-in
-run records them when that row exists and `hook_hash` is empty. No row is
-missing lock hash: no in-memory first-pin, no `sh`. After a pin exists, it is
-checked first. A changed `include.sh` is a hash mismatch. It does not `sh` and
-does not rewrite the lock.
+pin is `hook_path` / `hook_hash` on that dep's `[[package]]` row. The hash is
+`git hash-object` of the file. First opted-in run records them when that row
+exists and `hook_hash` is empty. No `[[package]]` row (a path dep, or any
+name not in the lock) is missing lock hash: no first-pin, no `sh`. After a
+pin exists, it is checked first. A changed include file is a hash mismatch.
+It does not `sh` and does not rewrite the lock:
+
+```toml
+[[package]]
+name = 'http'
+hook_path = './hooks/include.sh'
+hook_hash = 'abc123'
+```
 
 Non-zero exit aborts the consumer command:
 
