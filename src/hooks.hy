@@ -61,6 +61,20 @@ fn allow_include_add(Vec<string> names, string pkg) -> Vec<string> {
     return names;
 }
 
+/// First-pin when the lock hash is empty: caller may record path+hash, then gate.
+/// A present hash is never replaced before may_run_hook.
+fn script_gate_lock(
+    string lock_path,
+    string lock_hash,
+    string path,
+    string actual_hash,
+) -> (string, string, bool) {
+    if len(lock_hash) == 0 {
+        return (path, actual_hash, true);
+    }
+    return (lock_path, lock_hash, false);
+}
+
 fn may_run_hook(
     bool hooks_off,
     string kind,

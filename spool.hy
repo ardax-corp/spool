@@ -21,7 +21,7 @@ use resolve::{
     run_collect, run_check_install, run_check_engine,
 };
 use manifest::{scripts_read, scripts_path_of, package_name_read};
-use hooks::{may_run_hook, hooks_are_off, hook_kind_script};
+use hooks::{may_run_hook, hooks_are_off, hook_kind_script, script_gate_lock};
 
 fn run_plan(string root) -> Result<int, string> {
     let packages = lock_read_or_empty(join2(root, "coil.lock"))?;
@@ -182,17 +182,28 @@ fn run_script_gate(
     }
     let lock_path = join2(root, "coil.lock");
     let scripts = lock_read_scripts_or_empty(lock_path)?;
-    scripts = lock_upsert_script(scripts, make_lock_script(slot, rel, hash));
-    lock_write_scripts(lock_path, scripts)?;
     let rec = lock_find_script(scripts, slot);
+    let decided = script_gate_lock(
+        lock_script_path(rec),
+        lock_script_hash(rec),
+        rel,
+        hash,
+    );
+    let (lp, lh, first_pin) = decided;
+    if first_pin {
+        if len(lh) > 0 {
+            scripts = lock_upsert_script(scripts, make_lock_script(slot, lp, lh));
+            lock_write_scripts(lock_path, scripts)?;
+        }
+    }
     may_run_hook(
         false,
         hook_kind_script(),
         pkg,
         rel,
         hash,
-        lock_script_path(rec),
-        lock_script_hash(rec),
+        lp,
+        lh,
         false,
     )?;
     write_spool_file(root, ".spool/script-run", "1")?;
