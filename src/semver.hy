@@ -1,4 +1,5 @@
 // Semver tag matching for spool (MAJOR.MINOR.PATCH, optional v prefix).
+// Ranges: caret (^), comparison (>= > <= < =), exact, or *.
 use text::{starts_with, split, trim, slice};
 use conv::{parse_int};
 use string::{format};

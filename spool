@@ -32,6 +32,16 @@ check_status() {
   fi
 }
 
+# Fail closed on [package].coil before fetch when the manifest is local/cached;
+# caller also runs this after checkout for newly fetched packages.
+check_engine() {
+  local out=""
+  out="$("$COIL_BIN" --version 2>/dev/null || true)"
+  export SPOOL_COIL_VERSION_OUTPUT="$out"
+  run_coil check_engine
+  check_status
+}
+
 git_failed() {
   local url="${1:-}"
   if [[ -n "$url" ]]; then
@@ -113,6 +123,7 @@ materialize() {
   run_coil plan
   run_git_script "$SPOOL_PROJECT/.spool/fetch.sh"
   verify_checkouts
+  check_engine
   run_coil link
 }
 
@@ -123,6 +134,7 @@ case "$CMD" in
   install)
     run_coil check_install
     check_status
+    check_engine
     materialize
     echo "spool install: ok"
     ;;
@@ -187,8 +199,10 @@ case "$CMD" in
     export SPOOL_ADD_GIT="$GIT"
     export SPOOL_ADD_PATH="$PATH_DEP"
     export SPOOL_ADD_VERSION="$VERSION"
+    check_engine
     run_coil add_manifest
     check_status
+    check_engine
     if [[ -n "$GIT" ]]; then
       resolve_git_dep "$NAME" "$GIT"
     fi
@@ -198,6 +212,7 @@ case "$CMD" in
     ;;
   update)
     ONLY="${1:-}"
+    check_engine
     run_coil list_git_deps
     check_status
     if [[ ! -s "$SPOOL_PROJECT/.spool/git-deps.tsv" ]]; then

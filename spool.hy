@@ -16,7 +16,7 @@ use config::{cache_root};
 use cache_url::{url_cache_key};
 use resolve::{
     run_add_manifest, run_pick, run_apply_resolved, run_list_git_deps, path_dep_links,
-    run_collect, run_check_install,
+    run_collect, run_check_install, run_check_engine,
 };
 
 fn run_plan(string root) -> Result<int, string> {
@@ -323,6 +323,18 @@ fn main() {
             },
             Result::Err(e) => {
                 finish_err(root, format("spool check_install failed: %s\n", e));
+            },
+        };
+        return;
+    }
+
+    if cmd == "check_engine" {
+        match run_check_engine(root, env_or_empty("SPOOL_COIL_VERSION_OUTPUT")) {
+            Result::Ok(_) => {
+                finish_ok(root, "spool check_engine: ok\n");
+            },
+            Result::Err(e) => {
+                finish_err(root, format("spool check_engine failed: %s\n", e));
             },
         };
         return;

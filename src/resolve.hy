@@ -2,7 +2,7 @@
 use io::file::{write_text, read_text};
 use io::fs::{exists};
 use path::{dirname, is_absolute};
-use text::{trim, split, contains};
+use text::{trim, split, contains, starts_with, slice};
 use string::{format};
 use util::{join2, join3, join4, ensure_dir, git_sh_preamble};
 use config::{cache_root};
@@ -14,9 +14,10 @@ use lock::{
 use manifest::{
     deps_read, find_dep, dep_kind, dep_name, dep_git, dep_version, dep_path,
     make_git_dep, make_path_dep, deps_append, package_name_read,
+    package_name_parse, package_coil_parse,
 };
 use tags::{parse_ls_remote, ls_remote_tag_names, ls_remote_sha};
-use semver::{select_tag, select_tag_all, tag_satisfies_all};
+use semver::{select_tag, select_tag_all, tag_satisfies_all, parse_semver, satisfies_range};
 
 fn sh_quote(string s) -> string {
     return "'" + s + "'";
@@ -438,6 +439,141 @@ fn run_collect(string root) -> Result<int, string> {
         Result::Ok(_) => 0,
         Result::Err(_) => raise "write todo.tsv failed",
     };
+}
+
+fn parse_coil_version_output(string raw) -> Result<string, string> {
+    let s = match trim(raw) {
+        Result::Ok(t) => t,
+        Result::Err(_) => raw,
+    };
+    if starts_with(s, "coil") == false {
+        raise "unrecognized coil --version output";
+    }
+    let rest = match slice(s, 4, len(s)) {
+        Result::Ok(r) => r,
+        Result::Err(_) => raise "unrecognized coil --version output",
+    };
+    rest = match trim(rest) {
+        Result::Ok(t) => t,
+        Result::Err(_) => rest,
+    };
+    if len(rest) == 0 {
+        raise "unrecognized coil --version output";
+    }
+    let parts = match split(rest, " ") {
+        Result::Ok(p) => p,
+        Result::Err(_) => raise "unrecognized coil --version output",
+    };
+    if len(parts) < 1 {
+        raise "unrecognized coil --version output";
+    }
+    if len(parts[0]) == 0 {
+        raise "unrecognized coil --version output";
+    }
+    return parts[0];
+}
+
+fn enforce_engine(string pkg, string range, string running) -> Result<int, string> {
+    let req = match trim(range) {
+        Result::Ok(t) => t,
+        Result::Err(_) => range,
+    };
+    if len(req) == 0 {
+        return 0;
+    }
+    let label = running;
+    if len(label) == 0 {
+        label = "unknown";
+    }
+    let msg = "package " + pkg + " requires coil " + req + ", running " + label;
+    if len(running) == 0 {
+        raise msg;
+    }
+    let ver_res = parse_semver(running);
+    match ver_res {
+        Result::Ok(ver) => {
+            let ok_res = satisfies_range(req, ver);
+            match ok_res {
+                Result::Ok(ok) => {
+                    if ok == false {
+                        raise msg;
+                    }
+                    return 0;
+                },
+                Result::Err(_) => {
+                    raise msg;
+                },
+            };
+        },
+        Result::Err(_) => {
+            raise msg;
+        },
+    };
+}
+
+fn check_one_toml(string toml_path, string fallback_name, string running) -> Result<int, string> {
+    let present = match exists(toml_path) {
+        Result::Ok(v) => v,
+        Result::Err(_) => false,
+    };
+    if present == false {
+        return 0;
+    }
+    let body = match read_text(toml_path) {
+        Result::Ok(s) => s,
+        Result::Err(_) => raise format("failed to read %s", toml_path),
+    };
+    let name = package_name_parse(body);
+    if len(name) == 0 {
+        name = fallback_name;
+    }
+    if len(name) == 0 {
+        name = toml_path;
+    }
+    let range = package_coil_parse(body);
+    return enforce_engine(name, range, running);
+}
+
+fn run_check_engine(string root, string version_output) -> Result<int, string> {
+    let running = "";
+    match parse_coil_version_output(version_output) {
+        Result::Ok(v) => {
+            running = v;
+        },
+        Result::Err(_) => {},
+    };
+
+    let who = root_requester(root);
+    check_one_toml(join2(root, "coil.toml"), who, running)?;
+
+    let toml = join2(root, "coil.toml");
+    let present = match exists(toml) {
+        Result::Ok(v) => v,
+        Result::Err(_) => false,
+    };
+    if present {
+        let deps = deps_read(toml)?;
+        let i = 0;
+        while i < len(deps) {
+            let d = deps[i];
+            i = i + 1;
+            if dep_kind(d) != "p" {
+                continue;
+            }
+            let dest = resolve_dep_path(root, dep_path(d));
+            check_one_toml(join2(dest, "coil.toml"), dep_name(d), running)?;
+        }
+    }
+
+    let packages = lock_read_or_empty(join2(root, "coil.lock"))?;
+    let i = 0;
+    while i < len(packages) {
+        let p = packages[i];
+        i = i + 1;
+        let dest = checkout_dir(lock_pkg_hash(p))?;
+        check_one_toml(join2(dest, "coil.toml"), lock_pkg_name(p), running)?;
+    }
+    return 0;
 }
 
 fn run_check_install(string root) -> Result<int, string> {
