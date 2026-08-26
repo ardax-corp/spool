@@ -1,5 +1,6 @@
 // Semver tag matching for spool (MAJOR.MINOR.PATCH, optional v prefix).
-use text::{starts_with, split, trim};
+// Ranges: caret (^), comparison (>= > <= < =), exact, or *.
+use text::{starts_with, split, trim, slice};
 use conv::{parse_int};
 use string::{format};
 
@@ -49,6 +50,22 @@ fn strip_caret(string req) -> string {
         return parts[1];
     }
     return req;
+}
+
+fn rest_after(string s, string prefix) -> string {
+    if starts_with(s, prefix) == false {
+        return s;
+    }
+    let rest = match slice(s, len(prefix), len(s)) {
+        Result::Ok(r) => r,
+        Result::Err(_) => {
+            return s;
+        },
+    };
+    return match trim(rest) {
+        Result::Ok(t) => t,
+        Result::Err(_) => rest,
+    };
 }
 
 fn parse_semver(string raw) -> Result<SemVer, string> {
@@ -108,22 +125,7 @@ fn cmp_semver(SemVer a, SemVer b) -> int {
     };
 }
 
-fn satisfies_caret(string requirement, SemVer version) -> Result<bool, string> {
-    let req = match trim(requirement) {
-        Result::Ok(t) => t,
-        Result::Err(_) => requirement,
-    };
-    if req == "*" {
-        return true;
-    }
-    if len(req) == 0 {
-        return true;
-    }
-    if starts_with(req, "^") == false {
-        let exact = parse_semver(req)?;
-        return cmp_semver(exact, version) == 0;
-    }
-    let base = parse_semver(strip_caret(req))?;
+fn satisfies_caret_base(SemVer base, SemVer version) -> bool {
     match base {
         SemVer::Ver(maj, min, pat) => {
             let base_maj = maj;
@@ -148,6 +150,55 @@ fn satisfies_caret(string requirement, SemVer version) -> Result<bool, string> {
             };
         },
     };
+}
+
+fn satisfies_range(string requirement, SemVer version) -> Result<bool, string> {
+    let req = match trim(requirement) {
+        Result::Ok(t) => t,
+        Result::Err(_) => requirement,
+    };
+    if req == "*" {
+        return true;
+    }
+    if len(req) == 0 {
+        return true;
+    }
+    if starts_with(req, "^") {
+        let base = parse_semver(strip_caret(req))?;
+        return satisfies_caret_base(base, version);
+    }
+    if starts_with(req, ">=") {
+        let base = parse_semver(rest_after(req, ">="))?;
+        if cmp_semver(version, base) < 0 {
+            return false;
+        }
+        return true;
+    }
+    if starts_with(req, "<=") {
+        let base = parse_semver(rest_after(req, "<="))?;
+        if cmp_semver(version, base) > 0 {
+            return false;
+        }
+        return true;
+    }
+    if starts_with(req, ">") {
+        let base = parse_semver(rest_after(req, ">"))?;
+        return cmp_semver(version, base) > 0;
+    }
+    if starts_with(req, "<") {
+        let base = parse_semver(rest_after(req, "<"))?;
+        return cmp_semver(version, base) < 0;
+    }
+    if starts_with(req, "=") {
+        let exact = parse_semver(rest_after(req, "="))?;
+        return cmp_semver(exact, version) == 0;
+    }
+    let exact = parse_semver(req)?;
+    return cmp_semver(exact, version) == 0;
+}
+
+fn satisfies_caret(string requirement, SemVer version) -> Result<bool, string> {
+    return satisfies_range(requirement, version)?;
 }
 
 fn select_tag(string requirement, Vec<string> tags) -> Result<string, string> {

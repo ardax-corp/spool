@@ -4,19 +4,18 @@ use io::{stdout};
 use io::sync::{write_all};
 use io::file::{write_text, read_text};
 use io::fs::{exists, is_dir};
-use path::{dirname};
 use string::{format, to_bytes};
 use text::{split, trim};
 use lock::{
     lock_read_or_empty, lock_pkg_name, lock_git_url, lock_git_rev, lock_git_hash,
 };
 use roots::{link_dep, ensure_roots_entry};
-use util::{join2, join3, join4, ensure_dir, write_status, git_sh_preamble};
+use util::{join2, join3, join4, ensure_dir, write_status, git_sh_preamble, path_dirname};
 use config::{cache_root};
 use cache_url::{url_cache_key};
 use resolve::{
     run_add_manifest, run_pick, run_apply_resolved, run_list_git_deps, path_dep_links,
-    run_collect, run_check_install,
+    run_collect, run_check_install, run_check_engine,
 };
 
 fn run_plan(string root) -> Result<int, string> {
@@ -37,10 +36,7 @@ fn run_plan(string root) -> Result<int, string> {
         let key = url_cache_key(url)?;
         let (host, owner, repo) = key;
         let bare = join4(join2(cache, "git"), host, owner, repo);
-        let bare_parent = match dirname(bare) {
-            Result::Ok(d) => d,
-            Result::Err(_) => ".",
-        };
+        let bare_parent = path_dirname(bare);
         ensure_dir(bare_parent)?;
         let checkouts = join3(cache, "git", "checkouts");
         ensure_dir(checkouts)?;
@@ -323,6 +319,18 @@ fn main() {
             },
             Result::Err(e) => {
                 finish_err(root, format("spool check_install failed: %s\n", e));
+            },
+        };
+        return;
+    }
+
+    if cmd == "check_engine" {
+        match run_check_engine(root, env_or_empty("SPOOL_COIL_VERSION_OUTPUT")) {
+            Result::Ok(_) => {
+                finish_ok(root, "spool check_engine: ok\n");
+            },
+            Result::Err(e) => {
+                finish_err(root, format("spool check_engine failed: %s\n", e));
             },
         };
         return;

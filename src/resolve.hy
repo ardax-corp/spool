@@ -1,10 +1,9 @@
 // Resolve git deps: pick a tag from ls-remote, write resolve.sh, merge coil.lock.
 use io::file::{write_text, read_text};
 use io::fs::{exists};
-use path::{dirname, is_absolute};
 use text::{trim, split, contains};
 use string::{format};
-use util::{join2, join3, join4, ensure_dir, git_sh_preamble};
+use util::{join2, join3, join4, ensure_dir, git_sh_preamble, path_dirname, path_is_absolute};
 use config::{cache_root};
 use cache_url::{url_cache_key};
 use lock::{
@@ -14,9 +13,11 @@ use lock::{
 use manifest::{
     deps_read, find_dep, dep_kind, dep_name, dep_git, dep_version, dep_path,
     make_git_dep, make_path_dep, deps_append, package_name_read,
+    package_name_parse, package_coil_parse,
 };
 use tags::{parse_ls_remote, ls_remote_tag_names, ls_remote_sha};
 use semver::{select_tag, select_tag_all, tag_satisfies_all};
+use engine::{parse_coil_version_output, enforce_engine};
 
 fn sh_quote(string s) -> string {
     return "'" + s + "'";
@@ -31,10 +32,7 @@ fn write_resolve_script(string root, string name, string url, string tag, string
     let key = url_cache_key(url)?;
     let (host, owner, repo) = key;
     let bare = join4(join2(cache, "git"), host, owner, repo);
-    let bare_parent = match dirname(bare) {
-        Result::Ok(d) => d,
-        Result::Err(_) => ".",
-    };
+    let bare_parent = path_dirname(bare);
     ensure_dir(bare_parent)?;
     let checkouts = join3(cache, "git", "checkouts");
     ensure_dir(checkouts)?;
@@ -159,7 +157,7 @@ fn run_list_git_deps(string root) -> Result<int, string> {
 }
 
 fn resolve_dep_path(string root, string p) -> string {
-    if is_absolute(p) {
+    if path_is_absolute(p) {
         return p;
     }
     return join2(root, p);
@@ -438,6 +436,73 @@ fn run_collect(string root) -> Result<int, string> {
         Result::Ok(_) => 0,
         Result::Err(_) => raise "write todo.tsv failed",
     };
+}
+
+fn check_one_toml(string toml_path, string fallback_name, string running) -> Result<int, string> {
+    let present = match exists(toml_path) {
+        Result::Ok(v) => v,
+        Result::Err(_) => false,
+    };
+    if present == false {
+        return 0;
+    }
+    let body = match read_text(toml_path) {
+        Result::Ok(s) => s,
+        Result::Err(_) => raise format("failed to read %s", toml_path),
+    };
+    let name = package_name_parse(body);
+    if len(name) == 0 {
+        name = fallback_name;
+    }
+    if len(name) == 0 {
+        name = toml_path;
+    }
+    let range = package_coil_parse(body);
+    return enforce_engine(name, range, running)?;
+}
+
+fn run_check_engine(string root, string version_output) -> Result<int, string> {
+    let running = "";
+    match parse_coil_version_output(version_output) {
+        Result::Ok(v) => {
+            running = v;
+        },
+        Result::Err(_) => {},
+    };
+
+    let who = root_requester(root);
+    check_one_toml(join2(root, "coil.toml"), who, running)?;
+
+    let toml = join2(root, "coil.toml");
+    let present = match exists(toml) {
+        Result::Ok(v) => v,
+        Result::Err(_) => false,
+    };
+    let i = 0;
+    if present == false {
+        i = 0;
+    } else {
+        let deps = deps_read(toml)?;
+        while i < len(deps) {
+            let d = deps[i];
+            i = i + 1;
+            if dep_kind(d) != "p" {
+                continue;
+            }
+            let dest = resolve_dep_path(root, dep_path(d));
+            check_one_toml(join2(dest, "coil.toml"), dep_name(d), running)?;
+        }
+    }
+
+    let packages = lock_read_or_empty(join2(root, "coil.lock"))?;
+    i = 0;
+    while i < len(packages) {
+        let p = packages[i];
+        i = i + 1;
+        let dest = checkout_dir(lock_pkg_hash(p))?;
+        check_one_toml(join2(dest, "coil.toml"), lock_pkg_name(p), running)?;
+    }
+    return 0;
 }
 
 fn run_check_install(string root) -> Result<int, string> {

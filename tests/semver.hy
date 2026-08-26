@@ -1,4 +1,4 @@
-use semver::{parse_semver, satisfies_caret, select_tag, select_tag_all, cmp_semver, SemVer};
+use semver::{parse_semver, satisfies_caret, satisfies_range, select_tag, select_tag_all, cmp_semver, SemVer};
 
 test("parse_semver accepts v prefix") {
     let a = parse_semver("v1.2.3")?;
@@ -67,4 +67,18 @@ test("select_tag_all rejects incompatible carets") {
             assert(true)?;
         },
     };
+}
+
+test("comparison operators match git-dep range language") {
+    let v = parse_semver("0.1.0")?;
+    assert(satisfies_range(">=0.1.0", v)?)?;
+    assert(satisfies_range(">=0.1", v)?)?;
+    assert(satisfies_range(">0.0.9", v)?)?;
+    assert(satisfies_range(">=0.2.0", v)? == false)?;
+    assert(satisfies_range(">0.1.0", v)? == false)?;
+    assert(satisfies_range("<=0.1.0", v)?)?;
+    assert(satisfies_range("<0.1.1", v)?)?;
+    assert(satisfies_range("<0.1.0", v)? == false)?;
+    assert(satisfies_range("=0.1.0", v)?)?;
+    assert(satisfies_range("=0.2.0", v)? == false)?;
 }
