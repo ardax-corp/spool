@@ -133,8 +133,9 @@ With `--enable-scripts`:
 successful link. Non-zero exit aborts with the script path and exit status.
 
 Hashes are stored in lock `[scripts]` (`pre_install` / `pre_install_hash`, …),
-not on a `[[package]]` row. The current project is not a git pin. A changed
-script file is re-hashed on the next opted-in run.
+not on a `[[package]]` row. The current project is not a git pin. First opted-in
+run records the hash. After that, a changed file is a hash mismatch and does
+not run.
 
 A dependency's `[scripts]` and `[package].include` are not executed during a
 consumer install.
