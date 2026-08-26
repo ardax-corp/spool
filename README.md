@@ -28,7 +28,8 @@ compiler already understands via `[module].roots`.
 - [x] Transitive deps and diamond errors (COI-15)
 - [x] Engine range `[package].coil` fail-closed on install/add/update (COI-105)
 - [x] Hook trust gate: `--ignore-scripts`, lock `hook_path` / `hook_hash`, `allow-include` (COI-227)
-- [x] Current-project `[scripts]` runner (`--enable-scripts`, host `sh`) (COI-103). Dependency include-hooks still do not run.
+- [x] Current-project `[scripts]` runner (`--enable-scripts`, host `sh`) (COI-103)
+- [x] Dependency `[package].include` runner after link (COI-104)
 
 ## Requirements
 
@@ -72,8 +73,9 @@ Range language is the same as git-dep `version`: caret (`^`), `>=`, `>`, `<=`,
 ## Hook trust
 
 Hooks are off by default. `may_run_hook` is the gate. Every host `sh` of a user
-script goes through it first (`kind` `script` for current-project `[scripts]`).
-`allow_exec` is not a gate.
+script goes through it first (`kind` `script` for current-project `[scripts]`,
+`kind` `include` for a dependency `[package].include`). `allow_exec` is not a
+gate.
 
 `--enable-scripts` opts in. `--ignore-scripts` always wins, including in CI.
 `SPOOL_IGNORE_SCRIPTS=0` is the same opt-in the gate already understands.
@@ -94,9 +96,11 @@ package. The allowlist is the lock `[hooks]` table:
 allow_include = ['http']
 ```
 
-`[[package]]` may also store `hook_path` and `hook_hash` for include-hooks.
-Those still do not run. An include-hook is eligible only when that package is
-on `allow_include` and both the path and the content hash match the lock.
+`[[package]]` stores `hook_path` and `hook_hash` for include-hooks. An
+include-hook is eligible only when that package is on `allow_include` and
+both the path and the content hash match the lock. Empty hash is first-pin
+then the same gate. A present hash is never rewritten on `lock_upsert` or
+before `may_run_hook`.
 
 `may_run_hook` raises these strings:
 
@@ -155,8 +159,42 @@ post_install_hash = 'def456'
 That diagnostic is `hook hash mismatch for <package>`, using the current
 `[package].name` (or `app` if the name is empty).
 
-A dependency's `[scripts]` and `[package].include` are not executed during a
-consumer install.
+A dependency's `[scripts]` are not executed during a consumer install. Those
+fire only when that repo is the current project.
+
+## Include hooks
+
+A library may declare a hook that runs when another project depends on it.
+
+```toml
+[package]
+name = "native-bits"
+include = "./hooks/include.sh"
+```
+
+The path is relative to that package's checkout, not the consumer. Missing
+`include` is a no-op. The runner does not change coil-lang.
+
+`spool install`, `add`, and `update` run include-hooks after that package is
+checked out and linked, including transitives. `sh` runs from the checkout so
+the script can see its own files. `SPOOL_PROJECT` is still the consumer.
+
+Default is still off. `--enable-scripts` / `SPOOL_IGNORE_SCRIPTS=0` opt in.
+`--ignore-scripts` wins. Include-hooks also need `spool allow-include <name>`
+on the consumer. Opt-in without that allowlist is deny, no `sh`. `allow_exec`
+is not the gate.
+
+Every include `sh` goes through `may_run_hook` first (`kind` `include`). The
+pin is `hook_path` / `hook_hash` on that dep's `[[package]]` row. First opted-in
+run records them when the lock slot was empty. After that the existing pin is
+checked first. A changed `include.sh` is a hash mismatch. It does not `sh` and
+does not rewrite the lock.
+
+Non-zero exit aborts the consumer command:
+
+```text
+spool: include-hook http ./hooks/include.sh exited 9
+```
 
 ## Cache
 
@@ -189,8 +227,9 @@ $COIL test
 ./scripts/smoke_auth.sh      # git auth failure message
 ./scripts/smoke_transitive.sh # unify compatible pins, diamond error
 ./scripts/smoke_engine.sh     # [package].coil range: omit / in-range / too-old
-./scripts/smoke_hooks.sh      # --ignore-scripts, allow-include, include-hooks stay off
+./scripts/smoke_hooks.sh      # --ignore-scripts, allow-include, default include-hooks stay off
 ./scripts/smoke_scripts.sh    # current-project [scripts]: default off, opt-in, fail, no dep scripts
+./scripts/smoke_include.sh    # dep include-hooks: allowlist, hash pin, fail, no dep [scripts]
 ```
 
 ## Private git
@@ -228,7 +267,8 @@ module boundaries (COI-12). Enums and functions in a git/path dep compile and ru
 2. Coil `plan` — read `coil.lock`, write `.spool/fetch.sh` + `.spool/links.tsv`
 3. Bash runs `fetch.sh` (git clone/fetch + worktree)
 4. Coil engine range again for newly fetched `coil.toml` files, then `link`
-5. If `--enable-scripts`, current-project `post_install` after a successful link
+5. Include-hooks for linked deps (if opted in and allowlisted)
+6. If `--enable-scripts`, current-project `post_install` after a successful link
 
 `pre_install` (when opted in) runs after engine checks and before fetch/link.
 
@@ -240,7 +280,8 @@ module boundaries (COI-12). Enums and functions in a git/path dep compile and ru
 4. Bash `resolve.sh` fetches a worktree and records the tree hash
 5. Coil merges `coil.lock`, then the usual plan → fetch → verify tree hash → engine range → link
 6. `add` / `update` then walk each package `coil.toml` for transitive git deps (unify compatible pins, error on diamonds)
-7. Opted-in `add` uses `pre_install` / `post_install`; `update` uses `pre_update` / `post_update`
+7. Include-hooks for newly linked deps (same opt-in + allowlist as install)
+8. Opted-in `add` uses `pre_install` / `post_install`; `update` uses `pre_update` / `post_update`
 
 Design: Linear project **Git-based package manager** (COI-1 design doc).
 
