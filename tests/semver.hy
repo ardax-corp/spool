@@ -10,6 +10,7 @@ test("caret on 0.x stays within minor") {
     let v = parse_semver("0.2.5")?;
     assert(satisfies_caret("^0.2", v)?)?;
     assert(satisfies_caret("^0.2", parse_semver("0.3.0")?)? == false)?;
+    assert(satisfies_caret("^0.2", parse_semver("0.1.0")?)? == false)?;
 }
 
 test("caret on 1.x stays within major") {

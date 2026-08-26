@@ -33,3 +33,31 @@ test("enforce_engine refuses too-old toolchain") {
         },
     };
 }
+
+test("enforce_engine refuses >=0.2.0 on coil 0.1.0") {
+    let r = enforce_engine("http", ">=0.2.0", "0.1.0");
+    match r {
+        Result::Ok(_) => {
+            assert(false)?;
+        },
+        Result::Err(e) => {
+            assert(contains(e, "http"))?;
+            assert(contains(e, ">=0.2.0"))?;
+            assert(contains(e, "0.1.0"))?;
+        },
+    };
+}
+
+test("enforce_engine refuses ^0.2 on coil 0.1.0") {
+    let r = enforce_engine("http", "^0.2", "0.1.0");
+    match r {
+        Result::Ok(_) => {
+            assert(false)?;
+        },
+        Result::Err(e) => {
+            assert(contains(e, "http"))?;
+            assert(contains(e, "^0.2"))?;
+            assert(contains(e, "0.1.0"))?;
+        },
+    };
+}

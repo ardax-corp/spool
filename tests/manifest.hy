@@ -75,3 +75,16 @@ version = \"0.1.0\"
 ";
     assert(package_coil_parse(body) == "")?;
 }
+
+test("package_coil_parse ignores include and scripts") {
+    let body = "[package]
+name = \"app\"
+version = \"0.1.0\"
+coil = \">=0.1.0\"
+include = \"./hooks/include.sh\"
+
+[scripts]
+preinstall = \"./hooks/preinstall.sh\"
+";
+    assert(package_coil_parse(body) == ">=0.1.0")?;
+}
