@@ -1,7 +1,8 @@
 use lock::{
-    make_git_pkg, make_git_pkg_hook, lock_serialize, lock_serialize_full, lock_parse,
-    lock_parse_allow, lock_pkg_name, lock_pkg_hash, lock_pkg_hook_path, lock_pkg_hook_hash,
-    lock_hashes_match, lock_upsert,
+    make_git_pkg, make_git_pkg_hook, lock_serialize, lock_serialize_full, lock_serialize_all,
+    lock_parse, lock_parse_allow, lock_parse_scripts, lock_pkg_name, lock_pkg_hash,
+    lock_pkg_hook_path, lock_pkg_hook_hash, lock_hashes_match, lock_upsert,
+    make_lock_script, lock_script_path, lock_script_hash, lock_find_script,
 };
 use text::{contains};
 
@@ -116,4 +117,27 @@ test("lock_upsert keeps hook fields when the new pin omits them") {
     assert(lock_pkg_hash(pkgs[0]) == "h2")?;
     assert(lock_pkg_hook_path(pkgs[0]) == "./h.sh")?;
     assert(lock_pkg_hook_hash(pkgs[0]) == "abc")?;
+}
+
+test("lock [scripts] round-trip is not a package row") {
+    let pkgs = Vec::new();
+    pkgs.push(make_git_pkg("http", "https://x", "v1", "c", "h1"));
+    let allow: Vec<string> = Vec::new();
+    let scripts: Vec<string> = Vec::new();
+    scripts.push(make_lock_script("pre_install", "./scripts/pre-install.sh", "abc123"));
+    scripts.push(make_lock_script("post_install", "./scripts/post-install.sh", "def456"));
+    let text = lock_serialize_all(pkgs, allow, scripts);
+    assert(contains(text, "[scripts]"))?;
+    assert(contains(text, "pre_install = './scripts/pre-install.sh'"))?;
+    assert(contains(text, "pre_install_hash = 'abc123'"))?;
+    assert(contains(text, "name = 'app'") == false)?;
+    let back = lock_parse_scripts(text)?;
+    assert(len(back) == 2)?;
+    let pre = lock_find_script(back, "pre_install");
+    assert(lock_script_path(pre) == "./scripts/pre-install.sh")?;
+    assert(lock_script_hash(pre) == "abc123")?;
+    let pkgs_back = lock_parse(text)?;
+    assert(len(pkgs_back) == 1)?;
+    assert(lock_pkg_name(pkgs_back[0]) == "http")?;
+    assert(lock_pkg_hook_path(pkgs_back[0]) == "")?;
 }
