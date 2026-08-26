@@ -24,7 +24,7 @@ use resolve::{
 use manifest::{scripts_read, scripts_path_of, package_name_read, package_include_read};
 use hooks::{
     may_run_hook, hooks_are_off, hook_kind_script, hook_kind_include, script_gate_lock,
-    allow_include_has,
+    include_gate_lock, allow_include_has,
 };
 
 fn run_plan(string root) -> Result<int, string> {
@@ -264,7 +264,8 @@ fn run_include_gate(
     let packages = lock_read_or_empty(lock_path)?;
     let allow = lock_read_allow_or_empty(lock_path)?;
     let rec = lock_find(packages, pkg);
-    let decided = script_gate_lock(
+    let decided = include_gate_lock(
+        len(rec) > 0,
         lock_pkg_hook_path(rec),
         lock_pkg_hook_hash(rec),
         rel,
