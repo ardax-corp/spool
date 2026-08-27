@@ -37,6 +37,8 @@ compiler already understands via `[module].roots`.
 - Host `git` and `sh`
 - Coil stdlib: default `../coil-stdlib/src` relative to this repo
   ([coil-stdlib](https://github.com/ardax-corp/coil-stdlib))
+- coil-toml: default `../coil-toml/src` for `coil.toml` decode
+  ([coil-toml](https://github.com/ardax-corp/coil-toml))
 
 ## Engine range
 

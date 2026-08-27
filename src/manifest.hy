@@ -1,9 +1,10 @@
 // Parse and update coil.toml [dependencies] (git / path inline tables).
-use text::{trim, starts_with, ends_with, split, join as text_join, slice, contains};
+// Manifest decode uses coil-toml; deps_insert_line still edits text to preserve comments.
+use text::{trim, starts_with, split, join as text_join};
 use io::file::{read_text, write_text};
 use io::fs::{exists};
 use string::{format};
-use lock::{strip_quotes, parse_kv_line};
+use toml::{Toml, TomlValue, TomlError};
 
 fn make_git_dep(string name, string git, string version) -> string {
     return "g\t" + name + "\t" + git + "\t" + version;
@@ -56,56 +57,83 @@ fn dep_path(string d) -> string {
     return dep_field(d, 2);
 }
 
-fn parse_inline_table(string value) -> Result<Vec<(string, string)>, string> {
-    let t = match trim(value) {
-        Result::Ok(x) => x,
-        Result::Err(_) => value,
+fn toml_err(TomlError e) -> string {
+    match e {
+        TomlError::Invalid { line, column } => {
+            return format("invalid toml at %i:%i", line, column);
+        },
+        TomlError::Io { line, column } => {
+            return format("toml io at %i:%i", line, column);
+        },
+        TomlError::Utf8 { line, column } => {
+            return format("toml utf8 at %i:%i", line, column);
+        },
+        TomlError::Number { line, column } => {
+            return format("toml number at %i:%i", line, column);
+        },
     };
-    if starts_with(t, "{") == false {
-        raise "expected inline table";
-    }
-    if ends_with(t, "}") == false {
-        raise "expected inline table";
-    }
-    let inner = slice(t, 1, len(t) - 1)?;
-    let pieces = match split(inner, ",") {
-        Result::Ok(p) => p,
-        Result::Err(_) => raise "split inline table failed",
-    };
-    let out: Vec<(string, string)> = Vec::new();
-    let i = 0;
-    while i < len(pieces) {
-        let piece = match trim(pieces[i]) {
-            Result::Ok(x) => x,
-            Result::Err(_) => pieces[i],
-        };
-        i = i + 1;
-        if len(piece) == 0 {
-            continue;
-        }
-        let kv = parse_kv_line(piece)?;
-        out.push(kv);
-    }
-    return out;
 }
 
-fn parse_dep_spec(string name, string value) -> Result<string, string> {
-    let entries = parse_inline_table(value)?;
+fn decode_manifest(string body) -> Result<TomlValue, string> {
+    match Toml::v1().decode_str(body) {
+        Result::Ok(v) => {
+            return v;
+        },
+        Result::Err(e) => {
+            raise toml_err(e);
+        },
+    };
+}
+
+fn table_get(TomlValue root, string key) -> Option<TomlValue> {
+    if root.is_table() == false {
+        return Option::None;
+    }
+    if root.has(key) == false {
+        return Option::None;
+    }
+    let v = root.get(key);
+    if v.is_table() {
+        return Option::Some(v);
+    }
+    return Option::None;
+}
+
+fn table_string(TomlValue tab, string key) -> string {
+    if tab.has(key) == false {
+        return "";
+    }
+    let v = tab.get(key);
+    if v.is_string() {
+        return v.s;
+    }
+    return "";
+}
+
+fn parse_dep_spec_value(string name, TomlValue value) -> Result<string, string> {
+    if value.is_table() == false {
+        raise "expected inline table";
+    }
     let git = "";
     let version = "";
     let path = "";
     let i = 0;
-    while i < len(entries) {
-        let (k, v) = entries[i];
+    let n = value.table_len();
+    while i < n {
+        let k = value.key_at(i);
+        let v = value.child(i);
         i = i + 1;
+        if v.is_string() == false {
+            raise format("dependency %s key %s must be a string", name, k);
+        }
         if k == "git" {
-            git = v;
+            git = v.s;
         } else {
             if k == "version" {
-                version = v;
+                version = v.s;
             } else {
                 if k == "path" {
-                    path = v;
+                    path = v.s;
                 } else {
                     raise format("unknown dependency key %s", k);
                 }
@@ -131,90 +159,49 @@ fn parse_dep_spec(string name, string value) -> Result<string, string> {
 }
 
 fn deps_parse(string body) -> Result<Vec<string>, string> {
-    let lines = match split(body, "\n") {
-        Result::Ok(ls) => ls,
-        Result::Err(_) => raise "split manifest failed",
-    };
+    let root = decode_manifest(body)?;
     let out: Vec<string> = Vec::new();
-    let in_deps = false;
-    let i = 0;
-    while i < len(lines) {
-        let line = match trim(lines[i]) {
-            Result::Ok(t) => t,
-            Result::Err(_) => lines[i],
-        };
-        i = i + 1;
-        if len(line) == 0 {
-            continue;
-        }
-        if starts_with(line, "#") {
-            continue;
-        }
-        if starts_with(line, "[") {
-            in_deps = line == "[dependencies]";
-            continue;
-        }
-        if in_deps == false {
-            continue;
-        }
-        let kv = parse_kv_line(line)?;
-        let (name, value) = kv;
-        let j = 0;
-        while j < len(out) {
-            if dep_name(out[j]) == name {
-                raise format("duplicate dependency %s", name);
+    match table_get(root, "dependencies") {
+        Option::None => {
+            return out;
+        },
+        Option::Some(tab) => {
+            let i = 0;
+            let n = tab.table_len();
+            while i < n {
+                let name = tab.key_at(i);
+                let j = 0;
+                while j < len(out) {
+                    if dep_name(out[j]) == name {
+                        raise format("duplicate dependency %s", name);
+                    }
+                    j = j + 1;
+                }
+                let dep = parse_dep_spec_value(name, tab.child(i))?;
+                out.push(dep);
+                i = i + 1;
             }
-            j = j + 1;
-        }
-        let dep = parse_dep_spec(name, value)?;
-        out.push(dep);
-    }
-    return out;
+            return out;
+        },
+    };
 }
 
 fn package_field_parse(string body, string key) -> string {
-    let lines = match split(body, "\n") {
-        Result::Ok(ls) => ls,
+    match decode_manifest(body) {
+        Result::Ok(root) => {
+            match table_get(root, "package") {
+                Option::None => {
+                    return "";
+                },
+                Option::Some(pkg) => {
+                    return table_string(pkg, key);
+                },
+            };
+        },
         Result::Err(_) => {
             return "";
         },
     };
-    let in_pkg = false;
-    let i = 0;
-    while i < len(lines) {
-        let line = match trim(lines[i]) {
-            Result::Ok(t) => t,
-            Result::Err(_) => lines[i],
-        };
-        i = i + 1;
-        if len(line) == 0 {
-            continue;
-        }
-        if starts_with(line, "#") {
-            continue;
-        }
-        if starts_with(line, "[") {
-            in_pkg = line == "[package]";
-            continue;
-        }
-        if in_pkg == false {
-            continue;
-        }
-        if contains(line, "=") == false {
-            continue;
-        }
-        let kv_res = parse_kv_line(line);
-        match kv_res {
-            Result::Ok(kv) => {
-                let (k, v) = kv;
-                if k == key {
-                    return v;
-                }
-            },
-            Result::Err(_) => {},
-        };
-    }
-    return "";
 }
 
 fn package_name_parse(string body) -> string {
@@ -325,53 +312,44 @@ fn scripts_path_of(Vec<string> recs, string slot) -> string {
 
 /// Current-project `[scripts]` only. Unknown keys hard-error. Missing keys omitted.
 fn scripts_parse(string body) -> Result<Vec<string>, string> {
-    let lines = match split(body, "\n") {
-        Result::Ok(ls) => ls,
-        Result::Err(_) => raise "split manifest failed",
-    };
+    let root = decode_manifest(body)?;
     let out: Vec<string> = Vec::new();
-    let in_scripts = false;
-    let i = 0;
-    while i < len(lines) {
-        let line = match trim(lines[i]) {
-            Result::Ok(t) => t,
-            Result::Err(_) => lines[i],
-        };
-        i = i + 1;
-        if len(line) == 0 {
-            continue;
-        }
-        if starts_with(line, "#") {
-            continue;
-        }
-        if starts_with(line, "[") {
-            in_scripts = line == "[scripts]";
-            continue;
-        }
-        if in_scripts == false {
-            continue;
-        }
-        let kv = parse_kv_line(line)?;
-        let (k, v) = kv;
-        if script_slot_known(k) == false {
-            raise format("unknown scripts key %s", k);
-        }
-        if len(v) == 0 {
-            continue;
-        }
-        if script_rel_ok(v) == false {
-            raise format("script path must be relative to the project root: %s", v);
-        }
-        let j = 0;
-        while j < len(out) {
-            if scripts_slot(out[j]) == k {
-                raise format("duplicate scripts key %s", k);
+    match table_get(root, "scripts") {
+        Option::None => {
+            return out;
+        },
+        Option::Some(tab) => {
+            let i = 0;
+            let n = tab.table_len();
+            while i < n {
+                let k = tab.key_at(i);
+                let v = tab.child(i);
+                i = i + 1;
+                if script_slot_known(k) == false {
+                    raise format("unknown scripts key %s", k);
+                }
+                if v.is_string() == false {
+                    raise format("scripts key %s must be a string", k);
+                }
+                let path = v.s;
+                if len(path) == 0 {
+                    continue;
+                }
+                if script_rel_ok(path) == false {
+                    raise format("script path must be relative to the project root: %s", path);
+                }
+                let j = 0;
+                while j < len(out) {
+                    if scripts_slot(out[j]) == k {
+                        raise format("duplicate scripts key %s", k);
+                    }
+                    j = j + 1;
+                }
+                out.push(k + "\t" + path);
             }
-            j = j + 1;
-        }
-        out.push(k + "\t" + v);
-    }
-    return out;
+            return out;
+        },
+    };
 }
 
 fn scripts_read(string path) -> Result<Vec<string>, string> {
