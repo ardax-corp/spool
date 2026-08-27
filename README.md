@@ -205,6 +205,41 @@ Non-zero exit aborts the consumer command:
 spool: include-hook http ./hooks/include.sh exited 9
 ```
 
+## Install order
+
+`spool install` is this sequence. Gates live in [Hook trust](#hook-trust),
+[Project scripts](#project-scripts), and [Include hooks](#include-hooks).
+
+1. `check_install` — `coil.toml` present; git deps already in `coil.lock`
+2. `check_engine` on the current project, path deps, and cached `coil.toml` —
+   engine first so an unsatisfied `[package].coil` never fetches
+3. `pre_install` if `--enable-scripts` — before fetch so a failing project
+   script leaves lock and link alone
+4. Plan: write `.spool/fetch.sh` and `.spool/links.tsv`
+5. Bash `fetch.sh`: clone/fetch + worktree
+6. Verify lock `content_hash` against each checkout `HEAD` tree
+7. `check_engine` again on new checkouts
+8. Link `.spool/deps` and inject `[module].roots`
+9. Include-hooks after link (the hook can see its own checkout)
+10. `post_install` if `--enable-scripts` — only after a successful link; does
+    not run if include failed
+
+Hooks default off. `--enable-scripts` opts in. `--ignore-scripts` always wins.
+Every `sh` goes through `may_run_hook` first.
+
+Two lock homes: consumer `[scripts]` hashes live in lock `[scripts]`
+(`git hash-object`; the current project is not a `[[package]]` row). Include
+pins are `hook_path` / `hook_hash` on that dep's `[[package]]`. First opted-in
+run pins. An existing lock hash is checked first; a changed file is a mismatch
+and does not `sh` or rewrite the lock. No lock row (path deps) is deny, no
+`sh`. Include-hooks also need `spool allow-include <name>`. A dep's own
+`[scripts]` never run on a consumer install.
+
+`add` uses the install pair. `update` uses `pre_update` / `post_update`. Both
+share the same materialize, engine first, include/scripts at the end.
+
+This path does not fetch a `.so` or write `[ffi] search_paths`.
+
 ## Cache
 
 Default root: `$XDG_CACHE_HOME/coil` or `~/.cache/coil`.
@@ -270,27 +305,11 @@ use greet::hello;
 `greet` is function-style on purpose. Userland class types still cannot cross
 module boundaries (COI-12). Enums and functions in a git/path dep compile and run.
 
-`install` flow:
+The locked `install` order is under [Install order](#install-order).
 
-1. Coil `check_install` + `[package].coil` engine range (current project and cached checkouts)
-2. Coil `plan` — read `coil.lock`, write `.spool/fetch.sh` + `.spool/links.tsv`
-3. Bash runs `fetch.sh` (git clone/fetch + worktree)
-4. Coil engine range again for newly fetched `coil.toml` files, then `link`
-5. Include-hooks for linked deps (if opted in and allowlisted)
-6. If `--enable-scripts`, current-project `post_install` after a successful link
-
-`pre_install` (when opted in) runs after engine checks and before fetch/link.
-
-`add` / `update` flow:
-
-1. Coil checks `[package].coil` on the current project (and path deps / cached checkouts)
-2. Coil upserts `[dependencies]` (`add`) or lists git deps (`update`)
-3. Bash `git ls-remote --tags`; Coil picks the highest matching semver tag
-4. Bash `resolve.sh` fetches a worktree and records the tree hash
-5. Coil merges `coil.lock`, then the usual plan → fetch → verify tree hash → engine range → link
-6. `add` / `update` then walk each package `coil.toml` for transitive git deps (unify compatible pins, error on diamonds)
-7. Include-hooks for newly linked deps (same opt-in + allowlist as install)
-8. Opted-in `add` uses `pre_install` / `post_install`; `update` uses `pre_update` / `post_update`
+`add` / `update` resolve tags and merge `coil.lock`, then the same materialize.
+Transitive git deps unify compatible pins and error on diamonds. `add` uses
+`pre_install` / `post_install`. `update` uses `pre_update` / `post_update`.
 
 Design: Linear project **Git-based package manager** (COI-1 design doc).
 
