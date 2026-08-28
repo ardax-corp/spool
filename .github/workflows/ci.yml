@@ -61,7 +61,8 @@ jobs:
         working-directory: spool
         env:
           COIL: ${{ github.workspace }}/coil-lang/target/release/coil
-        run: "$COIL" test
+        run: |
+          "$COIL" test
 
       - name: Smoke install / add / consume
         working-directory: spool
