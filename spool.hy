@@ -333,7 +333,7 @@ fn main() {
             Result::Ok(_) => 0,
             Result::Err(_) => 0,
         };
-        match write_all(stdout(), to_bytes("Usage:\n  spool install [--enable-scripts] [--ignore-scripts]\n  spool add <name> --git <url> [--version <req>] [--enable-scripts] [--ignore-scripts]\n  spool add <name> --path <path> [--enable-scripts] [--ignore-scripts]\n  spool update [name] [--enable-scripts] [--ignore-scripts]\n  spool allow-include <name>\n  spool help\n")) {
+        match write_all(stdout(), to_bytes("Usage:\n  spool install [--with-natives] [--enable-scripts] [--ignore-scripts]\n  spool download [packaged-exe]\n  spool add <name> --git <url> [--version <req>] [--enable-scripts] [--ignore-scripts]\n  spool add <name> --path <path> [--enable-scripts] [--ignore-scripts]\n  spool update [name] [--enable-scripts] [--ignore-scripts]\n  spool allow-include <name>\n  spool help\n")) {
             Result::Ok(_) => 0,
             Result::Err(_) => 0,
         };
