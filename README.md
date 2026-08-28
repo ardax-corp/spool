@@ -11,8 +11,8 @@ compiler already understands via `[module].roots`.
 
 | Tool | Role |
 |------|------|
-| **`spool`** | Library dependencies (`install` / `add` / `update`) |
-| **`coil package`** | Embed a `.hyc` into a runner executable — unrelated |
+| **`spool`** | Library dependencies (`install` / `add` / `update`) and **`download`** for direct native shared libraries |
+| **`coil package`** | Embed a `.hyc` (+ optional native lock metadata) into a runner executable |
 
 ## Status (M4)
 
@@ -30,15 +30,41 @@ compiler already understands via `[module].roots`.
 - [x] Hook trust gate: `--ignore-scripts`, lock `hook_path` / `hook_hash`, `allow-include` (COI-227)
 - [x] Current-project `[scripts]` runner (`--enable-scripts`, host `sh`) (COI-103)
 - [x] Dependency `[package].include` runner after link (COI-104)
+- [x] `spool download` / `spool install --with-natives` for direct FFI natives
 
 ## Requirements
 
-- Coil toolchain (`coil` on `PATH`, or set `COIL`)
-- Host `git` and `sh`
+- Coil toolchain (`coil` on `PATH`, or set `COIL`) — needs `coil natives dump` for native downloads
+- Host `git`, `sh`, `curl`, and `sha256sum`
 - Coil stdlib: default `../coil-stdlib/src` relative to this repo
   ([coil-stdlib](https://github.com/ardax-corp/coil-stdlib))
 - coil-toml: default `../coil-toml/src` for `coil.toml` decode
   ([coil-toml](https://github.com/ardax-corp/coil-toml))
+
+## Native libraries (`spool download`)
+
+Direct shared libraries declared in `[[ffi.native]]` (or embedded in a packaged
+exe) are fetched into a content-addressed cache:
+
+```
+~/.coil/natives/cache/<package>/<version>/<sha256_16>/<filename>
+```
+
+Override the root with `COIL_NATIVES_DIR`. Only **direct** `dload` targets are
+downloaded; transitive sonames (`requires`) must come from the OS.
+
+```bash
+# After coil package ./hello (embeds a native lock):
+./spool download ./hello
+
+# Project mode (reads [[ffi.native]] from coil.toml; local libs must exist to pin hashes):
+./spool download
+
+# Install source deps and natives in one step:
+./spool install --with-natives
+```
+
+Default `spool install` does **not** download natives.
 
 ## Engine range
 
