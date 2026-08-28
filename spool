@@ -8,12 +8,15 @@ COIL_BIN="${COIL:-coil}"
 # allow_exec is not the gate. Every user-script sh goes through may_run_hook.
 FORCE_OFF=0
 WANT_ON=0
+WITH_NATIVES=0
 ARGS=()
 for arg in "$@"; do
   if [[ "$arg" == "--ignore-scripts" ]]; then
     FORCE_OFF=1
   elif [[ "$arg" == "--enable-scripts" ]]; then
     WANT_ON=1
+  elif [[ "$arg" == "--with-natives" ]]; then
+    WITH_NATIVES=1
   else
     ARGS+=("$arg")
   fi
@@ -115,6 +118,114 @@ verify_checkouts() {
       exit 1
     fi
   done < "$f"
+}
+
+# Fetch direct natives into ~/.coil/natives (or $COIL_NATIVES_DIR).
+# Usage: download_natives [packaged-exe]
+# With no arg, uses project [[ffi.native]] via `coil natives dump --tsv`.
+download_natives() {
+  local exe="${1:-}"
+  local natives_root="${COIL_NATIVES_DIR:-${HOME}/.coil/natives}"
+  local host_os host_arch
+  host_os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+  case "$(uname -m)" in
+    x86_64|amd64) host_arch="x86_64" ;;
+    aarch64|arm64) host_arch="aarch64" ;;
+    *) host_arch="$(uname -m)" ;;
+  esac
+  # Normalize Darwin → macos to match Rust std::env::consts::OS.
+  if [[ "$host_os" == "darwin" ]]; then
+    host_os="macos"
+  fi
+
+  local tsv
+  if [[ -n "$exe" ]]; then
+    if ! tsv="$("$COIL_BIN" natives dump --tsv "$exe")"; then
+      echo "spool download: coil natives dump failed for $exe" >&2
+      exit 1
+    fi
+  else
+    if ! tsv="$(cd "$SPOOL_PROJECT" && "$COIL_BIN" natives dump --tsv)"; then
+      echo "spool download: coil natives dump failed (project mode)" >&2
+      exit 1
+    fi
+  fi
+
+  local lock_os="" lock_arch=""
+  local line package version filename url sha size
+  local installed=0 skipped=0
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ -z "$line" ]] && continue
+    if [[ "$line" == \#\ os=* ]]; then
+      lock_os="${line#\# os=}"
+      continue
+    fi
+    if [[ "$line" == \#\ arch=* ]]; then
+      lock_arch="${line#\# arch=}"
+      continue
+    fi
+    [[ "$line" == \#* ]] && continue
+    IFS=$'\t' read -r package version filename url sha size <<< "$line"
+    [[ -z "${package:-}" ]] && continue
+
+    if [[ -n "$lock_os" && "$lock_os" != "$host_os" ]]; then
+      echo "spool download: native lock os=$lock_os but host is $host_os" >&2
+      exit 1
+    fi
+    if [[ -n "$lock_arch" && "$lock_arch" != "$host_arch" ]]; then
+      echo "spool download: native lock arch=$lock_arch but host is $host_arch" >&2
+      exit 1
+    fi
+
+    local hash16="${sha:0:16}"
+    local dest_dir="$natives_root/cache/$package/$version/$hash16"
+    local dest="$dest_dir/$filename"
+    if [[ -f "$dest" ]]; then
+      local actual
+      actual="$(sha256sum "$dest" | awk '{print $1}')"
+      if [[ "$actual" == "$sha" ]]; then
+        echo "spool download: skip $package $version ($filename)"
+        skipped=$((skipped + 1))
+        continue
+      fi
+      echo "spool download: hash mismatch for $dest; re-fetching" >&2
+      rm -f "$dest"
+    fi
+
+    mkdir -p "$dest_dir"
+    local part="$dest.part"
+    rm -f "$part"
+    if ! curl -fsSL --proto '=https' --proto-redir '=https' -o "$part" "$url"; then
+      echo "spool download: failed to fetch $url" >&2
+      rm -f "$part"
+      exit 1
+    fi
+    local got
+    got="$(sha256sum "$part" | awk '{print $1}')"
+    if [[ "$got" != "$sha" ]]; then
+      echo "spool download: sha256 mismatch for $package: expected $sha, got $got" >&2
+      rm -f "$part"
+      exit 1
+    fi
+    if [[ -n "$size" && "$size" != "0" ]]; then
+      local got_size
+      got_size="$(wc -c < "$part" | tr -d ' ')"
+      if [[ "$got_size" != "$size" ]]; then
+        echo "spool download: size mismatch for $package: expected $size, got $got_size" >&2
+        rm -f "$part"
+        exit 1
+      fi
+    fi
+    mv -f "$part" "$dest"
+    echo "spool download: installed $package $version → $dest"
+    installed=$((installed + 1))
+  done <<< "$tsv"
+
+  if [[ "$installed" -eq 0 && "$skipped" -eq 0 ]]; then
+    echo "spool download: nothing to download"
+  else
+    echo "spool download: ok ($installed installed, $skipped skipped)"
+  fi
 }
 
 resolve_git_dep() {
@@ -259,7 +370,13 @@ case "$CMD" in
     materialize
     run_include_hooks
     run_project_script post_install
+    if [[ "$WITH_NATIVES" -eq 1 ]]; then
+      download_natives
+    fi
     echo "spool install: ok"
+    ;;
+  download)
+    download_natives "${1:-}"
     ;;
   plan)
     run_coil plan
