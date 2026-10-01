@@ -8,7 +8,8 @@
 #   4. Fetch coil-stdlib, coil-toml and coil-json into .bootstrap/ (or use siblings).
 #   5. `coil package spool.hy` → target/spool.
 #   6. --install: spool → DIR (default ~/.local/bin), stdlib → ~/.coil/stdlib,
-#      and a bootstrap-built coil + coil-embed → ~/.coil/bin.
+#      and a bootstrap-built coil with its tools (coil-test, coil-fmt, …) and
+#      coil-embed → ~/.coil/bin.
 #
 # Usage: ./bootstrap.sh [--from-source] [--coil-only] [--use-siblings] [--install [DIR]]
 set -euo pipefail
@@ -33,6 +34,8 @@ COIL_TOML_REPO="${COIL_TOML_REPO:-$(pinned toml git)}"
 COIL_TOML_REF="${COIL_TOML_REF:-$(pinned toml rev)}"
 COIL_JSON_REPO="${COIL_JSON_REPO:-$(pinned json git)}"
 COIL_JSON_REF="${COIL_JSON_REF:-$(pinned json rev)}"
+# Binaries next to coil that it re-execs, plus the packaging runner.
+COIL_TOOLS="coil-embed coil-test coil-fmt coil-lsp coil-debug coil-dissect"
 COIL_RELEASES_API="${COIL_RELEASES_API:-https://api.github.com/repos/ardax-corp/coil-lang/releases/latest}"
 
 FROM_SOURCE=0
@@ -192,7 +195,14 @@ host_triple() {
 # still the newest COIL_LANG_REF; otherwise it would never pick up new coil
 # features. Offline (or a ref ls-remote cannot resolve): keep it.
 boot_coil_is_current() {
-  local src="$BOOT/coil-lang" have want
+  local src="$BOOT/coil-lang" have want tool
+  # Older bootstraps built only coil + coil-embed.
+  for tool in $COIL_TOOLS; do
+    if [[ ! -x "$src/target/release/$tool" ]]; then
+      say "  bootstrap coil has no $tool: rebuilding"
+      return 1
+    fi
+  done
   have="$(git -C "$src" rev-parse HEAD 2>/dev/null)" || return 0
   want="$(git ls-remote "$COIL_LANG_REPO" "$COIL_LANG_REF" 2>/dev/null | awk 'NR == 1 { print $1 }')"
   [[ -z "$want" || "$have" == "$want" ]] && return 0
@@ -208,6 +218,9 @@ same_file() {
 # Features spool's commands use; a coil without them still works, with less.
 warn_missing_features() {
   local bin="$1"
+  if [[ ! -x "$(dirname "$bin")/coil-test" ]]; then
+    say "warning: no coil-test next to $bin: \`spool test\` / \`spool infect\` will not work"
+  fi
   if ! "$bin" --help 2>/dev/null | grep -q '^  mutate '; then
     say "warning: $bin has no \`coil mutate\`: \`spool infect\` will not work"
   fi
@@ -302,7 +315,9 @@ build_coil_from_source() {
   mkdir -p "$BOOT"
   sync_checkout "$COIL_LANG_REPO" "$COIL_LANG_REF" "$src"
   say "building coil ($(git -C "$src" rev-parse --short HEAD)); this takes a few minutes"
-  ( cd "$src" && cargo build --release -p coil -p coil-embed ) >&2 \
+  # Default members: coil plus the tools it re-execs (coil-test, coil-fmt,
+  # coil-lsp, coil-debug, coil-dissect) and the coil-embed packaging runner.
+  ( cd "$src" && cargo build --release ) >&2 \
     || die "cargo build failed in $src"
   local bin="$src/target/release/coil"
   coil_is_valid "$bin" || die "freshly built coil at $bin is not usable"
@@ -382,8 +397,11 @@ if [[ -n "$INSTALL_DIR" ]]; then
     "$BOOT"/*)
       mkdir -p "$COIL_HOME/bin"
       install -m 0755 "$COIL_BIN" "$COIL_HOME/bin/coil"
-      embed="$(dirname "$COIL_BIN")/coil-embed"
-      [[ -x "$embed" ]] && install -m 0755 "$embed" "$COIL_HOME/bin/coil-embed"
+      # `coil test/fmt/lsp/debug/dissect` re-exec these from coil's directory.
+      for tool in $COIL_TOOLS; do
+        bin="$(dirname "$COIL_BIN")/$tool"
+        [[ -x "$bin" ]] && install -m 0755 "$bin" "$COIL_HOME/bin/$tool"
+      done
       say "installed $COIL_HOME/bin/coil"
       ;;
   esac
