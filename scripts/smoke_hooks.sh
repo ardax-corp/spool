@@ -2,6 +2,7 @@
 # COI-227: hook trust gates. No host sh for [scripts] / [package].include.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+SPOOL="${SPOOL_BIN:-$ROOT/target/spool}"
 COIL_BIN="${COIL:-coil}"
 CACHE="$ROOT/scratch/cache_hooks"
 BASE="$ROOT/scratch/hooks"
@@ -81,7 +82,7 @@ assert_hooks_idle() {
   fi
 }
 
-HELP="$("$ROOT/spool" help)"
+HELP="$("$SPOOL" help)"
 echo "$HELP" | grep -q -- "--ignore-scripts"
 echo "$HELP" | grep -q "allow-include"
 
@@ -92,31 +93,31 @@ export COIL_CACHE_DIR="$CACHE"
 APP="$BASE/app"
 write_app "$APP" "app"
 export SPOOL_PROJECT="$APP"
-"$ROOT/spool" install
+"$SPOOL" install
 assert_hooks_idle "$APP"
 
 # Flag is accepted and still does not exec.
-"$ROOT/spool" --ignore-scripts install
+"$SPOOL" --ignore-scripts install
 assert_hooks_idle "$APP"
-"$ROOT/spool" install --ignore-scripts
+"$SPOOL" install --ignore-scripts
 assert_hooks_idle "$APP"
 
 # Path dep with include-hook: still no sh without allowlist.
 LIB="$BASE/httplib"
 write_lib "$LIB" "http"
-"$ROOT/spool" add http --path "$LIB"
+"$SPOOL" add http --path "$LIB"
 test -L "$APP/.spool/deps/http"
 assert_hooks_idle "$APP"
 
 # Explicit consumer allowlist is recorded in coil.lock (not coil.toml).
-"$ROOT/spool" allow-include http
+"$SPOOL" allow-include http
 grep -q "\[hooks\]" "$APP/coil.lock"
 grep -q "allow_include" "$APP/coil.lock"
 grep -q "http" "$APP/coil.lock"
 assert_hooks_idle "$APP"
 
 # Allowlisted still does not exec in this PR (no 103/104 runners).
-"$ROOT/spool" --ignore-scripts install
+"$SPOOL" --ignore-scripts install
 assert_hooks_idle "$APP"
 
 # Git dep with include-hook: install does not sh, even with allow_exec.
@@ -133,7 +134,7 @@ GITURL="file://$FIX"
 GITAPP="$BASE/gitapp"
 write_app "$GITAPP" "gitapp"
 export SPOOL_PROJECT="$GITAPP"
-"$ROOT/spool" add fixture --git "$GITURL" --version "^1.0"
+"$SPOOL" add fixture --git "$GITURL" --version "^1.0"
 test -L "$GITAPP/.spool/deps/fixture"
 assert_hooks_idle "$GITAPP"
 if grep -q "hook_path" "$GITAPP/coil.lock"; then

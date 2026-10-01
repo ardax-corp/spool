@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+SPOOL="${SPOOL_BIN:-$ROOT/target/spool}"
 COIL_BIN="${COIL:-coil}"
 FIX="$ROOT/scratch/fixture_repo"
 CACHE="$ROOT/scratch/cache"
@@ -32,6 +33,9 @@ roots = ["./src"]
 
 [env]
 allow_exec = true
+
+[dependencies]
+fixture = { git = "$URL", version = "^1" }
 EOF
 echo "// consumer" > "$PROJ/src/main.hy"
 
@@ -51,10 +55,11 @@ EOF
 export COIL="$COIL_BIN"
 export COIL_CACHE_DIR="$CACHE"
 export SPOOL_PROJECT="$PROJ"
-"$ROOT/spool" install
+"$SPOOL" install --locked
 
 test -L "$PROJ/.spool/deps/fixture"
 test -f "$PROJ/.spool/deps/fixture/lib.hy"
-grep -q '.spool/deps' "$PROJ/coil.toml"
+# The lock was already exact: --locked leaves it alone.
+grep -q "content_hash = '$TREE'" "$PROJ/coil.lock"
 
 echo "smoke_install: ok (rev=$REV tree=$TREE)"

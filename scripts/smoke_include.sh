@@ -2,6 +2,7 @@
 # COI-104: dependency [package].include after link. Default off. allow-include required.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+SPOOL="${SPOOL_BIN:-$ROOT/target/spool}"
 COIL_BIN="${COIL:-coil}"
 CACHE="$ROOT/scratch/cache_include"
 BASE="$ROOT/scratch/include"
@@ -125,7 +126,7 @@ write_app "$APP" "app"
 export SPOOL_PROJECT="$APP"
 
 # Default off: declared include does not sh.
-"$ROOT/spool" add mid --git "$MID_URL" --version "^1.0"
+"$SPOOL" add mid --git "$MID_URL" --version "^1.0"
 test -L "$APP/.spool/deps/mid"
 test -L "$APP/.spool/deps/leaf"
 assert_no_file "$APP/INCLUDE_mid" "default add ran include-hook"
@@ -139,7 +140,7 @@ fi
 # Opt-in without allowlist: deny, no sh. pre_install may already have run.
 rm -f "$APP/SCRIPT_RAN"
 set +e
-NOALLOW_OUT="$("$ROOT/spool" install --enable-scripts 2>&1)"
+NOALLOW_OUT="$("$SPOOL" install --enable-scripts 2>&1)"
 NOALLOW_RC=$?
 set -e
 if [[ "$NOALLOW_RC" -eq 0 ]]; then
@@ -155,12 +156,12 @@ if [[ -f "$APP/SCRIPT_RAN" ]] && grep -q "post_install" "$APP/SCRIPT_RAN"; then
   exit 1
 fi
 
-"$ROOT/spool" allow-include mid
-"$ROOT/spool" allow-include leaf
+"$SPOOL" allow-include mid
+"$SPOOL" allow-include leaf
 
 # Opt-in + allowlist + matching hash: runs after link, transitives too.
 rm -f "$APP/INCLUDE_mid" "$APP/INCLUDE_leaf" "$APP/SCRIPT_RAN" "$APP/DEP_SCRIPT_RAN"
-"$ROOT/spool" install --enable-scripts
+"$SPOOL" install --enable-scripts
 if [[ ! -f "$APP/INCLUDE_mid" ]]; then
   echo "smoke_include: expected INCLUDE_mid after opted-in allowlisted install" >&2
   ls -la "$APP" >&2
@@ -194,7 +195,7 @@ fi
 
 # update also runs include-hooks for linked deps (and transitives).
 rm -f "$APP/INCLUDE_mid" "$APP/INCLUDE_leaf" "$APP/SCRIPT_RAN"
-"$ROOT/spool" update mid --enable-scripts
+"$SPOOL" update mid --enable-scripts
 if [[ ! -f "$APP/INCLUDE_mid" || ! -f "$APP/INCLUDE_leaf" ]]; then
   echo "smoke_include: update did not run include-hooks" >&2
   ls -la "$APP" >&2
@@ -205,11 +206,11 @@ assert_no_file "$APP/DEP_SCRIPT_RAN" "dependency [scripts] ran on update"
 # Changed include.sh with an existing lock hash: mismatch, no sh, pin unchanged.
 # Mutate the materialized checkout (same pin). `update` only takes direct git deps.
 OLD_HASH="$(grep "hook_hash" "$APP/coil.lock")"
-LEAF_DEST="$(awk -F'\t' '$1=="leaf"{print $2}' "$APP/.spool/links.tsv")"
+LEAF_DEST="$(git -C "$(readlink -f "$APP/.spool/deps/leaf")" rev-parse --show-toplevel)"
 write_include "$LEAF_DEST" "touch \"\${SPOOL_PROJECT:-.}/INCLUDE_leaf_changed\""
 rm -f "$APP/INCLUDE_mid" "$APP/INCLUDE_leaf" "$APP/INCLUDE_leaf_changed"
 set +e
-CHG_OUT="$("$ROOT/spool" install --enable-scripts 2>&1)"
+CHG_OUT="$("$SPOOL" install --enable-scripts 2>&1)"
 CHG_RC=$?
 set -e
 if [[ "$CHG_RC" -eq 0 ]]; then
@@ -239,11 +240,11 @@ FAIL_URL="file://$FAIL"
 FAILAPP="$BASE/failapp"
 write_app "$FAILAPP" "failapp"
 export SPOOL_PROJECT="$FAILAPP"
-"$ROOT/spool" add failib --git "$FAIL_URL" --version "^1.0"
-"$ROOT/spool" allow-include failib
+"$SPOOL" add failib --git "$FAIL_URL" --version "^1.0"
+"$SPOOL" allow-include failib
 rm -f "$FAILAPP/INCLUDE_failib" "$FAILAPP/SCRIPT_RAN"
 set +e
-FAIL_OUT="$("$ROOT/spool" install --enable-scripts 2>&1)"
+FAIL_OUT="$("$SPOOL" install --enable-scripts 2>&1)"
 FAIL_RC=$?
 set -e
 if [[ "$FAIL_RC" -eq 0 ]]; then
@@ -275,7 +276,7 @@ init_git "$PLAIN"
 PLAINAPP="$BASE/plainapp"
 write_app "$PLAINAPP" "plainapp"
 export SPOOL_PROJECT="$PLAINAPP"
-"$ROOT/spool" add plain --git "file://$PLAIN" --version "^1.0" --enable-scripts
+"$SPOOL" add plain --git "file://$PLAIN" --version "^1.0" --enable-scripts
 test -L "$PLAINAPP/.spool/deps/plain"
 assert_no_file "$PLAINAPP/INCLUDE_plain" "missing include wrote a marker"
 
@@ -285,11 +286,11 @@ write_lib "$PATHLIB" "pathlib"
 PATHAPP="$BASE/pathapp"
 write_app "$PATHAPP" "pathapp"
 export SPOOL_PROJECT="$PATHAPP"
-"$ROOT/spool" add pathlib --path "$PATHLIB"
-"$ROOT/spool" allow-include pathlib
+"$SPOOL" add pathlib --path "$PATHLIB"
+"$SPOOL" allow-include pathlib
 rm -f "$PATHAPP/INCLUDE_pathlib"
 set +e
-PATH_OUT="$("$ROOT/spool" install --enable-scripts 2>&1)"
+PATH_OUT="$("$SPOOL" install --enable-scripts 2>&1)"
 PATH_RC=$?
 set -e
 if [[ "$PATH_RC" -eq 0 ]]; then

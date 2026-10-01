@@ -2,6 +2,7 @@
 # Smoke: spool download skip-on-hit with a fake TSV (no network).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+SPOOL="${SPOOL_BIN:-$ROOT/target/spool}"
 COIL_BIN="${COIL:-coil}"
 
 TMP="$(mktemp -d)"
@@ -64,6 +65,6 @@ EOF
 fi
 
 cd "$ROOT"
-out="$("$ROOT/spool" download 2>&1 || true)"
+out="$("$SPOOL" download 2>&1 || true)"
 echo "$out" | grep -q "nothing to download\|ok (0 installed"
 echo "smoke_natives_download: ok"

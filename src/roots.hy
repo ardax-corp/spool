@@ -1,78 +1,21 @@
-// Manage project .spool/deps symlink farm and [module].roots.
-use io::fs::{exists, is_dir, remove_file, symlink};
-use io::file::{read_text, write_text};
-use text::{trim, starts_with, ends_with, split, contains, join as text_join};
+// Project `.spool/deps` symlink farm. `spool build/run/test/check` pass it to
+// coil as a `--root`; coil.toml is never edited (coil ignores [module].roots).
+//
+//   .spool/deps/<name>     -> <checkout>/src   (`use name::module`)
+//   .spool/deps/<name>.hy  -> <checkout>/src/<name>.hy when present
+//                             (`use name::{Item}` for single-file libraries)
+use io::fs::{is_dir, is_symlink, remove_file, symlink, list_dir};
+use text::{ends_with, slice};
 use string::{format};
-use util::{join2, ensure_dir};
+use util::{join2, ensure_dir, path_exists, tsv_field, vec_has, check_pkg_name};
 
 fn spool_deps_dir(string project_root) -> string {
     return join2(project_root, ".spool/deps");
 }
 
-fn insert_into_roots_line(string line) -> Result<string, string> {
-    if contains(line, "]") == false {
-        raise "malformed roots line";
-    }
-    let parts = match split(line, "]") {
-        Result::Ok(p) => p,
-        Result::Err(_) => raise "split roots failed",
-    };
-    if len(parts) < 1 {
-        raise "malformed roots line";
-    }
-    let head = parts[0];
-    if ends_with(head, "[") {
-        return "roots = [\"./.spool/deps\"]";
-    }
-    return head + ", \"./.spool/deps\"]";
-}
-
-fn inject_spool_root(string body) -> Result<string, string> {
-    let lines = match split(body, "\n") {
-        Result::Ok(ls) => ls,
-        Result::Err(_) => raise "split failed",
-    };
-    let out: Vec<string> = Vec::new();
-    let i = 0;
-    let done = false;
-    while i < len(lines) {
-        let line = lines[i];
-        i = i + 1;
-        let trimmed = match trim(line) {
-            Result::Ok(t) => t,
-            Result::Err(_) => line,
-        };
-        if done == false {
-            if starts_with(trimmed, "roots") {
-                if contains(trimmed, "[") {
-                    if contains(trimmed, "]") {
-                        let inserted = insert_into_roots_line(trimmed)?;
-                        out.push(inserted);
-                        done = true;
-                        continue;
-                    }
-                }
-            }
-        }
-        out.push(line);
-    }
-    if done == false {
-        out.push("");
-        out.push("[module]");
-        out.push("roots = [\"./src\", \"./.spool/deps\"]");
-    }
-    return text_join(out, "\n");
-}
-
-// Coil resolves `use greet::hello` as `<root>/greet/hello.hy`. Packages keep
-// sources under `src/`, so the dep symlink points at that directory when present.
 fn checkout_module_root(string checkout_path) -> string {
     let src = join2(checkout_path, "src");
-    let present = match exists(src) {
-        Result::Ok(v) => v,
-        Result::Err(_) => false,
-    };
-    if present == false {
+    if path_exists(src) == false {
         return checkout_path;
     }
     match is_dir(src) {
@@ -86,47 +29,87 @@ fn checkout_module_root(string checkout_path) -> string {
     return checkout_path;
 }
 
-fn link_dep(string project_root, string name, string checkout_path) -> Result<int, string> {
-    let deps = spool_deps_dir(project_root);
-    ensure_dir(join2(project_root, ".spool"))?;
-    ensure_dir(deps)?;
-    let link = join2(deps, name);
-    let present = match exists(link) {
+fn is_link(string p) -> bool {
+    return match is_symlink(p) {
         Result::Ok(v) => v,
         Result::Err(_) => false,
     };
-    if present {
-        match remove_file(link) {
+}
+
+/// Remove a spool-managed symlink. Anything else in the way is an error.
+fn remove_link(string p) -> Result<int, string> {
+    if is_link(p) {
+        return match remove_file(p) {
             Result::Ok(_) => 0,
-            Result::Err(_) => 0,
+            Result::Err(_) => raise format("cannot remove %s", p),
         };
     }
-    let target = checkout_module_root(checkout_path);
+    if path_exists(p) {
+        raise format("%s is not a spool link; move it out of the way", p);
+    }
+    return 0;
+}
+
+fn make_link(string target, string link) -> Result<int, string> {
     return match symlink(target, link) {
         Result::Ok(_) => 0,
         Result::Err(_) => raise format("symlink %s -> %s failed", link, target),
     };
 }
 
-fn ensure_roots_entry(string project_root) -> Result<int, string> {
-    let path = join2(project_root, "coil.toml");
-    let present = match exists(path) {
+fn link_dep(string project_root, string name, string checkout_path) -> Result<int, string> {
+    check_pkg_name(name)?;
+    let deps = spool_deps_dir(project_root);
+    ensure_dir(deps)?;
+    let target = checkout_module_root(checkout_path);
+    let link = join2(deps, name);
+    remove_link(link)?;
+    make_link(target, link)?;
+    let file_link = link + ".hy";
+    remove_link(file_link)?;
+    let lib_file = join2(target, name + ".hy");
+    if path_exists(lib_file) {
+        make_link(lib_file, file_link)?;
+    }
+    return 0;
+}
+
+fn strip_hy(string entry) -> string {
+    if ends_with(entry, ".hy") && len(entry) > 3 {
+        return match slice(entry, 0, len(entry) - 3) {
+            Result::Ok(x) => x,
+            Result::Err(_) => entry,
+        };
+    }
+    return entry;
+}
+
+/// Link every `name \t dir` row and drop links for names no longer present.
+fn link_all(string project_root, Vec<string> rows) -> Result<int, string> {
+    let names: Vec<string> = Vec::new();
+    let i = 0;
+    while i < len(rows) {
+        names.push(tsv_field(rows[i], 0));
+        i = i + 1;
+    }
+    let deps = spool_deps_dir(project_root);
+    ensure_dir(deps)?;
+    let entries = match list_dir(deps) {
         Result::Ok(v) => v,
-        Result::Err(_) => false,
+        Result::Err(_) => raise format("cannot list %s", deps),
     };
-    if present == false {
-        raise "coil.toml not found";
+    i = 0;
+    while i < len(entries) {
+        let e = entries[i];
+        i = i + 1;
+        if vec_has(names, strip_hy(e)) == false {
+            remove_link(join2(deps, e))?;
+        }
     }
-    let body = match read_text(path) {
-        Result::Ok(s) => s,
-        Result::Err(_) => raise "read coil.toml failed",
-    };
-    if contains(body, ".spool/deps") {
-        return 0;
+    i = 0;
+    while i < len(rows) {
+        link_dep(project_root, tsv_field(rows[i], 0), tsv_field(rows[i], 1))?;
+        i = i + 1;
     }
-    let updated = inject_spool_root(body)?;
-    return match write_text(path, updated) {
-        Result::Ok(_) => 0,
-        Result::Err(_) => raise "write coil.toml failed",
-    };
+    return 0;
 }

@@ -1,7 +1,8 @@
 use manifest::{
     deps_parse, dep_kind, dep_name, dep_git, dep_version, dep_path, deps_insert_line,
     make_git_dep, format_dep_line, deps_has_name, package_name_parse, package_coil_parse,
-    package_include_parse, scripts_parse, scripts_path_of, script_rel_ok,
+    package_include_parse, scripts_parse, scripts_path_of, script_rel_ok, dep_rev, dep_req,
+    deps_remove_line,
 };
 use text::{contains};
 
@@ -165,4 +166,34 @@ test("script paths stay in the project tree") {
     assert(script_rel_ok("./scripts/pre-install.sh"))?;
     assert(script_rel_ok("../evil.sh") == false)?;
     assert(script_rel_ok("/tmp/x.sh") == false)?;
+}
+
+test("deps_insert_line keeps entries together and ends with a newline") {
+    let body = "[package]\nname = \"app\"\nversion = \"0.1.0\"\n\n[dependencies]\na = { path = \"../a\" }\n\n";
+    let out = deps_insert_line(body, "b = { path = \"../b\" }")?;
+    assert(contains(out, "a = { path = \"../a\" }\nb = { path = \"../b\" }\n"))?;
+    let deps = deps_parse(out)?;
+    assert(len(deps) == 2)?;
+}
+
+test("deps_insert_line output without trailing newline still decodes") {
+    let body = "[package]\nname = \"app\"\nversion = \"0.1.0\"";
+    let out = deps_insert_line(body, "b = { path = \"../b\" }")?;
+    let deps = deps_parse(out)?;
+    assert(len(deps) == 1)?;
+}
+
+test("git deps accept rev pins and trusted") {
+    let body = "[dependencies]\ntoml = { git = \"https://example.com/a/toml.git\", rev = \"main\", trusted = true }\n";
+    let deps = deps_parse(body)?;
+    assert(dep_rev(deps[0]) == "main")?;
+    assert(dep_req(deps[0]) == "@main")?;
+}
+
+test("deps_remove_line drops only the named entry") {
+    let body = "[dependencies]\nab = { path = \"../ab\" }\na = { path = \"../a\" }\n";
+    let out = deps_remove_line(body, "a")?;
+    let deps = deps_parse(out)?;
+    assert(len(deps) == 1)?;
+    assert(dep_name(deps[0]) == "ab")?;
 }

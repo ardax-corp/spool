@@ -1,212 +1,28 @@
-// Resolve git deps: pick a tag from ls-remote, write resolve.sh, merge coil.lock.
-use io::file::{write_text, read_text};
-use io::fs::{exists};
-use text::{trim, split, contains};
+// Resolve git deps in memory: collect constraints over the reachable graph,
+// pick tags (or `rev` pins) against ls-remote, fetch, and prune the lock.
+// Constraint rows: name \t git \t req \t who  (req is a range or `@<rev>`).
+use io::file::{read_text};
+use text::{trim, split, starts_with, slice};
 use string::{format};
-use util::{join2, join3, join4, ensure_dir, git_sh_preamble, path_dirname, path_is_absolute};
-use config::{cache_root};
-use cache_url::{url_cache_key};
+use util::{join2, path_is_absolute, path_exists, tsv_field, vec_has, check_pkg_name, check_git_url};
 use lock::{
-    make_git_pkg, lock_read_or_empty, lock_read, lock_upsert, lock_write, lock_find,
-    lock_pkg_name, lock_pkg_tag, lock_pkg_hash,
+    make_git_pkg_ref, lock_upsert, lock_find, lock_pkg_name, lock_pkg_tag, lock_pkg_hash,
+    lock_pkg_git, lock_pkg_rev, lock_pkg_ref,
 };
 use manifest::{
-    deps_read, find_dep, dep_kind, dep_name, dep_git, dep_version, dep_path,
-    make_git_dep, make_path_dep, deps_append, package_name_read,
-    package_name_parse, package_coil_parse,
+    deps_read, dep_kind, dep_name, dep_git, dep_path, dep_req, dep_rev,
+    package_name_read, package_name_parse, package_coil_parse,
 };
 use tags::{parse_ls_remote, ls_remote_tag_names, ls_remote_sha};
 use semver::{select_tag, select_tag_all, tag_satisfies_all};
-use engine::{parse_coil_version_output, enforce_engine};
-
-fn sh_quote(string s) -> string {
-    return "'" + s + "'";
-}
-
-fn contains_space(string s) -> bool {
-    return contains(s, " ");
-}
-
-fn write_resolve_script(string root, string name, string url, string tag, string rev) -> Result<int, string> {
-    let cache = cache_root()?;
-    let key = url_cache_key(url)?;
-    let (host, owner, repo) = key;
-    let bare = join4(join2(cache, "git"), host, owner, repo);
-    let bare_parent = path_dirname(bare);
-    ensure_dir(bare_parent)?;
-    let checkouts = join3(cache, "git", "checkouts");
-    ensure_dir(checkouts)?;
-    let tmp = join2(checkouts, ".tmp-" + name);
-    let resolved = join2(root, ".spool/resolved.tsv");
-
-    let script = git_sh_preamble();
-    script = script + "RESOLVED=" + sh_quote(resolved) + "\n";
-    script = script + ": > \"$RESOLVED\"\n";
-    script = script + "BARE=" + sh_quote(bare) + "\n";
-    script = script + "URL=" + sh_quote(url) + "\n";
-    script = script + "REV=" + sh_quote(rev) + "\n";
-    script = script + "NAME=" + sh_quote(name) + "\n";
-    script = script + "TAG=" + sh_quote(tag) + "\n";
-    script = script + "TMP=" + sh_quote(tmp) + "\n";
-    script = script + "CHECKOUTS=" + sh_quote(checkouts) + "\n";
-    script = script + "if [ -d \"$BARE\" ]; then\n";
-    script = script + "  git -C \"$BARE\" fetch --tags --force origin\n";
-    script = script + "else\n";
-    script = script + "  git clone --bare \"$URL\" \"$BARE\"\n";
-    script = script + "fi\n";
-    script = script + "rm -rf \"$TMP\"\n";
-    script = script + "git -C \"$BARE\" worktree add --detach \"$TMP\" \"$REV\"\n";
-    script = script + "TREE=$(git -C \"$TMP\" rev-parse 'HEAD^{tree}')\n";
-    script = script + "DEST=\"$CHECKOUTS/$TREE\"\n";
-    script = script + "if [ -d \"$DEST\" ]; then\n";
-    script = script + "  git -C \"$BARE\" worktree remove --force \"$TMP\" || rm -rf \"$TMP\"\n";
-    script = script + "else\n";
-    script = script + "  git -C \"$BARE\" worktree move \"$TMP\" \"$DEST\"\n";
-    script = script + "fi\n";
-    script = script + "printf '%s\\t%s\\t%s\\t%s\\t%s\\n' \"$NAME\" \"$URL\" \"$TAG\" \"$REV\" \"$TREE\" >> \"$RESOLVED\"\n";
-
-    return match write_text(join2(root, ".spool/resolve.sh"), script) {
-        Result::Ok(_) => 0,
-        Result::Err(_) => raise "write resolve.sh failed",
-    };
-}
-
-fn run_add_manifest(string root, string name, string git, string path, string version) -> Result<int, string> {
-    if len(name) == 0 {
-        raise "missing package name";
-    }
-    if contains_space(name) {
-        raise "package name must not contain whitespace";
-    }
-    let dep = "";
-    if len(git) > 0 {
-        if len(path) > 0 {
-            raise "git and path are mutually exclusive";
-        }
-        let ver = version;
-        if len(ver) == 0 {
-            ver = "*";
-        }
-        dep = make_git_dep(name, git, ver);
-    } else {
-        if len(path) == 0 {
-            raise "need --git or --path";
-        }
-        dep = make_path_dep(name, path);
-    }
-    return deps_append(join2(root, "coil.toml"), dep)?;
-}
-
-fn run_apply_resolved(string root) -> Result<int, string> {
-    let path = join2(root, ".spool/resolved.tsv");
-    let body = match read_text(path) {
-        Result::Ok(s) => s,
-        Result::Err(_) => raise "read resolved.tsv failed",
-    };
-    let packages = lock_read_or_empty(join2(root, "coil.lock"))?;
-    let lines = match split(body, "\n") {
-        Result::Ok(ls) => ls,
-        Result::Err(_) => raise "split resolved failed",
-    };
-    let out = packages;
-    let n = 0;
-    let i = 0;
-    while i < len(lines) {
-        let line = match trim(lines[i]) {
-            Result::Ok(t) => t,
-            Result::Err(_) => lines[i],
-        };
-        i = i + 1;
-        if len(line) == 0 {
-            continue;
-        }
-        let parts = match split(line, "\t") {
-            Result::Ok(p) => p,
-            Result::Err(_) => raise "bad resolved line",
-        };
-        if len(parts) < 5 {
-            raise "bad resolved line";
-        }
-        let pkg = make_git_pkg(parts[0], parts[1], parts[2], parts[3], parts[4]);
-        out = lock_upsert(out, pkg);
-        n = n + 1;
-    }
-    if n == 0 {
-        raise "resolved.tsv is empty";
-    }
-    return lock_write(join2(root, "coil.lock"), out)?;
-}
-
-fn run_list_git_deps(string root) -> Result<int, string> {
-    let deps = deps_read(join2(root, "coil.toml"))?;
-    let out = "";
-    let i = 0;
-    while i < len(deps) {
-        let d = deps[i];
-        i = i + 1;
-        if dep_kind(d) != "g" {
-            continue;
-        }
-        out = out + dep_name(d) + "\t" + dep_git(d) + "\t" + dep_version(d) + "\n";
-    }
-    ensure_dir(join2(root, ".spool"))?;
-    return match write_text(join2(root, ".spool/git-deps.tsv"), out) {
-        Result::Ok(_) => 0,
-        Result::Err(_) => raise "write git-deps.tsv failed",
-    };
-}
+use engine::{enforce_engine};
+use git::{ls_remote_tags, ls_remote_ref, fetch_rev, checkout_path, is_hex_sha};
 
 fn resolve_dep_path(string root, string p) -> string {
     if path_is_absolute(p) {
         return p;
     }
     return join2(root, p);
-}
-
-fn path_dep_links(string root) -> Result<string, string> {
-    let deps = deps_read(join2(root, "coil.toml"))?;
-    let links = "";
-    let i = 0;
-    while i < len(deps) {
-        let d = deps[i];
-        i = i + 1;
-        if dep_kind(d) != "p" {
-            continue;
-        }
-        let dest = resolve_dep_path(root, dep_path(d));
-        let present = match exists(dest) {
-            Result::Ok(v) => v,
-            Result::Err(_) => false,
-        };
-        if present == false {
-            raise format("path dependency %s not found: %s", dep_name(d), dest);
-        }
-        links = links + dep_name(d) + "\t" + dest + "\n";
-    }
-    return links;
-}
-
-fn con_field(string c, int idx) -> string {
-    let parts = match split(c, "\t") {
-        Result::Ok(v) => v,
-        Result::Err(_) => {
-            let empty: Vec<string> = Vec::new();
-            empty
-        },
-    };
-    if idx < len(parts) {
-        return parts[idx];
-    }
-    return "";
-}
-
-fn make_con(string name, string git, string version, string who) -> string {
-    return name + "\t" + git + "\t" + version + "\t" + who;
-}
-
-fn checkout_dir(string hash) -> Result<string, string> {
-    let cache = cache_root()?;
-    return join2(join3(cache, "git", "checkouts"), hash);
 }
 
 fn root_requester(string root) -> string {
@@ -217,6 +33,28 @@ fn root_requester(string root) -> string {
     return n;
 }
 
+fn make_con(string name, string git, string req, string who) -> string {
+    return name + "\t" + git + "\t" + req + "\t" + who;
+}
+
+fn con_name(string c) -> string {
+    return tsv_field(c, 0);
+}
+
+fn con_git(string c) -> string {
+    return tsv_field(c, 1);
+}
+
+fn con_req(string c) -> string {
+    return tsv_field(c, 2);
+}
+
+fn con_who(string c) -> string {
+    return tsv_field(c, 3);
+}
+
+/// Append the git deps of one manifest. Names and urls are validated here:
+/// a transitive manifest is untrusted input.
 fn push_git_cons(Vec<string> cons, Vec<string> deps, string who) -> Result<Vec<string>, string> {
     let i = 0;
     while i < len(deps) {
@@ -227,25 +65,17 @@ fn push_git_cons(Vec<string> cons, Vec<string> deps, string who) -> Result<Vec<s
         }
         let name = dep_name(d);
         let git = dep_git(d);
+        check_pkg_name(name)?;
+        check_git_url(git)?;
         let j = 0;
         while j < len(cons) {
-            if con_field(cons[j], 0) == name {
-                if con_field(cons[j], 1) != git {
-                    raise "package " + name + ": git url mismatch (" + con_field(cons[j], 3) + " wants " + con_field(cons[j], 1) + ", " + who + " wants " + git + ")";
-                }
+            if con_name(cons[j]) == name && con_git(cons[j]) != git {
+                raise "package " + name + ": git url mismatch (" + con_who(cons[j]) + " wants " + con_git(cons[j]) + ", " + who + " wants " + git + ")";
             }
             j = j + 1;
         }
-        let rec = make_con(name, git, dep_version(d), who);
-        let dup = false;
-        j = 0;
-        while j < len(cons) {
-            if cons[j] == rec {
-                dup = true;
-            }
-            j = j + 1;
-        }
-        if dup == false {
+        let rec = make_con(name, git, dep_req(d), who);
+        if vec_has(cons, rec) == false {
             cons.push(rec);
         }
     }
@@ -253,40 +83,39 @@ fn push_git_cons(Vec<string> cons, Vec<string> deps, string who) -> Result<Vec<s
 }
 
 fn scan_toml_cons(Vec<string> cons, string toml_path, string who) -> Result<Vec<string>, string> {
-    let present = match exists(toml_path) {
-        Result::Ok(v) => v,
-        Result::Err(_) => false,
-    };
-    if present == false {
+    if path_exists(toml_path) == false {
         return cons;
     }
     let deps = deps_read(toml_path)?;
     return push_git_cons(cons, deps, who)?;
 }
 
-fn format_diamond(string name, Vec<string> cons) -> string {
-    let bits = "";
+/// Constraints declared by the project and its path deps.
+fn root_cons(string root) -> Result<Vec<string>, string> {
+    let cons: Vec<string> = Vec::new();
+    let toml = join2(root, "coil.toml");
+    cons = scan_toml_cons(cons, toml, root_requester(root))?;
+    let deps = deps_read(toml)?;
     let i = 0;
-    while i < len(cons) {
-        let c = cons[i];
+    while i < len(deps) {
+        let d = deps[i];
         i = i + 1;
-        if con_field(c, 0) != name {
+        if dep_kind(d) != "p" {
             continue;
         }
-        if len(bits) > 0 {
-            bits = bits + ", ";
-        }
-        bits = bits + con_field(c, 3) + " requires " + con_field(c, 2);
+        check_pkg_name(dep_name(d))?;
+        let dest = resolve_dep_path(root, dep_path(d));
+        cons = scan_toml_cons(cons, join2(dest, "coil.toml"), dep_name(d))?;
     }
-    return format("diamond conflict for %s: %s", name, bits);
+    return cons;
 }
 
 fn reqs_for(Vec<string> cons, string name) -> Vec<string> {
     let out: Vec<string> = Vec::new();
     let i = 0;
     while i < len(cons) {
-        if con_field(cons[i], 0) == name {
-            out.push(con_field(cons[i], 2));
+        if con_name(cons[i]) == name {
+            out.push(con_req(cons[i]));
         }
         i = i + 1;
     }
@@ -296,28 +125,20 @@ fn reqs_for(Vec<string> cons, string name) -> Vec<string> {
 fn git_for(Vec<string> cons, string name) -> string {
     let i = 0;
     while i < len(cons) {
-        if con_field(cons[i], 0) == name {
-            return con_field(cons[i], 1);
+        if con_name(cons[i]) == name {
+            return con_git(cons[i]);
         }
         i = i + 1;
     }
     return "";
 }
 
-fn unique_git_names(Vec<string> cons) -> Vec<string> {
+fn unique_names(Vec<string> cons) -> Vec<string> {
     let out: Vec<string> = Vec::new();
     let i = 0;
     while i < len(cons) {
-        let n = con_field(cons[i], 0);
-        let seen = false;
-        let j = 0;
-        while j < len(out) {
-            if out[j] == n {
-                seen = true;
-            }
-            j = j + 1;
-        }
-        if seen == false {
+        let n = con_name(cons[i]);
+        if vec_has(out, n) == false {
             out.push(n);
         }
         i = i + 1;
@@ -325,125 +146,245 @@ fn unique_git_names(Vec<string> cons) -> Vec<string> {
     return out;
 }
 
-fn parse_constraints_body(string body) -> Vec<string> {
-    let out: Vec<string> = Vec::new();
-    if len(body) == 0 {
-        return out;
-    }
-    let lines = match split(body, "\n") {
-        Result::Ok(ls) => ls,
-        Result::Err(_) => {
-            return out;
-        },
-    };
+fn format_diamond(string name, Vec<string> cons) -> string {
+    let bits = "";
     let i = 0;
-    while i < len(lines) {
-        let line = match trim(lines[i]) {
-            Result::Ok(t) => t,
-            Result::Err(_) => lines[i],
-        };
+    while i < len(cons) {
+        let c = cons[i];
         i = i + 1;
-        if len(line) == 0 {
+        if con_name(c) != name {
             continue;
         }
-        out.push(line);
+        if len(bits) > 0 {
+            bits = bits + ", ";
+        }
+        bits = bits + con_who(c) + " requires " + con_req(c);
+    }
+    return format("diamond conflict for %s: %s", name, bits);
+}
+
+fn strip_at(string req) -> string {
+    return match slice(req, 1, len(req)) {
+        Result::Ok(x) => x,
+        Result::Err(_) => req,
+    };
+}
+
+/// The single `@rev` pin among reqs, "" when none; mixed / different pins raise.
+fn pin_of(string name, Vec<string> reqs, Vec<string> cons) -> Result<string, string> {
+    let pin = "";
+    let ranges = 0;
+    let i = 0;
+    while i < len(reqs) {
+        let r = reqs[i];
+        i = i + 1;
+        if starts_with(r, "@") {
+            let p = strip_at(r);
+            if len(pin) > 0 && pin != p {
+                raise format_diamond(name, cons);
+            }
+            pin = p;
+        } else {
+            ranges = ranges + 1;
+        }
+    }
+    if len(pin) > 0 && ranges > 0 {
+        raise format_diamond(name, cons);
+    }
+    return pin;
+}
+
+/// Does the locked row still satisfy every constraint on its name?
+fn locked_ok(string locked, string url, Vec<string> reqs, string pin) -> bool {
+    if len(locked) == 0 {
+        return false;
+    }
+    if lock_pkg_git(locked) != url {
+        return false;
+    }
+    if len(pin) > 0 {
+        if lock_pkg_ref(locked) != pin {
+            return false;
+        }
+        if is_hex_sha(pin) {
+            return lock_pkg_rev(locked) == pin;
+        }
+        return true;
+    }
+    if len(lock_pkg_ref(locked)) > 0 {
+        return false;
+    }
+    return match tag_satisfies_all(lock_pkg_tag(locked), reqs) {
+        Result::Ok(ok) => ok,
+        Result::Err(_) => false,
+    };
+}
+
+/// Walk the graph from the project through locked checkouts.
+/// Returns (constraints, todo) where todo rows are `name \t url`.
+/// Names in `force` are re-resolved even when the lock satisfies them.
+fn collect(string root, Vec<string> packages, Vec<string> force) -> Result<(Vec<string>, Vec<string>), string> {
+    let cons = root_cons(root)?;
+    let scanned: Vec<string> = Vec::new();
+    let todo: Vec<string> = Vec::new();
+    let changed = true;
+    while changed {
+        changed = false;
+        let names = unique_names(cons);
+        let i = 0;
+        while i < len(names) {
+            let name = names[i];
+            i = i + 1;
+            if vec_has(scanned, name) {
+                continue;
+            }
+            scanned.push(name);
+            let url = git_for(cons, name);
+            let reqs = reqs_for(cons, name);
+            let pin = pin_of(name, reqs, cons)?;
+            let locked = lock_find(packages, name);
+            if vec_has(force, name) || locked_ok(locked, url, reqs, pin) == false {
+                todo.push(name + "\t" + url);
+                continue;
+            }
+            let dest = checkout_path(lock_pkg_hash(locked))?;
+            cons = scan_toml_cons(cons, join2(dest, "coil.toml"), name)?;
+            changed = true;
+        }
+    }
+    // A later scan can add a constraint that a locked pick no longer meets.
+    let names = unique_names(cons);
+    let k = 0;
+    while k < len(names) {
+        let name = names[k];
+        k = k + 1;
+        let url = git_for(cons, name);
+        let row = name + "\t" + url;
+        if vec_has(todo, row) {
+            continue;
+        }
+        let reqs = reqs_for(cons, name);
+        let pin = pin_of(name, reqs, cons)?;
+        if locked_ok(lock_find(packages, name), url, reqs, pin) == false {
+            todo.push(row);
+        }
+    }
+    return (cons, todo);
+}
+
+/// Pick and fetch one package; returns its new lock row.
+fn resolve_one(string name, string url, Vec<string> cons) -> Result<string, string> {
+    let reqs = reqs_for(cons, name);
+    if len(reqs) == 0 {
+        raise format("no requirement for %s", name);
+    }
+    let pin = pin_of(name, reqs, cons)?;
+    let tag = "";
+    let sha = "";
+    if len(pin) > 0 {
+        sha = ls_remote_ref(url, pin)?;
+    } else {
+        let body = ls_remote_tags(url)?;
+        let rows = parse_ls_remote(body)?;
+        let tag_names = ls_remote_tag_names(rows);
+        if len(reqs) == 1 {
+            tag = match select_tag(reqs[0], tag_names) {
+                Result::Ok(t) => t,
+                Result::Err(e) => raise format("%s: %s", name, e),
+            };
+        } else {
+            tag = match select_tag_all(reqs, tag_names) {
+                Result::Ok(t) => t,
+                Result::Err(_) => raise format_diamond(name, cons),
+            };
+        }
+        sha = ls_remote_sha(rows, tag)?;
+    }
+    let tree = fetch_rev(url, sha)?;
+    return make_git_pkg_ref(name, url, tag, sha, tree, "", "", pin);
+}
+
+/// Resolve until the lock satisfies every reachable constraint.
+fn resolve_all(string root, Vec<string> packages, Vec<string> force) -> Result<Vec<string>, string> {
+    let pass = 0;
+    let f = force;
+    while pass < 32 {
+        pass = pass + 1;
+        let res = collect(root, packages, f)?;
+        let (cons, todo) = res;
+        if len(todo) == 0 {
+            return packages;
+        }
+        let i = 0;
+        while i < len(todo) {
+            let name = tsv_field(todo[i], 0);
+            let url = tsv_field(todo[i], 1);
+            i = i + 1;
+            let row = resolve_one(name, url, cons)?;
+            packages = lock_upsert(packages, row);
+        }
+        let empty: Vec<string> = Vec::new();
+        f = empty;
+    }
+    raise "resolve loop exceeded 32 passes";
+}
+
+fn packages_none() -> Vec<string> {
+    let empty: Vec<string> = Vec::new();
+    return empty;
+}
+
+/// Names reachable from the project (git deps only).
+fn reachable_names(string root, Vec<string> packages) -> Result<Vec<string>, string> {
+    let res = collect(root, packages, packages_none())?;
+    let (cons, todo) = res;
+    return unique_names(cons);
+}
+
+/// Drop lock rows nothing reaches any more.
+fn prune(Vec<string> packages, Vec<string> keep) -> Vec<string> {
+    let out: Vec<string> = Vec::new();
+    let i = 0;
+    while i < len(packages) {
+        if vec_has(keep, lock_pkg_name(packages[i])) {
+            out.push(packages[i]);
+        }
+        i = i + 1;
     }
     return out;
 }
 
-fn read_constraints(string root) -> Vec<string> {
-    let path = join2(root, ".spool/constraints.tsv");
-    let present = match exists(path) {
-        Result::Ok(v) => v,
-        Result::Err(_) => false,
-    };
-    if present == false {
-        let empty: Vec<string> = Vec::new();
-        return empty;
-    }
-    let body = match read_text(path) {
-        Result::Ok(s) => s,
-        Result::Err(_) => {
-            let empty: Vec<string> = Vec::new();
-            return empty;
-        },
-    };
-    return parse_constraints_body(body);
-}
-
-fn run_collect(string root) -> Result<int, string> {
-    let who = root_requester(root);
-    let cons: Vec<string> = Vec::new();
-    cons = scan_toml_cons(cons, join2(root, "coil.toml"), who)?;
-
-    let root_deps = deps_read(join2(root, "coil.toml"))?;
+/// `name \t dir` for every package to link: locked git checkouts, then path deps.
+fn link_rows(string root, Vec<string> packages) -> Result<Vec<string>, string> {
+    let out: Vec<string> = Vec::new();
     let i = 0;
-    while i < len(root_deps) {
-        let d = root_deps[i];
+    while i < len(packages) {
+        let p = packages[i];
+        i = i + 1;
+        check_pkg_name(lock_pkg_name(p))?;
+        let dest = checkout_path(lock_pkg_hash(p))?;
+        out.push(lock_pkg_name(p) + "\t" + dest);
+    }
+    let deps = deps_read(join2(root, "coil.toml"))?;
+    i = 0;
+    while i < len(deps) {
+        let d = deps[i];
         i = i + 1;
         if dep_kind(d) != "p" {
             continue;
         }
+        check_pkg_name(dep_name(d))?;
         let dest = resolve_dep_path(root, dep_path(d));
-        cons = scan_toml_cons(cons, join2(dest, "coil.toml"), dep_name(d))?;
-    }
-
-    let packages = lock_read_or_empty(join2(root, "coil.lock"))?;
-    i = 0;
-    while i < len(packages) {
-        let p = packages[i];
-        i = i + 1;
-        let dest = checkout_dir(lock_pkg_hash(p))?;
-        cons = scan_toml_cons(cons, join2(dest, "coil.toml"), lock_pkg_name(p))?;
-    }
-
-    let body = "";
-    i = 0;
-    while i < len(cons) {
-        body = body + cons[i] + "\n";
-        i = i + 1;
-    }
-    ensure_dir(join2(root, ".spool"))?;
-    match write_text(join2(root, ".spool/constraints.tsv"), body) {
-        Result::Ok(_) => 0,
-        Result::Err(_) => raise "write constraints.tsv failed",
-    };
-
-    let todo = "";
-    let names = unique_git_names(cons);
-    i = 0;
-    while i < len(names) {
-        let name = names[i];
-        i = i + 1;
-        let reqs = reqs_for(cons, name);
-        let git = git_for(cons, name);
-        let locked = lock_find(packages, name);
-        if len(locked) > 0 {
-            let tag = lock_pkg_tag(locked);
-            let ok_res = tag_satisfies_all(tag, reqs);
-            match ok_res {
-                Result::Ok(ok) => {
-                    if ok {
-                        continue;
-                    }
-                },
-                Result::Err(_) => {},
-            };
+        if path_exists(dest) == false {
+            raise format("path dependency %s not found: %s", dep_name(d), dest);
         }
-        todo = todo + name + "\t" + git + "\n";
+        out.push(dep_name(d) + "\t" + dest);
     }
-    return match write_text(join2(root, ".spool/todo.tsv"), todo) {
-        Result::Ok(_) => 0,
-        Result::Err(_) => raise "write todo.tsv failed",
-    };
+    return out;
 }
 
 fn check_one_toml(string toml_path, string fallback_name, string running) -> Result<int, string> {
-    let present = match exists(toml_path) {
-        Result::Ok(v) => v,
-        Result::Err(_) => false,
-    };
-    if present == false {
+    if path_exists(toml_path) == false {
         return 0;
     }
     let body = match read_text(toml_path) {
@@ -457,157 +398,30 @@ fn check_one_toml(string toml_path, string fallback_name, string running) -> Res
     if len(name) == 0 {
         name = toml_path;
     }
-    let range = package_coil_parse(body);
-    return enforce_engine(name, range, running)?;
+    return enforce_engine(name, package_coil_parse(body), running)?;
 }
 
-fn run_check_engine(string root, string version_output) -> Result<int, string> {
-    let running = "";
-    match parse_coil_version_output(version_output) {
-        Result::Ok(v) => {
-            running = v;
-        },
-        Result::Err(_) => {},
-    };
-
-    let who = root_requester(root);
-    check_one_toml(join2(root, "coil.toml"), who, running)?;
-
+/// `[package].coil` of the project, path deps and every locked checkout on disk.
+fn check_engine_all(string root, Vec<string> packages, string running) -> Result<int, string> {
     let toml = join2(root, "coil.toml");
-    let present = match exists(toml) {
-        Result::Ok(v) => v,
-        Result::Err(_) => false,
-    };
+    check_one_toml(toml, root_requester(root), running)?;
+    let deps = deps_read(toml)?;
     let i = 0;
-    if present == false {
-        i = 0;
-    } else {
-        let deps = deps_read(toml)?;
-        while i < len(deps) {
-            let d = deps[i];
-            i = i + 1;
-            if dep_kind(d) != "p" {
-                continue;
-            }
-            let dest = resolve_dep_path(root, dep_path(d));
-            check_one_toml(join2(dest, "coil.toml"), dep_name(d), running)?;
+    while i < len(deps) {
+        let d = deps[i];
+        i = i + 1;
+        if dep_kind(d) != "p" {
+            continue;
         }
+        let dest = resolve_dep_path(root, dep_path(d));
+        check_one_toml(join2(dest, "coil.toml"), dep_name(d), running)?;
     }
-
-    let packages = lock_read_or_empty(join2(root, "coil.lock"))?;
     i = 0;
     while i < len(packages) {
         let p = packages[i];
         i = i + 1;
-        let dest = checkout_dir(lock_pkg_hash(p))?;
+        let dest = checkout_path(lock_pkg_hash(p))?;
         check_one_toml(join2(dest, "coil.toml"), lock_pkg_name(p), running)?;
     }
     return 0;
-}
-
-fn run_check_install(string root) -> Result<int, string> {
-    let toml = join2(root, "coil.toml");
-    let present = match exists(toml) {
-        Result::Ok(v) => v,
-        Result::Err(_) => false,
-    };
-    if present == false {
-        raise "coil.toml not found";
-    }
-    let deps = deps_read(toml)?;
-    let git_n = 0;
-    let i = 0;
-    while i < len(deps) {
-        if dep_kind(deps[i]) == "g" {
-            git_n = git_n + 1;
-        }
-        i = i + 1;
-    }
-    let lock_path = join2(root, "coil.lock");
-    let lock_ok = match exists(lock_path) {
-        Result::Ok(v) => v,
-        Result::Err(_) => false,
-    };
-    if git_n > 0 {
-        if lock_ok == false {
-            raise "missing coil.lock: run spool add or commit a lockfile";
-        }
-    }
-    if lock_ok == false {
-        return 0;
-    }
-    let packages = lock_read(lock_path)?;
-    i = 0;
-    while i < len(deps) {
-        let d = deps[i];
-        i = i + 1;
-        if dep_kind(d) != "g" {
-            continue;
-        }
-        let n = dep_name(d);
-        if len(lock_find(packages, n)) == 0 {
-            raise format("unresolved dependency %s (declared in coil.toml, not in coil.lock)", n);
-        }
-    }
-    return 0;
-}
-
-fn run_pick(string root, string name) -> Result<int, string> {
-    if len(name) == 0 {
-        raise "missing package name";
-    }
-    let cons = read_constraints(root);
-    let url = "";
-    let reqs: Vec<string> = Vec::new();
-    if len(reqs_for(cons, name)) > 0 {
-        reqs = reqs_for(cons, name);
-        url = git_for(cons, name);
-    } else {
-        let deps = deps_read(join2(root, "coil.toml"))?;
-        let dep = find_dep(deps, name)?;
-        if dep_kind(dep) != "g" {
-            raise format("%s is not a git dependency", name);
-        }
-        url = dep_git(dep);
-        reqs.push(dep_version(dep));
-    }
-    if len(url) == 0 {
-        raise format("no git url for %s", name);
-    }
-    let tags_path = join2(root, ".spool/tags.tsv");
-    let present = match exists(tags_path) {
-        Result::Ok(v) => v,
-        Result::Err(_) => false,
-    };
-    if present == false {
-        raise "missing .spool/tags.tsv";
-    }
-    let body = match read_text(tags_path) {
-        Result::Ok(s) => s,
-        Result::Err(_) => raise "read tags.tsv failed",
-    };
-    let rows = parse_ls_remote(body)?;
-    let tag_names = ls_remote_tag_names(rows);
-    let tag = "";
-    if len(reqs) == 1 {
-        tag = select_tag(reqs[0], tag_names)?;
-    } else {
-        let tag_res = select_tag_all(reqs, tag_names);
-        match tag_res {
-            Result::Ok(t) => {
-                tag = t;
-            },
-            Result::Err(_) => {
-                raise format_diamond(name, cons);
-            },
-        };
-    }
-    let sha = ls_remote_sha(rows, tag)?;
-    ensure_dir(join2(root, ".spool"))?;
-    let pick = name + "\t" + url + "\t" + tag + "\t" + sha + "\n";
-    match write_text(join2(root, ".spool/pick.tsv"), pick) {
-        Result::Ok(_) => 0,
-        Result::Err(_) => raise "write pick.tsv failed",
-    };
-    return write_resolve_script(root, name, url, tag, sha)?;
 }

@@ -1,0 +1,144 @@
+name: Edge
+
+# One rolling pre-release, `edge`, with a spool binary per host. It is
+# rebuilt after every green CI run on main: the `edge` tag moves to that
+# commit and every asset is replaced. No other tags or releases are made.
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+# A newer main build supersedes one still running.
+concurrency:
+  group: edge
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  # The CI run's commit (workflow_run), or the dispatched ref's.
+  EDGE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+jobs:
+  build:
+    name: spool (${{ matrix.triple }})
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            triple: x86_64-unknown-linux-gnu
+          - os: ubuntu-24.04-arm
+            triple: aarch64-unknown-linux-gnu
+          - os: macos-latest
+            triple: aarch64-apple-darwin
+          # x86_64-apple-darwin: GitHub's Intel macOS runners queue for hours
+          # (coil-lang COI-100). Windows: spool needs a POSIX `sh`.
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EDGE_SHA }}
+
+      - name: Install system deps (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libffi-dev libpcre2-dev build-essential
+
+      - name: Install system deps (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install libffi pcre2 pkg-config
+          pkg-config --exists libffi
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Check host triple
+        run: |
+          host="$(rustc -vV | sed -n 's/^host: //p')"
+          if [[ "$host" != "${{ matrix.triple }}" ]]; then
+            echo "::error::runner host '$host' is not ${{ matrix.triple }}"
+            exit 1
+          fi
+
+      - name: Cache coil build
+        uses: actions/cache@v4
+        with:
+          path: .bootstrap/coil-lang/target
+          key: edge-coil-${{ matrix.triple }}-${{ hashFiles('bootstrap.sh') }}
+          restore-keys: edge-coil-${{ matrix.triple }}-
+
+      - name: Bootstrap spool
+        run: ./bootstrap.sh
+
+      - name: Smoke check
+        run: ./target/spool --version
+
+      - name: Package
+        run: |
+          mkdir -p dist
+          archive="spool-${{ matrix.triple }}.tar.gz"
+          tar -C target -czf "dist/$archive" spool
+          (cd dist && shasum -a 256 "$archive" > "$archive.sha256")
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: edge-${{ matrix.triple }}
+          path: dist/*
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EDGE_SHA }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: edge-*
+          path: dist
+          merge-multiple: true
+
+      - name: Checksums
+        run: |
+          cat dist/*.sha256 > dist/SHA256SUMS
+          rm dist/*.sha256
+          cat dist/SHA256SUMS
+
+      - name: Move the edge tag
+        run: |
+          git tag -f edge "$EDGE_SHA"
+          git push -f origin refs/tags/edge
+
+      - name: Update the edge release
+        run: |
+          notes="Rolling pre-release of spool, rebuilt from main after every green CI run.
+
+          Commit: ${EDGE_SHA}
+          Built: $(date -u '+%Y-%m-%d %H:%M UTC')
+
+          Not a stable release: the binaries and this tag are replaced on every build.
+          Each archive holds a single \`spool\` executable; \`SHA256SUMS\` lists their checksums."
+          if gh release view edge >/dev/null 2>&1; then
+            gh release edit edge --prerelease --title "edge" --notes "$notes"
+          else
+            gh release create edge --prerelease --verify-tag --title "edge" --notes "$notes"
+          fi
+          gh release upload edge dist/* --clobber
+          # Drop assets this build did not produce (e.g. a removed target).
+          gh release view edge --json assets -q '.assets[].name' | while read -r name; do
+            if [[ ! -e "dist/$name" ]]; then
+              gh release delete-asset edge "$name" --yes
+            fi
+          done

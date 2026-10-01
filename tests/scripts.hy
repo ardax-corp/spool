@@ -11,17 +11,19 @@ use io::file::{write_text};
 use io::fs::{exists, create_dir_all, remove_file};
 use text::{contains};
 
-fn deny_contains(Result<int, string> r, string needle) -> Result<int, string> {
+// Match the Err payload in a bool helper: on coil main, matching a Result
+// parameter inside a Result-returning fn loses the payload (see README).
+fn denied_with(Result<int, string> r, string needle) -> bool {
     match r {
         Result::Ok(_) => {
-            assert(false)?;
+            return false;
         },
         Result::Err(e) => {
-            assert(contains(e, needle))?;
+            return contains(e, needle);
         },
     };
-    return 0;
 }
+
 
 /// Same as the spool driver: `--ignore-scripts` wins; else `--enable-scripts` sets `0`.
 fn ignore_env(bool force_off, bool want_on) -> string {
@@ -94,19 +96,18 @@ fn clear_marker(string p) {
 }
 
 /// Marker only. Does not exec. Writes HOOK_RAN when the gate would allow `sh`.
-fn mark_if_allowed(string marker, Result<int, string> gated) -> Result<int, string> {
+fn mark_if_allowed(string marker, Result<int, string> gated) -> bool {
     match gated {
         Result::Ok(_) => {
-            match write_text(marker, "pre_install\n") {
-                Result::Ok(_) => 0,
-                Result::Err(_) => raise "marker write failed",
+            return match write_text(marker, "pre_install\n") {
+                Result::Ok(_) => true,
+                Result::Err(_) => false,
             };
         },
-        Result::Err(e) => {
-            raise e;
+        Result::Err(_) => {
+            return false;
         },
     };
-    return 0;
 }
 
 test("default: consumer scripts do not run") {
@@ -116,7 +117,7 @@ test("default: consumer scripts do not run") {
     let lock = app_lock_scripts("./scripts/pre-install.sh", "abc");
     assert(default_hooks_off())?;
     assert(hooks_are_off(ignore_env(false, false)))?;
-    deny_contains(
+    assert(denied_with(
         script_from_lock(
             hooks_are_off(ignore_env(false, false)),
             lock,
@@ -124,7 +125,7 @@ test("default: consumer scripts do not run") {
             "abc",
         ),
         "hooks are off",
-    )?;
+    ))?;
     assert(marker_exists(marker) == false)?;
 }
 
@@ -135,7 +136,7 @@ test("--enable-scripts: allowed script may run") {
     let lock = app_lock_scripts("./scripts/pre-install.sh", "abc");
     assert(enable_scripts_flag("--enable-scripts"))?;
     assert(hooks_are_off(ignore_env(false, true)) == false)?;
-    mark_if_allowed(
+    assert(mark_if_allowed(
         marker,
         script_from_lock(
             hooks_are_off(ignore_env(false, true)),
@@ -143,7 +144,7 @@ test("--enable-scripts: allowed script may run") {
             "./scripts/pre-install.sh",
             "abc",
         ),
-    )?;
+    ))?;
     assert(marker_exists(marker))?;
 }
 
@@ -155,7 +156,7 @@ test("--ignore-scripts wins over --enable-scripts") {
     assert(ignore_scripts_flag("--ignore-scripts"))?;
     assert(enable_scripts_flag("--enable-scripts"))?;
     assert(hooks_are_off(ignore_env(true, true)))?;
-    deny_contains(
+    assert(denied_with(
         script_from_lock(
             hooks_are_off(ignore_env(true, true)),
             lock,
@@ -163,7 +164,7 @@ test("--ignore-scripts wins over --enable-scripts") {
             "abc",
         ),
         "hooks are off",
-    )?;
+    ))?;
     assert(marker_exists(marker) == false)?;
 }
 
@@ -199,7 +200,7 @@ test("changed script with a lock pin mismatches and does not sh") {
     let (lp, lh, first_pin) = decided;
     assert(first_pin == false)?;
     assert(lh == "abc")?;
-    deny_contains(
+    assert(denied_with(
         may_run_hook(
             false,
             hook_kind_script(),
@@ -211,8 +212,8 @@ test("changed script with a lock pin mismatches and does not sh") {
             false,
         ),
         "hook hash mismatch",
-    )?;
-    deny_contains(
+    ))?;
+    assert(denied_with(
         script_from_lock(
             hooks_are_off(ignore_env(false, true)),
             lock,
@@ -220,7 +221,7 @@ test("changed script with a lock pin mismatches and does not sh") {
             "changed",
         ),
         "hook hash mismatch",
-    )?;
+    ))?;
     assert(marker_exists(marker) == false)?;
 }
 
@@ -232,7 +233,7 @@ test("missing lock pin first-pins then gates; empty hash does not skip the gate"
     assert(contains(lock, "pre_install_hash") == false)?;
     let scripts = lock_parse_scripts(lock)?;
     let rec = lock_find_script(scripts, "pre_install");
-    deny_contains(
+    assert(denied_with(
         may_run_hook(
             false,
             hook_kind_script(),
@@ -244,7 +245,7 @@ test("missing lock pin first-pins then gates; empty hash does not skip the gate"
             false,
         ),
         "missing lock hash",
-    )?;
+    ))?;
     assert(marker_exists(marker) == false)?;
     let decided = script_gate_lock(
         lock_script_path(rec),
@@ -256,7 +257,7 @@ test("missing lock pin first-pins then gates; empty hash does not skip the gate"
     assert(first_pin)?;
     assert(lp == "./scripts/pre-install.sh")?;
     assert(lh == "abc")?;
-    mark_if_allowed(
+    assert(mark_if_allowed(
         marker,
         may_run_hook(
             false,
@@ -268,6 +269,6 @@ test("missing lock pin first-pins then gates; empty hash does not skip the gate"
             lh,
             false,
         ),
-    )?;
+    ))?;
     assert(marker_exists(marker))?;
 }

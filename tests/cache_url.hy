@@ -27,3 +27,26 @@ test("url_cache_key uses last three segments for file urls") {
     assert(owner == "acme")?;
     assert(repo == "widgets")?;
 }
+
+test("url_cache_key keeps hosts that contain .git") {
+    let key = url_cache_key("https://my.gitea.io/acme/widgets.git")?;
+    let (host, owner, repo) = key;
+    assert(host == "my.gitea.io")?;
+    assert(owner == "acme")?;
+    assert(repo == "widgets")?;
+}
+
+test("url_cache_key only strips a trailing .git") {
+    let key = url_cache_key("https://github.com/acme/site.github.io.git/")?;
+    let (host, owner, repo) = key;
+    assert(host == "github.com")?;
+    assert(repo == "site.github.io")?;
+}
+
+test("url_cache_key drops ssh:// user") {
+    let key = url_cache_key("ssh://git@example.com/acme/widgets.git")?;
+    let (host, owner, repo) = key;
+    assert(host == "example.com")?;
+    assert(owner == "acme")?;
+    assert(repo == "widgets")?;
+}

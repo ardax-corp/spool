@@ -2,6 +2,7 @@
 # COI-103: current-project [scripts] via host sh. Default off. --ignore-scripts wins.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+SPOOL="${SPOOL_BIN:-$ROOT/target/spool}"
 COIL_BIN="${COIL:-coil}"
 CACHE="$ROOT/scratch/cache_scripts"
 BASE="$ROOT/scratch/scripts"
@@ -103,7 +104,7 @@ assert_no_file() {
   fi
 }
 
-HELP="$("$ROOT/spool" help)"
+HELP="$("$SPOOL" help)"
 echo "$HELP" | grep -q -- "--enable-scripts"
 echo "$HELP" | grep -q -- "--ignore-scripts"
 
@@ -115,11 +116,11 @@ write_app "$APP" "app"
 export SPOOL_PROJECT="$APP"
 
 # Default off: declared [scripts] must not sh.
-"$ROOT/spool" install
+"$SPOOL" install
 assert_no_file "$APP/SCRIPT_RAN" "default install ran scripts"
 
 # Opt-in: install pair only.
-"$ROOT/spool" install --enable-scripts
+"$SPOOL" install --enable-scripts
 test -f "$APP/SCRIPT_RAN"
 grep -qx "pre_install" <(head -n 1 "$APP/SCRIPT_RAN")
 grep -q "post_install" "$APP/SCRIPT_RAN"
@@ -139,7 +140,7 @@ OLD_HASH="$(grep "pre_install_hash" "$APP/coil.lock")"
 write_marker_script "$APP/scripts/pre-install.sh" "pre_install_changed"
 rm -f "$APP/SCRIPT_RAN"
 set +e
-CHG_OUT="$("$ROOT/spool" install --enable-scripts 2>&1)"
+CHG_OUT="$("$SPOOL" install --enable-scripts 2>&1)"
 CHG_RC=$?
 set -e
 if [[ "$CHG_RC" -eq 0 ]]; then
@@ -158,16 +159,16 @@ write_marker_script "$APP/scripts/pre-install.sh" "pre_install"
 
 # --ignore-scripts wins over --enable-scripts.
 rm -f "$APP/SCRIPT_RAN"
-"$ROOT/spool" --enable-scripts --ignore-scripts install
+"$SPOOL" --enable-scripts --ignore-scripts install
 assert_no_file "$APP/SCRIPT_RAN" "--ignore-scripts did not win"
-"$ROOT/spool" --ignore-scripts --enable-scripts install
+"$SPOOL" --ignore-scripts --enable-scripts install
 assert_no_file "$APP/SCRIPT_RAN" "--ignore-scripts did not win (flag order)"
 
 # Path dep with its own [scripts]: never run during consumer install.
 LIB="$BASE/httplib"
 write_lib "$LIB" "http"
 rm -f "$APP/SCRIPT_RAN" "$APP/DEP_SCRIPT_RAN"
-"$ROOT/spool" add http --path "$LIB" --enable-scripts
+"$SPOOL" add http --path "$LIB" --enable-scripts
 test -L "$APP/.spool/deps/http"
 test -f "$APP/SCRIPT_RAN"
 grep -q "pre_install" "$APP/SCRIPT_RAN"
@@ -192,7 +193,7 @@ GITURL="file://$FIX"
 GITAPP="$BASE/gitapp"
 write_app "$GITAPP" "gitapp"
 export SPOOL_PROJECT="$GITAPP"
-"$ROOT/spool" add fixture --git "$GITURL" --version "^1.0" --enable-scripts
+"$SPOOL" add fixture --git "$GITURL" --version "^1.0" --enable-scripts
 test -L "$GITAPP/.spool/deps/fixture"
 grep -q "pre_install" "$GITAPP/SCRIPT_RAN"
 grep -q "post_install" "$GITAPP/SCRIPT_RAN"
@@ -204,7 +205,7 @@ git -C "$FIX" commit -q -m "v1.2"
 git -C "$FIX" tag v1.2.0
 
 rm -f "$GITAPP/SCRIPT_RAN"
-"$ROOT/spool" update fixture --enable-scripts
+"$SPOOL" update fixture --enable-scripts
 grep -q "tag = 'v1.2.0'" "$GITAPP/coil.lock"
 test -f "$GITAPP/SCRIPT_RAN"
 grep -q "pre_update" "$GITAPP/SCRIPT_RAN"
@@ -221,7 +222,7 @@ write_app "$FAILAPP" "failapp"
 write_fail_script "$FAILAPP/scripts/pre-install.sh"
 export SPOOL_PROJECT="$FAILAPP"
 set +e
-OUT="$("$ROOT/spool" install --enable-scripts 2>&1)"
+OUT="$("$SPOOL" install --enable-scripts 2>&1)"
 RC=$?
 set -e
 if [[ "$RC" -eq 0 ]]; then

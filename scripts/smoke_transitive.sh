@@ -2,6 +2,7 @@
 # COI-15: transitive fetch/lock and diamond conflict.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+SPOOL="${SPOOL_BIN:-$ROOT/target/spool}"
 COIL_BIN="${COIL:-coil}"
 CACHE="$ROOT/scratch/cache_trans"
 BASE="$ROOT/scratch/trans"
@@ -123,8 +124,8 @@ export COIL_CACHE_DIR="$CACHE"
 OK="$BASE/ok"
 write_app "$OK"
 export SPOOL_PROJECT="$OK"
-"$ROOT/spool" add a --git "$A_URL" --version "^0.1"
-"$ROOT/spool" add b --git "$B_URL" --version "^0.1"
+"$SPOOL" add a --git "$A_URL" --version "^0.1"
+"$SPOOL" add b --git "$B_URL" --version "^0.1"
 grep -q "name = 'c'" "$OK/coil.lock"
 grep -q "tag = 'v1.2.0'" "$OK/coil.lock"
 test -L "$OK/.spool/deps/c"
@@ -134,9 +135,9 @@ test -L "$OK/.spool/deps/b"
 BAD="$BASE/bad"
 write_app "$BAD"
 export SPOOL_PROJECT="$BAD"
-"$ROOT/spool" add a --git "$A_URL" --version "^0.1"
+"$SPOOL" add a --git "$A_URL" --version "^0.1"
 set +e
-OUT="$("$ROOT/spool" add d --git "$D_URL" --version "^0.1" 2>&1)"
+OUT="$("$SPOOL" add d --git "$D_URL" --version "^0.1" 2>&1)"
 RC=$?
 set -e
 if [[ "$RC" -eq 0 ]]; then

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+SPOOL="${SPOOL_BIN:-$ROOT/target/spool}"
 COIL_BIN="${COIL:-coil}"
 FIX="$ROOT/scratch/fixture_repo"
 CACHE="$ROOT/scratch/cache"
@@ -44,14 +45,18 @@ export COIL="$COIL_BIN"
 export COIL_CACHE_DIR="$CACHE"
 export SPOOL_PROJECT="$PROJ"
 
-"$ROOT/spool" add fixture --git "$URL" --version "^1.0"
+"$SPOOL" add fixture --git "$URL" --version "^1.0"
 test -L "$PROJ/.spool/deps/fixture"
 grep -q "name = 'fixture'" "$PROJ/coil.lock"
 grep -q "tag = 'v1.1.0'" "$PROJ/coil.lock"
 grep -q 'fixture = { git =' "$PROJ/coil.toml"
-grep -q '.spool/deps' "$PROJ/coil.toml"
+# coil.toml is never edited for roots; spool passes .spool/deps as --root.
+if grep -q '.spool/deps' "$PROJ/coil.toml"; then
+  echo "smoke_add: coil.toml should not be rewritten" >&2
+  exit 1
+fi
 
-"$ROOT/spool" add local_lib --path "$PATHLIB"
+"$SPOOL" add local_lib --path "$PATHLIB"
 test -L "$PROJ/.spool/deps/local_lib"
 grep -q 'local_lib = { path =' "$PROJ/coil.toml"
 test -f "$PROJ/.spool/deps/local_lib/lib.hy"
@@ -61,7 +66,16 @@ git -C "$FIX" add -A
 git -C "$FIX" commit -q -m "v1.2"
 git -C "$FIX" tag v1.2.0
 
-"$ROOT/spool" update fixture
+"$SPOOL" update fixture
 grep -q "tag = 'v1.2.0'" "$PROJ/coil.lock"
+
+# remove drops the manifest line, the lock row, and the link.
+"$SPOOL" remove fixture
+if grep -q 'fixture' "$PROJ/coil.toml" "$PROJ/coil.lock"; then
+  echo "smoke_add: remove left fixture behind" >&2
+  exit 1
+fi
+test ! -e "$PROJ/.spool/deps/fixture"
+test -L "$PROJ/.spool/deps/local_lib"
 
 echo "smoke_add: ok"
