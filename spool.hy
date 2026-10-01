@@ -566,12 +566,27 @@ fn cmd_fmt(Vec<string> rest) -> Result<int, string> {
 }
 
 /// The language server talks over stdio, so nothing here may print to stdout.
+/// In a project, the server gets the same roots and grants as every other
+/// coil command (needs a coil whose `coil lsp` takes `--root`,
+/// ardax-corp/coil-lang#589; older ones get no flags).
 fn cmd_lsp(Vec<string> rest) -> Result<int, string> {
-    let dir = match find_project() {
-        Result::Ok(r) => r,
-        Result::Err(_) => current_dir()?,
-    };
     let argv = strs("lsp");
+    let dir = "";
+    match find_project() {
+        Result::Ok(root) => {
+            dir = root;
+            let lsp_help = coil_help(require_coil()?, strs("lsp"));
+            if contains(lsp_help, "--root") {
+                argv = push_all(argv, compile_flags(root)?);
+            } else {
+                say("this coil's `coil lsp` takes no --root; dependencies and the stdlib will not resolve");
+                say("(" + update_coil_hint() + ")");
+            }
+        },
+        Result::Err(_) => {
+            dir = current_dir()?;
+        },
+    };
     argv = push_all(argv, tool_args(rest));
     return coil_in(dir, argv)?;
 }
