@@ -13,38 +13,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          path: spool
-
-      # Siblings of spool so coil.toml roots resolve.
-      - uses: actions/checkout@v4
-        with:
-          repository: ardax-corp/coil-stdlib
-          path: coil-stdlib
-
-      - uses: actions/checkout@v4
-        with:
-          repository: ardax-corp/coil-toml
-          path: coil-toml
-
-      - uses: actions/checkout@v4
-        with:
-          repository: ardax-corp/coil-lang
-          path: coil-lang
-
-      # WORKAROUND (remove after COI-21): origin/main still errors E0900 on
-      # origin/main still errors E0900 on [package]/[dependencies]. The patch is
-      # feature/coi-3's compiler-only diff vs e277c20b. If it no longer applies,
-      # assume main already parses those tables.
-      - name: Patch coil-lang [package] support
-        working-directory: coil-lang
-        run: |
-          if git apply --check ../spool/ci/coil-package-manifest.patch; then
-            git apply ../spool/ci/coil-package-manifest.patch
-            echo "applied spool/ci/coil-package-manifest.patch"
-          else
-            echo "patch skipped (coil-lang likely already has [package] support)"
-          fi
 
       - name: Install system deps
         run: |
@@ -53,29 +21,30 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
-      - name: Build coil
-        working-directory: coil-lang
-        run: cargo build --release --bin coil
+      - name: Cache coil build
+        uses: actions/cache@v4
+        with:
+          path: .bootstrap/coil-lang/target
+          key: coil-${{ runner.os }}-${{ hashFiles('bootstrap.sh') }}
+          restore-keys: coil-${{ runner.os }}-
+
+      # Finds a valid coil (none on the runner, no release yet), builds
+      # coil-lang main from source, then packages target/spool.
+      - name: Bootstrap spool
+        run: ./bootstrap.sh
+
+      - name: Environment
+        run: |
+          echo "COIL=$PWD/.bootstrap/coil-lang/target/release/coil" >> "$GITHUB_ENV"
+          echo "COIL_STDLIB_DIR=$PWD/.bootstrap/coil-stdlib" >> "$GITHUB_ENV"
+
+      - name: Doctor
+        run: ./target/spool doctor
 
       - name: Unit tests
-        working-directory: spool
-        env:
-          COIL: ${{ github.workspace }}/coil-lang/target/release/coil
         run: |
-          "$COIL" test
+          ./target/spool install --locked
+          ./target/spool test
 
-      - name: Smoke install / add / consume
-        working-directory: spool
-        env:
-          COIL: ${{ github.workspace }}/coil-lang/target/release/coil
-        run: |
-          ./scripts/smoke_install.sh
-          ./scripts/smoke_add.sh
-          ./scripts/smoke_consume.sh
-          ./scripts/smoke_integrity.sh
-          ./scripts/smoke_auth.sh
-          ./scripts/smoke_transitive.sh
-          ./scripts/smoke_engine.sh
-          ./scripts/smoke_hooks.sh
-          ./scripts/smoke_scripts.sh
-          ./scripts/smoke_include.sh
+      - name: Smoke tests
+        run: ./scripts/smoke_all.sh

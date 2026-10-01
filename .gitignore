@@ -4,3 +4,4 @@ out.hyc
 .spool/
 /tmp/
 /scratch/
+/.bootstrap/

@@ -10,17 +10,19 @@ use lock::{
 use manifest::{package_include_parse};
 use text::{contains};
 
-fn deny_contains(Result<int, string> r, string needle) -> Result<int, string> {
+// Match the Err payload in a bool helper: on coil main, matching a Result
+// parameter inside a Result-returning fn loses the payload (see README).
+fn denied_with(Result<int, string> r, string needle) -> bool {
     match r {
         Result::Ok(_) => {
-            assert(false)?;
+            return false;
         },
         Result::Err(e) => {
-            assert(contains(e, needle))?;
+            return contains(e, needle);
         },
     };
-    return 0;
 }
+
 
 /// Gate an include-hook from lock fields only. Does not exec.
 fn include_from_lock(
@@ -77,7 +79,7 @@ test("default and --ignore-scripts are hooks-off") {
 }
 
 test("hooks-off denies before allowlist or hash") {
-    deny_contains(
+    assert(denied_with(
         may_run_hook(
             true,
             hook_kind_include(),
@@ -89,11 +91,11 @@ test("hooks-off denies before allowlist or hash") {
             true,
         ),
         "hooks are off",
-    )?;
+    ))?;
 }
 
 test("missing allowlist denies include-hook") {
-    deny_contains(
+    assert(denied_with(
         may_run_hook(
             false,
             hook_kind_include(),
@@ -105,11 +107,11 @@ test("missing allowlist denies include-hook") {
             false,
         ),
         "not allowlisted",
-    )?;
+    ))?;
 }
 
 test("missing lock hash denies") {
-    deny_contains(
+    assert(denied_with(
         may_run_hook(
             false,
             hook_kind_include(),
@@ -121,8 +123,8 @@ test("missing lock hash denies") {
             true,
         ),
         "missing lock hash",
-    )?;
-    deny_contains(
+    ))?;
+    assert(denied_with(
         may_run_hook(
             false,
             hook_kind_include(),
@@ -134,11 +136,11 @@ test("missing lock hash denies") {
             true,
         ),
         "missing lock hash",
-    )?;
+    ))?;
 }
 
 test("mismatched lock hash denies") {
-    deny_contains(
+    assert(denied_with(
         may_run_hook(
             false,
             hook_kind_include(),
@@ -150,11 +152,11 @@ test("mismatched lock hash denies") {
             true,
         ),
         "hook hash mismatch",
-    )?;
+    ))?;
 }
 
 test("mismatched hook path denies") {
-    deny_contains(
+    assert(denied_with(
         may_run_hook(
             false,
             hook_kind_include(),
@@ -166,7 +168,7 @@ test("mismatched hook path denies") {
             true,
         ),
         "hook path mismatch",
-    )?;
+    ))?;
 }
 
 test("allowlisted matching hash is eligible and does not exec") {
@@ -186,7 +188,7 @@ test("allowlisted matching hash is eligible and does not exec") {
 test("unsigned git identity is not a substitute") {
     assert(git_identity_trusted("https://github.com/acme/http.git") == false)?;
     assert(git_identity_trusted("git@github.com:acme/http.git") == false)?;
-    deny_contains(
+    assert(denied_with(
         may_run_hook(
             false,
             hook_kind_include(),
@@ -198,11 +200,11 @@ test("unsigned git identity is not a substitute") {
             true,
         ),
         "missing lock hash",
-    )?;
+    ))?;
 }
 
 test("consumer scripts skip allowlist but still need a lock hash") {
-    deny_contains(
+    assert(denied_with(
         may_run_hook(
             false,
             hook_kind_script(),
@@ -214,7 +216,7 @@ test("consumer scripts skip allowlist but still need a lock hash") {
             false,
         ),
         "missing lock hash",
-    )?;
+    ))?;
     let n = may_run_hook(
         false,
         hook_kind_script(),
@@ -238,7 +240,7 @@ test("changed script with an existing lock hash is a mismatch") {
     let (lp, lh, first_pin) = decided;
     assert(first_pin == false)?;
     assert(lh == "abc")?;
-    deny_contains(
+    assert(denied_with(
         may_run_hook(
             false,
             hook_kind_script(),
@@ -250,7 +252,7 @@ test("changed script with an existing lock hash is a mismatch") {
             false,
         ),
         "hook hash mismatch",
-    )?;
+    ))?;
 }
 
 test("empty lock hash is first-pin then gate, not a silent refresh") {
@@ -270,7 +272,7 @@ test("empty lock hash is first-pin then gate, not a silent refresh") {
         false,
     )?;
     assert(n == 0)?;
-    deny_contains(
+    assert(denied_with(
         may_run_hook(
             false,
             hook_kind_script(),
@@ -282,7 +284,7 @@ test("empty lock hash is first-pin then gate, not a silent refresh") {
             false,
         ),
         "missing lock hash",
-    )?;
+    ))?;
 }
 
 test("allow_include list is explicit") {
@@ -297,7 +299,7 @@ test("allow_include list is explicit") {
 test("default: include hook not allowed") {
     let lock = http_lock(false);
     assert(contains(lock, "allow_include =") == false)?;
-    deny_contains(
+    assert(denied_with(
         include_from_lock(
             default_hooks_off(),
             lock,
@@ -306,8 +308,8 @@ test("default: include hook not allowed") {
             "hookabc",
         ),
         "hooks are off",
-    )?;
-    deny_contains(
+    ))?;
+    assert(denied_with(
         include_from_lock(
             hooks_are_off("0"),
             lock,
@@ -316,7 +318,7 @@ test("default: include hook not allowed") {
             "hookabc",
         ),
         "not allowlisted",
-    )?;
+    ))?;
 }
 
 test("after allow-include: may_run_hook only for recorded path and hash") {
@@ -332,7 +334,7 @@ test("after allow-include: may_run_hook only for recorded path and hash") {
         "hookabc",
     )?;
     assert(n == 0)?;
-    deny_contains(
+    assert(denied_with(
         include_from_lock(
             hooks_are_off("0"),
             lock,
@@ -341,8 +343,8 @@ test("after allow-include: may_run_hook only for recorded path and hash") {
             "hookabc",
         ),
         "hook path mismatch",
-    )?;
-    deny_contains(
+    ))?;
+    assert(denied_with(
         include_from_lock(
             hooks_are_off("0"),
             lock,
@@ -351,13 +353,13 @@ test("after allow-include: may_run_hook only for recorded path and hash") {
             "hookabc",
         ),
         "not allowlisted",
-    )?;
+    ))?;
 }
 
 test("--ignore-scripts: false even when allowlisted") {
     let lock = http_lock(true);
     assert(ignore_scripts_flag("--ignore-scripts"))?;
-    deny_contains(
+    assert(denied_with(
         include_from_lock(
             hooks_are_off("1"),
             lock,
@@ -366,8 +368,8 @@ test("--ignore-scripts: false even when allowlisted") {
             "hookabc",
         ),
         "hooks are off",
-    )?;
-    deny_contains(
+    ))?;
+    assert(denied_with(
         include_from_lock(
             hooks_are_off("--ignore-scripts"),
             lock,
@@ -376,12 +378,12 @@ test("--ignore-scripts: false even when allowlisted") {
             "hookabc",
         ),
         "hooks are off",
-    )?;
+    ))?;
 }
 
 test("wrong or missing hook_hash fail closed") {
     let lock = http_lock(true);
-    deny_contains(
+    assert(denied_with(
         include_from_lock(
             hooks_are_off("0"),
             lock,
@@ -390,7 +392,7 @@ test("wrong or missing hook_hash fail closed") {
             "wrong",
         ),
         "hook hash mismatch",
-    )?;
+    ))?;
     let pkgs = Vec::new();
     pkgs.push(make_git_pkg_hook(
         "http",
@@ -404,7 +406,7 @@ test("wrong or missing hook_hash fail closed") {
     let allow = Vec::new();
     allow.push("http");
     let missing = lock_serialize_full(pkgs, allow);
-    deny_contains(
+    assert(denied_with(
         include_from_lock(
             hooks_are_off("0"),
             missing,
@@ -413,7 +415,7 @@ test("wrong or missing hook_hash fail closed") {
             "hookabc",
         ),
         "missing lock hash",
-    )?;
+    ))?;
 }
 
 test("no [hooks] section in coil.toml is required") {

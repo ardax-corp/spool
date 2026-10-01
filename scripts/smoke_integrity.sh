@@ -2,6 +2,7 @@
 # COI-14: lock diagnostics and content-hash check.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)/.."
+SPOOL="${SPOOL_BIN:-$ROOT/target/spool}"
 ROOT="$(cd "$ROOT" && pwd)"
 COIL_BIN="${COIL:-coil}"
 CACHE="$ROOT/scratch/cache_integrity"
@@ -31,6 +32,8 @@ version = "0.0.1"
 roots = ["./src"]
 [env]
 allow_exec = true
+[dependencies]
+fixture = { git = "$URL", version = "^1.0" }
 EOF
 echo "// app" > "$PROJ/src/main.hy"
 cat > "$PROJ/coil.lock" <<EOF
@@ -49,12 +52,12 @@ EOF
 export COIL="$COIL_BIN"
 export COIL_CACHE_DIR="$CACHE"
 export SPOOL_PROJECT="$PROJ"
-"$ROOT/spool" install
+"$SPOOL" install
 
 # Bad hash must fail closed.
 sed -i "s/content_hash = '$TREE'/content_hash = 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef'/" "$PROJ/coil.lock"
 set +e
-OUT="$("$ROOT/spool" install 2>&1)"
+OUT="$("$SPOOL" install 2>&1)"
 RC=$?
 set -e
 if [[ "$RC" -eq 0 ]]; then
@@ -62,6 +65,8 @@ if [[ "$RC" -eq 0 ]]; then
   exit 1
 fi
 echo "$OUT" | grep -q "integrity mismatch for fixture"
+# The mis-keyed checkout is not left in the cache.
+test ! -e "$CACHE/git/checkouts/deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
 
 # Missing lock with a git dep.
 cat > "$MISS/coil.toml" <<EOF
@@ -77,20 +82,24 @@ fixture = { git = "$URL", version = "^1.0" }
 EOF
 echo "// app" > "$MISS/src/main.hy"
 export SPOOL_PROJECT="$MISS"
+# --locked refuses to create a lock; plain install resolves and writes one.
 set +e
-OUT="$("$ROOT/spool" install 2>&1)"
+OUT="$("$SPOOL" install --locked 2>&1)"
 RC=$?
 set -e
 if [[ "$RC" -eq 0 ]]; then
-  echo "smoke_integrity: expected missing lock to fail" >&2
+  echo "smoke_integrity: expected --locked without a lock to fail" >&2
   exit 1
 fi
-echo "$OUT" | grep -q "missing coil.lock"
+echo "$OUT" | grep -q "coil.lock is out of date (needs fixture)"
+test ! -e "$MISS/coil.lock"
+"$SPOOL" install
+grep -q "tag = 'v1.0.0'" "$MISS/coil.lock"
 
 # Corrupt lock.
 echo "not a lock" > "$MISS/coil.lock"
 set +e
-OUT="$("$ROOT/spool" install 2>&1)"
+OUT="$("$SPOOL" install 2>&1)"
 RC=$?
 set -e
 if [[ "$RC" -eq 0 ]]; then
@@ -121,13 +130,13 @@ cat > "$UNRES/coil.lock" <<'EOF'
 EOF
 export SPOOL_PROJECT="$UNRES"
 set +e
-OUT="$("$ROOT/spool" install 2>&1)"
+OUT="$("$SPOOL" install --locked 2>&1)"
 RC=$?
 set -e
 if [[ "$RC" -eq 0 ]]; then
-  echo "smoke_integrity: expected unresolved dep to fail" >&2
+  echo "smoke_integrity: expected unresolved dep to fail with --locked" >&2
   exit 1
 fi
-echo "$OUT" | grep -q "unresolved dependency fixture"
+echo "$OUT" | grep -q "coil.lock is out of date (needs fixture)"
 
 echo "smoke_integrity: ok"

@@ -4,6 +4,7 @@
 # Hooks stay off (COI-227); this only asserts they do not fire.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+SPOOL="${SPOOL_BIN:-$ROOT/target/spool}"
 COIL_BIN="${COIL:-coil}"
 CACHE="$ROOT/scratch/cache_engine"
 BASE="$ROOT/scratch/engine"
@@ -153,9 +154,9 @@ write_lib "$OKLIB" "oklib"
 OMIT="$BASE/omit"
 write_app "$OMIT" "omit"
 export SPOOL_PROJECT="$OMIT"
-"$ROOT/spool" install
+"$SPOOL" install
 assert_hooks_idle
-"$ROOT/spool" add oklib --path "$OKLIB"
+"$SPOOL" add oklib --path "$OKLIB"
 test -L "$OMIT/.spool/deps/oklib"
 assert_hooks_idle
 
@@ -163,16 +164,16 @@ assert_hooks_idle
 OK="$BASE/ok"
 write_app "$OK" "ok" "coil = \">=0.1.0\""
 export SPOOL_PROJECT="$OK"
-"$ROOT/spool" install
+"$SPOOL" install
 assert_hooks_idle
-"$ROOT/spool" add oklib --path "$OKLIB"
+"$SPOOL" add oklib --path "$OKLIB"
 test -L "$OK/.spool/deps/oklib"
 assert_hooks_idle
 
 STAR="$BASE/star"
 write_app "$STAR" "star" "coil = \"*\""
 export SPOOL_PROJECT="$STAR"
-"$ROOT/spool" install
+"$SPOOL" install
 assert_hooks_idle
 
 # Git fixture for fail-closed-before-fetch and in-range update.
@@ -216,7 +217,7 @@ write_app "$OLD" "old" "coil = \">=0.2.0\""
 lock_fixture "$OLD"
 export SPOOL_PROJECT="$OLD"
 set +e
-OUT="$("$ROOT/spool" install 2>&1)"
+OUT="$("$SPOOL" install 2>&1)"
 RC=$?
 set -e
 expect_fail "$OUT" "$RC" "old" ">=0.2.0"
@@ -224,7 +225,7 @@ assert_no_fetch "$OLD"
 assert_hooks_idle "$OLD"
 
 set +e
-OUT="$("$ROOT/spool" add extra --path "$FIX" 2>&1)"
+OUT="$("$SPOOL" add extra --path "$FIX" 2>&1)"
 RC=$?
 set -e
 expect_fail "$OUT" "$RC" "old" ">=0.2.0"
@@ -232,7 +233,7 @@ assert_no_fetch "$OLD"
 assert_hooks_idle "$OLD"
 
 set +e
-OUT="$("$ROOT/spool" update 2>&1)"
+OUT="$("$SPOOL" update 2>&1)"
 RC=$?
 set -e
 expect_fail "$OUT" "$RC" "old" ">=0.2.0"
@@ -246,7 +247,7 @@ write_app "$CARET" "caret" "coil = \"^0.2\""
 lock_fixture "$CARET"
 export SPOOL_PROJECT="$CARET"
 set +e
-OUT="$("$ROOT/spool" install 2>&1)"
+OUT="$("$SPOOL" install 2>&1)"
 RC=$?
 set -e
 expect_fail "$OUT" "$RC" "caret" "^0.2"
@@ -254,14 +255,14 @@ assert_no_fetch "$CARET"
 assert_hooks_idle "$CARET"
 
 set +e
-OUT="$("$ROOT/spool" add extra --path "$FIX" 2>&1)"
+OUT="$("$SPOOL" add extra --path "$FIX" 2>&1)"
 RC=$?
 set -e
 expect_fail "$OUT" "$RC" "caret" "^0.2"
 assert_no_fetch "$CARET"
 
 set +e
-OUT="$("$ROOT/spool" update 2>&1)"
+OUT="$("$SPOOL" update 2>&1)"
 RC=$?
 set -e
 expect_fail "$OUT" "$RC" "caret" "^0.2"
@@ -276,7 +277,7 @@ write_app "$PATHAPP" "pathapp"
 export SPOOL_PROJECT="$PATHAPP"
 rm -rf "$CACHE"
 set +e
-OUT="$("$ROOT/spool" add pathlib --path "$PATHLIB" 2>&1)"
+OUT="$("$SPOOL" add pathlib --path "$PATHLIB" 2>&1)"
 RC=$?
 set -e
 expect_fail "$OUT" "$RC" "pathlib" ">=0.2.0"
@@ -298,7 +299,7 @@ GITAPP="$BASE/gitapp"
 write_app "$GITAPP" "gitapp"
 export SPOOL_PROJECT="$GITAPP"
 set +e
-OUT="$("$ROOT/spool" add gitlib --git "$GITURL" --version "^1.0" 2>&1)"
+OUT="$("$SPOOL" add gitlib --git "$GITURL" --version "^1.0" 2>&1)"
 RC=$?
 set -e
 expect_fail "$OUT" "$RC" "gitlib" ">=0.2.0"
@@ -311,10 +312,10 @@ UP="$BASE/up"
 write_app "$UP" "up" "coil = \">=0.1.0\""
 lock_fixture "$UP"
 export SPOOL_PROJECT="$UP"
-"$ROOT/spool" install
+"$SPOOL" install
 test -L "$UP/.spool/deps/fixture"
 assert_hooks_idle "$UP"
-"$ROOT/spool" update
+"$SPOOL" update
 assert_hooks_idle "$UP"
 
 echo "smoke_engine: ok (coil $COIL_VER)"

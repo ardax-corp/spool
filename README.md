@@ -1,75 +1,206 @@
 # spool
 
-Git-based library dependency manager for [Coil](https://github.com/ardax-corp/coil-lang).
+Project and dependency manager for [Coil](https://github.com/ardax-corp/coil-lang):
+the high-level front end over the `coil` toolchain, shipped as one standalone
+executable.
 
-`spool` is a **Coil userland** project (not part of the `coil` Rust CLI). It resolves
-semver tags from git remotes, pins them in `coil.lock`, fetches into a shared
-content-addressed cache, and maintains project-local `.spool/deps` roots that the
-compiler already understands via `[module].roots`.
+- **Projects**: `new`, `init`, `build`, `run`, `check`, `test`, `fmt`, `clean`
+- **Dependencies**: git (semver tags or a pinned `rev`) and path deps, a
+  `coil.lock`, transitive resolution, `add`/`remove`/`update`, `tree`, `outdated`
+- **Natives**: `download` fetches `[[ffi.native]]` shared libraries
+- **Tooling**: `doctor`, `cache`
 
-## Naming
+coil does not read `[module].roots` from `coil.toml`, so module roots come
+from `--root` flags. spool builds those flags from the manifest, the linked
+dependencies, and the stdlib, then runs `coil` for you.
 
-| Tool | Role |
-|------|------|
-| **`spool`** | Library dependencies (`install` / `add` / `update`) and **`download`** for direct native shared libraries |
-| **`coil package`** | Embed a `.hyc` (+ optional native lock metadata) into a runner executable |
+## Install
 
-## Status (M4)
-
-- [x] `coil.lock` read/write (COI-5)
-- [x] Git fetch into content-addressed cache (COI-4) — bash `fetch.sh` + shared cache
-- [x] Manage `.spool/deps` + ensure `./.spool/deps` in `[module].roots` (COI-6)
-- [x] `spool install` (COI-7) via `./spool install` (plan → fetch → link)
-- [x] `spool add` / `update` (COI-8–9)
-- [x] Demo package `greet` (`examples/greet`, also [coil-greet](https://github.com/ardax-corp/coil-greet) `v0.1.0`)
-- [x] Consume smoke: install → `use` → compile/run (`scripts/smoke_consume.sh`)
-- [x] Private git via host credentials (COI-13)
-- [x] Lock integrity + diagnostics (COI-14)
-- [x] Transitive deps and diamond errors (COI-15)
-- [x] Engine range `[package].coil` fail-closed on install/add/update (COI-105)
-- [x] Hook trust gate: `--ignore-scripts`, lock `hook_path` / `hook_hash`, `allow-include` (COI-227)
-- [x] Current-project `[scripts]` runner (`--enable-scripts`, host `sh`) (COI-103)
-- [x] Dependency `[package].include` runner after link (COI-104)
-- [x] `spool download` / `spool install --with-natives` for direct FFI natives
-
-## Requirements
-
-- Coil toolchain (`coil` on `PATH`, or set `COIL`) — needs `coil natives dump` for native downloads
-- Host `git`, `sh`, `curl`, and `sha256sum`
-- Coil stdlib: default `../coil-stdlib/src` relative to this repo
-  ([coil-stdlib](https://github.com/ardax-corp/coil-stdlib))
-- coil-toml: default `../coil-toml/src` for `coil.toml` decode
-  ([coil-toml](https://github.com/ardax-corp/coil-toml))
-
-## Native libraries (`spool download`)
-
-Direct shared libraries declared in `[[ffi.native]]` (or embedded in a packaged
-exe) are fetched into a content-addressed cache:
-
-```
-~/.coil/natives/cache/<package>/<version>/<sha256_16>/<filename>
-```
-
-Override the root with `COIL_NATIVES_DIR`. Only **direct** `dload` targets are
-downloaded; transitive sonames (`requires`) must come from the OS.
+spool is written in Coil and packaged with `coil package`:
 
 ```bash
-# After coil package ./hello (embeds a native lock):
-./spool download ./hello
-
-# Project mode (reads [[ffi.native]] from coil.toml; local libs must exist to pin hashes):
-./spool download
-
-# Install source deps and natives in one step:
-./spool install --with-natives
+./bootstrap.sh              # → target/spool
+./bootstrap.sh --install    # also: ~/.local/bin/spool, ~/.coil/stdlib,
+                            # and ~/.coil/bin/coil if bootstrap built it
 ```
 
-Default `spool install` does **not** download natives.
+`bootstrap.sh`:
+
+1. Looks for a usable coil: `$COIL`, `coil` on `PATH`, `~/.coil/bin/coil`, or a
+   previous bootstrap build. A candidate needs to meet `COIL_MIN_VERSION`, have
+   `coil package`, and compile a probe that uses `env::args/exec/exit`. A
+   previous bootstrap build is reused only while its checkout is still the
+   newest `COIL_LANG_REF`; otherwise it is rebuilt (incrementally). It warns
+   when the coil lacks `coil mutate` or `coil test --json`.
+2. If none qualifies, it downloads the latest GitHub release asset
+   `coil-<triple>.tar.gz`, when one exists.
+3. If there is no release either, it builds coil-lang `main` from source into
+   `.bootstrap/coil-lang` (needs `cargo`, libffi and pcre2 dev files).
+4. Fetches coil-stdlib (default branch), coil-toml and coil-json (at the `rev`s
+   pinned in this repo's `coil.toml`) into `.bootstrap/`. Pass `--use-siblings`
+   to build against `../coil-stdlib`, `../coil-toml` and `../coil-json` instead.
+5. Runs `coil package spool.hy -o target/spool`.
+
+Other flags: `--from-source` (skip installed coil and releases),
+`--coil-only`. Overrides: `COIL_LANG_REPO/REF`, `COIL_STDLIB_REPO/REF`,
+`COIL_TOML_REPO/REF`, `COIL_JSON_REPO/REF`, `COIL_STDLIB_DIR`, `COIL_TOML_DIR`,
+`COIL_JSON_DIR`, `SPOOL_BOOTSTRAP_DIR`.
+
+Runtime requirements: host `git` and `sh`. `curl` is needed for `download`.
+
+## Quick start
+
+```bash
+spool new hello && cd hello
+spool run                 # packages target/hello and runs it
+spool run -- a b          # program arguments after --
+spool test                # coil test with the project's roots
+spool add greet --git https://github.com/ardax-corp/coil-greet.git --version '^0.1'
+spool tree
+```
+
+`spool new <name> --lib` creates a library. Its entry module is
+`src/<name>.hy`, so consumers write `use <name>::{item}`.
+
+## Commands
+
+| Command | What it does |
+|---|---|
+| `new <name> [--lib] [--no-git]` / `init` | scaffold `coil.toml`, `src/`, `tests/`, `.gitignore` (and `git init`) |
+| `build [-o PATH] [-O LEVEL]` | `coil package` of `[entry].file` (default `src/main.hy`) into `target/<name>` |
+| `run [-O LEVEL] [-- ARGS]` | build, then exec `target/<name>` with ARGS and its exit code |
+| `check` | `coil compile` without packaging |
+| `clean [--all]` | remove `target/` (`--all`: also `.spool/`) |
+| `test [PATH] [FLAGS]` | `coil test` (default `./tests`): `--coverage`, `--seed N`, `-j N`, `--fail-fast`, … |
+| `coverage [PATH] [FLAGS]` | `test --coverage`: per-file coverage table and `target/coverage/lcov.info` (`--coverage-out F`, `--coverage-per-test F`) |
+| `infect [PATH] [FLAGS]` | mutation testing (`coil mutate`): `--files GLOB`, `--operators`, `--min-score P`, `--json`, … |
+| `fmt [--check] [PATHS]` | `coil fmt` (default `src tests`) |
+| `debug [FILE] [FLAGS]` | `coil debug` on `[entry].file` (`--dap` for an IDE adapter) |
+| `dissect [FILE] [FLAGS]` | `coil dissect` of `[entry].file` (`--fn`, `--il`, `--ast`, …) |
+| `lsp` | `coil lsp` on stdio, started from the project root |
+| `coil [ARGS]` | plain `coil ARGS` from the project root (no flags added) |
+| `install [--locked] [--with-natives]` | fetch, resolve, prune and link dependencies |
+| `add <name> --git URL [--version REQ \| --rev REV]` | declare a git dependency, then install |
+| `add <name> --path DIR` | declare a path dependency, then install |
+| `remove <name>` | drop the dependency, prune `coil.lock` and stale links |
+| `update [name]` | re-resolve to the newest allowed versions (moves `rev` branches) |
+| `tree` | print the dependency graph |
+| `outdated` | locked vs newest compatible vs newest tag |
+| `download [EXE]` | fetch FFI natives for the project or a packaged EXE |
+| `allow-include <name>` | allow a dependency's include-hook |
+| `doctor` | check coil, stdlib, git, sh, curl, cache and project roots |
+| `cache dir` / `cache clean` | show or clear the shared git cache |
+
+Commands that compile (`build`, `run`, `check`, `test`, `infect`, `debug`,
+`dissect`) run `install` first when dependencies are declared but
+`.spool/deps` does not exist yet.
+
+`test`, `infect`, `fmt`, `debug`, `dissect` and `lsp` forward every flag to
+coil unchanged, so `spool <cmd> --help` shows coil's own options and new coil
+flags work without a spool release. spool adds the compile flags below and,
+for `debug`/`dissect`, `[entry].file` when no file is named.
+
+### Test and mutation reports
+
+`test` and `infect` run coil with `--json` and render its event stream
+while the run goes: one line per test file, failing cases with their reason
+and captured output, then a summary (and coverage per file with
+`--coverage`). `infect` lists surviving and untested mutants as they finish
+and ends with the mutation score. The exit status is 1 on a failed test, a
+score under `--min-score`, or a harness error.
+
+| Flag | Effect |
+|---|---|
+| `--color auto\|always\|never` | default `auto`: color when stdout is a terminal, unless `NO_COLOR` is set or `TERM=dumb` |
+| `--plain` | coil's own text report instead |
+| `--json` | coil's raw NDJSON events (for tools); also implied by `--log-json` / `--log-lsp` |
+
+This needs a coil whose `coil test` / `coil mutate` stream `--json` events
+(ardax-corp/coil-lang#584). With an older coil, spool says so and shows
+coil's own report; `spool infect` needs `coil mutate`. `spool doctor` lists
+which of these the coil it found has.
+
+`run` packages `target/<name>` rather than running the entry in memory:
+`coil FILE` cannot pass program arguments, and the packaged binary sees a
+normal argv.
+
+Editors: point the Coil LSP client at `spool lsp`. Today `coil lsp` only
+resolves `src`, `.` and `.deps/*/src`, so it does not see `.spool/deps` or
+the stdlib.
+
+`add` and `remove` restore `coil.toml` and `coil.lock` if the install fails.
+
+### Compile flags
+
+spool runs `coil` from the project root with:
+
+- `--root` for each `[module].roots` entry (default `./src`)
+- `--root .spool/deps` when dependencies are linked
+- `--root <stdlib>` unless a manifest root already is a stdlib. The stdlib is
+  found through `COIL_STDLIB_DIR`, `COIL_STDLIB`, `[stdlib] dir` in
+  `~/.config/coil/config.toml`, or `~/.coil/stdlib`
+- grants the manifest records: `[env] allow_exec/allow_exit/allow_ffi_exec`,
+  `[ffi] allow_attach`, `[ffi] allow` (`--allow-dload`), and
+  `[ffi] search_paths` (`--ffi-search-path`)
+
+The coil binary is `$COIL`, then `coil` on `PATH`, then `~/.coil/bin/coil`.
+
+## Dependencies
+
+```toml
+[dependencies]
+greet = { git = "https://github.com/ardax-corp/coil-greet.git", version = "^0.1" }
+toml  = { git = "https://github.com/ardax-corp/coil-toml.git", rev = "3e0da9d…" }
+local = { path = "../local" }
+```
+
+- `version` is matched against `v`-prefixed or bare semver tags: `^`, `~`,
+  `>=`, `>`, `<=`, `<`, `=`, exact, `*`, and comma-joined ranges
+  (`">=1.2, <2"`). Prerelease tags are never picked by a range.
+- `rev` pins a branch, tag or commit. The lock stores the resolved sha plus the
+  `ref`. `install` keeps the pin, and `update` moves a branch pin.
+- `trusted = true` is accepted, since coil's schema allows it. spool does not
+  use it.
+
+Resolution walks the reachable graph: the project, its path deps, and every
+locked checkout's `coil.toml`. Compatible requirements unify. Incompatible
+ones fail with the requesters named:
+
+```text
+diamond conflict for base: hello requires @dev, mid requires ^1
+```
+
+Lock rows nothing reaches any more are pruned. `install --locked` fails
+instead of changing the lock (CI):
+
+```text
+coil.lock is out of date (needs fixture); run without --locked to update it
+```
+
+Every locked checkout is verified against its `content_hash` (the git tree
+id). A mismatched checkout is deleted from the cache and the command fails.
+
+Names and URLs from any manifest, including transitive ones, are validated.
+Package names match `[A-Za-z_][A-Za-z0-9_-]*`. Git URLs must use `https://`,
+`http://`, `ssh://`, `git://`, `git@host:`, `file://` or an absolute path.
+Values reach `git`/`sh` only as positional arguments, never inside a script.
+
+### Linking
+
+```text
+.spool/deps/<name>     -> <checkout>/src
+.spool/deps/<name>.hy  -> <checkout>/src/<name>.hy   (when it exists)
+```
+
+`use greet::hello` resolves through the directory link. `use toml::{Toml}`
+resolves through the file link, which covers single-file libraries named after
+their package. `coil.toml` is never edited.
 
 ## Engine range
 
-A package may set `[package].coil` to a semver range against the running Coil
-toolchain. The key is optional. Spool stores the string as written.
+A package may set `[package].coil` to a semver range. spool compares it with
+`coil --version` of the coil it would run. Prerelease suffixes such as
+`0.2.0-dev` are compared by their base version.
 
 ```toml
 [package]
@@ -78,25 +209,12 @@ version = "1.2.0"
 coil = ">=0.1.0"
 ```
 
-The engine string is `coil --version`. coil-lang prints `coil 0.1.0` for that
-flag and for `-V`. Spool takes the token after `coil` and compares it to the
-range. It uses the `coil` binary already selected by `COIL` or `PATH`.
-
-`spool install`, `add`, and `update` check the current project, path deps, and
-locked git checkouts that already exist. Missing key and in-range `>=0.1.0` are
-no-ops. Out-of-range `>=0.2.0` and `^0.2` fail closed before git fetch.
-
-A git dep whose `coil.toml` is not on disk yet is checked after checkout, before
-`link`.
-
-The diagnostic names the package, the range, and the running version:
+The project, path deps and locked checkouts are checked before anything is
+fetched. New checkouts are checked again before link:
 
 ```text
 package http requires coil >=0.2.0, running 0.1.0
 ```
-
-Range language is the same as git-dep `version`: caret (`^`), `>=`, `>`, `<=`,
-`<`, `=`, exact, or `*`.
 
 ## Hook trust
 
@@ -109,9 +227,9 @@ gate.
 `SPOOL_IGNORE_SCRIPTS=0` is the same opt-in the gate already understands.
 
 ```bash
-./spool install --enable-scripts
-./spool install --ignore-scripts
-./spool allow-include http
+spool install --enable-scripts
+spool install --ignore-scripts
+spool allow-include http
 ```
 
 `spool allow-include <name>` records the consumer allowlist in `coil.lock`,
@@ -164,8 +282,8 @@ With `--enable-scripts`:
 
 `pre_*` runs after engine checks and before fetch/link. `post_*` runs after a
 successful link. `sh` runs from the project root. Non-zero exit is
-`spool: <path> exited <status>` and aborts. A missing file is
-`spool: missing script <path>`.
+`spool: error: <path> exited <status>` and aborts. A missing file is
+`spool: error: missing script <path>`.
 
 Every `sh` goes through `may_run_hook` first (`kind` `script`). Scripts skip
 the include allowlist. They still need a lock hash.
@@ -201,7 +319,7 @@ include = "./hooks/include.sh"
 
 The path is relative to that package's checkout, not the consumer. Missing
 `include` is a no-op. A declared file that is not on disk is
-`spool: missing include-hook <name> <path>`.
+`spool: error: missing include-hook <name> <path>`.
 
 `spool install`, `add`, and `update` run include-hooks after link, including
 transitives. `sh` runs from the checkout. `SPOOL_PROJECT` is still the
@@ -230,120 +348,97 @@ hook_hash = 'abc123'
 Non-zero exit aborts the consumer command:
 
 ```text
-spool: include-hook http ./hooks/include.sh exited 9
+spool: error: include-hook http ./hooks/include.sh exited 9
 ```
 
 ## Install order
 
-`spool install` is this sequence. Gates live in [Hook trust](#hook-trust),
-[Project scripts](#project-scripts), and [Include hooks](#include-hooks).
+1. `coil.toml` parses; `[package].coil` of the project, path deps and cached
+   checkouts
+2. `pre_install` / `pre_update` if `--enable-scripts`
+3. Check out every locked package and verify its tree id
+4. Resolve (or, with `--locked`, fail if anything would change), then prune
+5. Write `coil.lock` if it changed; engine check on new checkouts
+6. Link `.spool/deps` (stale links removed)
+7. Include-hooks (the hook can see its own checkout; `SPOOL_PROJECT` is the consumer)
+8. `post_install` / `post_update` — only after a successful link
+9. `--with-natives`: `download`
 
-1. `check_install` — `coil.toml` present; git deps already in `coil.lock`
-2. `check_engine` on the current project, path deps, and cached `coil.toml` —
-   engine first so an unsatisfied `[package].coil` never fetches
-3. `pre_install` if `--enable-scripts` — before fetch so a failing project
-   script leaves lock and link alone
-4. Plan: write `.spool/fetch.sh` and `.spool/links.tsv`
-5. Bash `fetch.sh`: clone/fetch + worktree
-6. Verify lock `content_hash` against each checkout `HEAD` tree
-7. `check_engine` again on new checkouts
-8. Link `.spool/deps` and inject `[module].roots`
-9. Include-hooks after link (the hook can see its own checkout)
-10. `post_install` if `--enable-scripts` — only after a successful link; does
-    not run if include failed
+`add` and `remove` use the install pair; `update` uses the update pair.
 
-Hooks default off. `--enable-scripts` opts in. `--ignore-scripts` always wins.
-Every `sh` goes through `may_run_hook` first.
+## Native libraries (`spool download`)
 
-Two lock homes: consumer `[scripts]` hashes live in lock `[scripts]`
-(`git hash-object`; the current project is not a `[[package]]` row). Include
-pins are `hook_path` / `hook_hash` on that dep's `[[package]]`. First opted-in
-run pins. An existing lock hash is checked first; a changed file is a mismatch
-and does not `sh` or rewrite the lock. No lock row (path deps) is deny, no
-`sh`. Include-hooks also need `spool allow-include <name>`. A dep's own
-`[scripts]` never run on a consumer install.
+Direct shared libraries declared in `[[ffi.native]]` (or embedded in a
+packaged exe) are fetched into a content-addressed cache:
 
-`add` uses the install pair. `update` uses `pre_update` / `post_update`. Both
-share the same materialize, engine first, include/scripts at the end.
+```text
+~/.coil/natives/cache/<package>/<version>/<sha256_16>/<filename>
+```
 
-This path does not fetch a `.so` or write `[ffi] search_paths`.
+Override the root with `COIL_NATIVES_DIR`. Only https URLs are fetched. Each
+file is checked against the lock's sha256 and size before it is moved into
+place. Transitive sonames (`requires`) must come from the OS.
+
+```bash
+spool download ./hello          # a packaged exe
+spool download                  # project [[ffi.native]]
+spool install --with-natives
+```
 
 ## Cache
 
-Default root: `$XDG_CACHE_HOME/coil` or `~/.cache/coil`.
-
-Override:
-
-- Env: `COIL_CACHE_DIR` (wins)
-- File: `~/.config/coil/config.toml` → `[cache] dir = "…"`
-
-Layout:
+Default root: `$XDG_CACHE_HOME/coil` or `~/.cache/coil`. `COIL_CACHE_DIR` wins,
+then `[cache] dir` in `~/.config/coil/config.toml`.
 
 ```text
 <cache_root>/git/
   <host>/<owner>/<repo>/     # bare clone
-  checkouts/
-    <tree-id>/               # detached worktree
-```
-
-## Develop
-
-```bash
-export COIL=/path/to/coil-lang/target/release/coil
-$COIL test
-./spool help
-./scripts/smoke_install.sh   # local git fixture → install
-./scripts/smoke_add.sh       # add git+path deps, then update
-./scripts/smoke_consume.sh   # add greet, `use greet::hello`, run it
-./scripts/smoke_integrity.sh # hash mismatch, missing/corrupt lock
-./scripts/smoke_auth.sh      # git auth failure message
-./scripts/smoke_transitive.sh # unify compatible pins, diamond error
-./scripts/smoke_engine.sh     # [package].coil range: omit / in-range / too-old
-./scripts/smoke_hooks.sh      # --ignore-scripts, allow-include, default include-hooks stay off
-./scripts/smoke_scripts.sh    # current-project [scripts]: default off, opt-in, fail, no dep scripts
-./scripts/smoke_include.sh    # dep include-hooks: allowlist, hash pin, fail, no dep [scripts]
+  checkouts/<tree-id>/       # detached worktree
 ```
 
 ## Private git
 
-spool does not store credentials. It runs host `git` with `GIT_TERMINAL_PROMPT=0` so a missing credential fails instead of hanging on a prompt.
+spool stores no credentials. git runs with `GIT_TERMINAL_PROMPT=0`, so a
+missing credential fails instead of hanging. Use whatever works for
+`git clone`: ssh-agent with `git@host:owner/repo.git`, `GIT_ASKPASS`,
+credential helpers, or `url.<base>.insteadOf`.
 
-Use whatever already works for `git clone` on your machine:
-
-- `ssh-agent` and `git@host:owner/repo.git` URLs
-- `GIT_ASKPASS` / `SSH_ASKPASS`
-- git credential helpers
-- `url.<base>.insteadOf` in `~/.gitconfig` to rewrite HTTPS to SSH
-
-`GIT_SSH_COMMAND` and those variables are passed through to clone/fetch/`ls-remote`.
-
-## Consume a library
-
-`.spool/deps/<name>` is a symlink to the checkout's `src/` directory when that
-exists, so `use greet::hello` maps to `hello.hy` in the package.
+## Develop
 
 ```bash
-./spool add greet --git https://github.com/ardax-corp/coil-greet.git --version '^0.1'
+./bootstrap.sh    # rerun to pick up a newer coil-lang COIL_LANG_REF
+export COIL=$PWD/.bootstrap/coil-lang/target/release/coil
+export COIL_STDLIB_DIR=$PWD/.bootstrap/coil-stdlib
+./target/spool install        # links coil-toml (pinned rev in coil.toml)
+./target/spool test           # unit tests
+./scripts/smoke_all.sh        # end-to-end smoke tests against target/spool
 ```
 
-```coil
-use greet::hello;
-```
+`spool.hy` is the entry; modules are under `src/`:
 
-`greet` is function-style on purpose. Userland class types still cannot cross
-module boundaries (COI-12). Enums and functions in a git/path dep compile and run.
-
-The locked `install` order is under [Install order](#install-order).
-
-`add` / `update` resolve tags and merge `coil.lock`, then the same materialize.
-Transitive git deps unify compatible pins and error on diamonds. `add` uses
-`pre_install` / `post_install`. `update` uses `pre_update` / `post_update`.
-
-Design: Linear project **Git-based package manager** (COI-1 design doc).
+| Module | Role |
+|---|---|
+| `cli` | argv parsing |
+| `proc` | child processes (constant scripts, positional args) |
+| `git` | ls-remote, bare cache, worktrees, tree ids |
+| `resolve` | constraints, tag/rev picking, pruning, engine checks |
+| `sync` | the install/add/update/remove pipeline |
+| `lock`, `manifest` | `coil.lock` and `coil.toml` |
+| `roots` | `.spool/deps` links |
+| `lifecycle`, `hooks` | `[scripts]`, include-hooks, trust gate |
+| `toolchain` | coil/stdlib discovery, compile flags |
+| `natives`, `report`, `scaffold` | `download`, `tree`/`outdated`, `new`/`init` |
+| `render` | `test`/`infect` reports from coil's `--json` events (uses coil-json) |
 
 ## Coil quirks this repo works around
 
-- No forward references within a module file
-- `env::exec` / `env::exit` warnings fail in-memory compile; `extern` in imported
-  modules panics (`invalid library handle`); `system(3)` breaks after `Vec` alloc
-- So git stays in the bash driver; Coil does plan/pick/lock/link only
+- No forward references within a module file.
+- In a function that returns `Result`, a `Result`-typed **parameter** is
+  corrupted (for example, its `Err` payload reads as empty). Helpers that
+  inspect a `Result` return `bool` instead (see `tests/include.hy`).
+- coil-toml panics (index out of bounds) when a document ends right after a
+  value with no trailing newline. `decode_manifest` appends one.
+- coil-toml `main` predates field-visibility enforcement. Spool pins the
+  default-branch commit with the fix.
+- Userland class types still cannot cross module boundaries (COI-12), so
+  records are tab-joined strings.

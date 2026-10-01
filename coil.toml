@@ -1,14 +1,20 @@
 [package]
 name = "spool"
-version = "0.1.0"
+version = "0.2.0"
 
 [module]
-# Sibling checkouts for local development.
-# Override roots if your layout differs.
-roots = ["./src", "../coil-stdlib/src", "../coil-toml/src"]
+roots = ["./src"]
 
-# No [entry]: running the same path as [entry].file breaks `extern "c"`
-# (invalid library handle). Always invoke via ./spool or `coil spool.hy`.
+# spool is a standalone binary: ./bootstrap.sh packages spool.hy.
+[entry]
+file = "spool.hy"
 
 [env]
 allow_exec = true
+allow_exit = true
+
+[dependencies]
+# coil-toml has no release tags yet; pin the commit with the pub-API fix (COI-392).
+toml = { git = "https://github.com/ardax-corp/coil-toml.git", rev = "3e0da9d38f0fb0d090f56869e2547fa2bebd8453" }
+# Read API (get/at/as_*) for coil test/mutate --json events: ardax-corp/coil-json#10.
+json = { git = "https://github.com/ardax-corp/coil-json.git", rev = "50d521698a1dd0bb6ec604a5cd24238c737f4f14" }

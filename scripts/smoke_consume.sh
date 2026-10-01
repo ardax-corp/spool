@@ -2,8 +2,8 @@
 # COI-11: install a git/path dep, `use` it, compile and run.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+SPOOL="${SPOOL_BIN:-$ROOT/target/spool}"
 COIL_BIN="${COIL:-coil}"
-STDLIB="$(cd "$ROOT/../coil-stdlib/src" && pwd)"
 GREET_SRC="$ROOT/examples/greet"
 FIX="$ROOT/scratch/greet_repo"
 CACHE="$ROOT/scratch/cache_consume"
@@ -37,19 +37,17 @@ name = "consume"
 version = "0.0.1"
 
 [module]
-roots = ["./src", "$STDLIB"]
+roots = ["./src"]
 
-[env]
-allow_exec = true
+[entry]
+file = "src/main.hy"
 EOF
   cat > "$dest/src/main.hy" <<'EOF'
 use greet::hello;
-use io::{stdout};
-use io::sync::{write_all};
-use string::{to_bytes};
+use io::sync::{print};
 
 fn main() {
-    match write_all(stdout(), to_bytes(hello("spool"))) {
+    match print(hello("spool")) {
         Result::Ok(_) => 0,
         Result::Err(_) => 0,
     };
@@ -62,18 +60,18 @@ export COIL_CACHE_DIR="$CACHE"
 
 write_consumer "$GIT_PROJ"
 export SPOOL_PROJECT="$GIT_PROJ"
-"$ROOT/spool" add greet --git "$URL" --version "^0.1"
+"$SPOOL" add greet --git "$URL" --version "^0.1"
 test -L "$GIT_PROJ/.spool/deps/greet"
 test -f "$GIT_PROJ/.spool/deps/greet/hello.hy"
-GOT="$("$COIL_BIN" "$GIT_PROJ/src/main.hy")"
+GOT="$(cd "$GIT_PROJ" && "$SPOOL" run 2>/dev/null)"
 test "$GOT" = "hello, spool"
 
 write_consumer "$PATH_PROJ"
 export SPOOL_PROJECT="$PATH_PROJ"
-"$ROOT/spool" add greet --path "$GREET_SRC"
+"$SPOOL" add greet --path "$GREET_SRC"
 test -L "$PATH_PROJ/.spool/deps/greet"
 test -f "$PATH_PROJ/.spool/deps/greet/hello.hy"
-GOT="$("$COIL_BIN" "$PATH_PROJ/src/main.hy")"
+GOT="$(cd "$PATH_PROJ" && "$SPOOL" run 2>/dev/null)"
 test "$GOT" = "hello, spool"
 
 echo "smoke_consume: ok"

@@ -24,6 +24,20 @@ fn make_git_pkg(string name, string git, string tag, string rev, string hash) ->
     return make_git_pkg_hook(name, git, tag, rev, hash, "", "");
 }
 
+/// Record with the manifest `rev` pin (branch / tag / sha) this row came from.
+fn make_git_pkg_ref(
+    string name,
+    string git,
+    string tag,
+    string rev,
+    string hash,
+    string hook_path,
+    string hook_hash,
+    string src_ref,
+) -> string {
+    return make_git_pkg_hook(name, git, tag, rev, hash, hook_path, hook_hash) + "\t" + src_ref;
+}
+
 fn field_at(string p, int idx) -> string {
     let parts = match split(p, "\t") {
         Result::Ok(v) => v,
@@ -78,8 +92,12 @@ fn lock_pkg_hook_hash(string p) -> string {
     return field_at(p, 6);
 }
 
+fn lock_pkg_ref(string p) -> string {
+    return field_at(p, 7);
+}
+
 fn lock_pkg_with_hook(string p, string hook_path, string hook_hash) -> string {
-    return make_git_pkg_hook(
+    return make_git_pkg_ref(
         lock_pkg_name(p),
         lock_pkg_git(p),
         lock_pkg_tag(p),
@@ -87,6 +105,7 @@ fn lock_pkg_with_hook(string p, string hook_path, string hook_hash) -> string {
         lock_pkg_hash(p),
         hook_path,
         hook_hash,
+        lock_pkg_ref(p),
     );
 }
 
@@ -457,6 +476,10 @@ fn lock_serialize_all(
 ";
         out = out + "tag = " + quote(lock_pkg_tag(p)) + "
 ";
+        if len(lock_pkg_ref(p)) > 0 {
+            out = out + "ref = " + quote(lock_pkg_ref(p)) + "
+";
+        }
         out = out + "rev = " + quote(lock_pkg_rev(p)) + "
 ";
         out = out + "content_hash = " + quote(lock_pkg_hash(p)) + "
@@ -495,6 +518,7 @@ fn finish_pkg(
     string hash,
     string hook_path,
     string hook_hash,
+    string src_ref,
 ) -> Result<string, string> {
     if len(name) == 0 {
         raise "corrupt coil.lock: package missing name";
@@ -508,7 +532,7 @@ fn finish_pkg(
     if len(hash) == 0 {
         raise "corrupt coil.lock: package missing content_hash";
     }
-    return make_git_pkg_hook(name, git, tag, rev, hash, hook_path, hook_hash);
+    return make_git_pkg_ref(name, git, tag, rev, hash, hook_path, hook_hash, src_ref);
 }
 
 fn lock_parse_all(string source) -> Result<(Vec<string>, Vec<string>, Vec<string>), string> {
@@ -529,6 +553,7 @@ fn lock_parse_all(string source) -> Result<(Vec<string>, Vec<string>, Vec<string
     let hash = "";
     let hook_path = "";
     let hook_hash = "";
+    let src_ref = "";
     let i = 0;
 
     while i < len(lines) {
@@ -545,7 +570,7 @@ fn lock_parse_all(string source) -> Result<(Vec<string>, Vec<string>, Vec<string
         }
         if line == "[hooks]" {
             if in_pkg {
-                let pkg = finish_pkg(name, git, tag, rev, hash, hook_path, hook_hash)?;
+                let pkg = finish_pkg(name, git, tag, rev, hash, hook_path, hook_hash, src_ref)?;
                 out.push(pkg);
             }
             in_pkg = false;
@@ -555,7 +580,7 @@ fn lock_parse_all(string source) -> Result<(Vec<string>, Vec<string>, Vec<string
         }
         if line == "[scripts]" {
             if in_pkg {
-                let pkg = finish_pkg(name, git, tag, rev, hash, hook_path, hook_hash)?;
+                let pkg = finish_pkg(name, git, tag, rev, hash, hook_path, hook_hash, src_ref)?;
                 out.push(pkg);
             }
             in_pkg = false;
@@ -565,7 +590,7 @@ fn lock_parse_all(string source) -> Result<(Vec<string>, Vec<string>, Vec<string
         }
         if line == "[[package]]" {
             if in_pkg {
-                let pkg = finish_pkg(name, git, tag, rev, hash, hook_path, hook_hash)?;
+                let pkg = finish_pkg(name, git, tag, rev, hash, hook_path, hook_hash, src_ref)?;
                 out.push(pkg);
             }
             in_pkg = true;
@@ -578,6 +603,7 @@ fn lock_parse_all(string source) -> Result<(Vec<string>, Vec<string>, Vec<string
             hash = "";
             hook_path = "";
             hook_hash = "";
+            src_ref = "";
             continue;
         }
         if in_hooks {
@@ -630,7 +656,11 @@ fn lock_parse_all(string source) -> Result<(Vec<string>, Vec<string>, Vec<string
                                 if k == "hook_hash" {
                                     hook_hash = v;
                                 } else {
-                                    raise format("corrupt coil.lock: unknown key %s", k);
+                                    if k == "ref" {
+                                        src_ref = v;
+                                    } else {
+                                        raise format("corrupt coil.lock: unknown key %s", k);
+                                    }
                                 }
                             }
                         }
@@ -640,7 +670,7 @@ fn lock_parse_all(string source) -> Result<(Vec<string>, Vec<string>, Vec<string
         }
     }
     if in_pkg {
-        let pkg = finish_pkg(name, git, tag, rev, hash, hook_path, hook_hash)?;
+        let pkg = finish_pkg(name, git, tag, rev, hash, hook_path, hook_hash, src_ref)?;
         out.push(pkg);
     }
     return (out, allow, scripts);

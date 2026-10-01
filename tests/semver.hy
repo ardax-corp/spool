@@ -83,3 +83,34 @@ test("comparison operators match git-dep range language") {
     assert(satisfies_range("=0.1.0", v)?)?;
     assert(satisfies_range("=0.2.0", v)? == false)?;
 }
+
+test("tilde keeps major.minor") {
+    let tags: Vec<string> = Vec::new();
+    tags.push("v1.2.3");
+    tags.push("v1.2.9");
+    tags.push("v1.3.0");
+    tags.push("v2.0.0");
+    assert(select_tag("~1.2.3", tags)? == "v1.2.9")?;
+    assert(select_tag("~1.2", tags)? == "v1.2.9")?;
+    assert(select_tag("~1", tags)? == "v1.3.0")?;
+}
+
+test("comma ranges must all hold") {
+    let tags: Vec<string> = Vec::new();
+    tags.push("v1.1.0");
+    tags.push("v1.4.0");
+    tags.push("v2.0.0");
+    assert(select_tag(">=1.2, <2", tags)? == "v1.4.0")?;
+}
+
+test("prerelease tags are not picked by ranges") {
+    let tags: Vec<string> = Vec::new();
+    tags.push("v1.0.0");
+    tags.push("v1.1.0-rc.1");
+    assert(select_tag("^1", tags)? == "v1.0.0")?;
+}
+
+test("prerelease toolchain versions parse") {
+    let v = parse_semver("0.2.0-dev")?;
+    assert(satisfies_range(">=0.2.0", v)?)?;
+}
