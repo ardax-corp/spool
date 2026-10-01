@@ -124,9 +124,12 @@ which of these the coil it found has.
 `coil FILE` cannot pass program arguments, and the packaged binary sees a
 normal argv.
 
-Editors: point the Coil LSP client at `spool lsp`. Today `coil lsp` only
-resolves `src`, `.` and `.deps/*/src`, so it does not see `.spool/deps` or
-the stdlib.
+Editors: point the Coil LSP client at `spool lsp`. It starts `coil lsp` with
+the same roots (`[module].roots`, `.spool/deps`, the stdlib) and grants as
+every other command, so dependencies resolve and granted calls such as
+`env::exec` are not flagged. That needs a coil whose `coil lsp` accepts
+`--root` (ardax-corp/coil-lang#589); with an older one spool says so and
+starts it without flags.
 
 `add` and `remove` restore `coil.toml` and `coil.lock` if the install fails.
 
