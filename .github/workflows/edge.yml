@@ -75,8 +75,12 @@ jobs:
           key: edge-coil-${{ matrix.triple }}-${{ hashFiles('bootstrap.sh') }}
           restore-keys: edge-coil-${{ matrix.triple }}-
 
+      # coil comes from the coil-lang `edge` release; the source build (and the
+      # Rust toolchain and cache above) is only the fallback.
       - name: Bootstrap spool
-        run: ./bootstrap.sh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: ./bootstrap.sh --channel edge
 
       - name: Smoke check
         run: ./target/spool --version
