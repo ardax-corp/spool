@@ -176,6 +176,18 @@ fn project_roots(string root) -> Result<Vec<string>, string> {
 fn grant_flags(string root) -> Result<Vec<string>, string> {
     let body = manifest_body(join2(root, "coil.toml"))?;
     let out: Vec<string> = Vec::new();
+    // `[permissions] read = true` → `--allow-read`; `all = true` → `-A`.
+    if section_bool(body, "permissions", "all")? {
+        out.push("--allow-all");
+    }
+    let caps = ["read", "write", "net", "env", "exec", "exit", "attach"];
+    let c = 0;
+    while c < len(caps) {
+        if section_bool(body, "permissions", caps[c])? {
+            out.push("--allow-" + caps[c]);
+        }
+        c = c + 1;
+    }
     if section_bool(body, "env", "allow_exec")? {
         out.push("--allow-exec");
     }
