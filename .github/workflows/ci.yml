@@ -28,15 +28,23 @@ jobs:
           key: coil-${{ runner.os }}-${{ hashFiles('bootstrap.sh') }}
           restore-keys: coil-${{ runner.os }}-
 
-      # Finds a valid coil (none on the runner, no release yet), builds
-      # coil-lang main from source, then packages target/spool.
+      # coil comes from the coil-lang `edge` release (a snapshot of its main,
+      # rebuilt after every green coil-lang CI run). Only when that release is
+      # unavailable does bootstrap build coil-lang main from source, which is
+      # what the Rust toolchain and the cache above are for.
+      - name: Find coil (edge)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          coil="$(./bootstrap.sh --channel edge --coil-only)"
+          echo "COIL=$coil" >> "$GITHUB_ENV"
+
+      # Packages target/spool with that coil ($COIL is tried first).
       - name: Bootstrap spool
         run: ./bootstrap.sh
 
       - name: Environment
-        run: |
-          echo "COIL=$PWD/.bootstrap/coil-lang/target/release/coil" >> "$GITHUB_ENV"
-          echo "COIL_STDLIB_DIR=$PWD/.bootstrap/coil-stdlib" >> "$GITHUB_ENV"
+        run: echo "COIL_STDLIB_DIR=$PWD/.bootstrap/coil-stdlib" >> "$GITHUB_ENV"
 
       - name: Doctor
         run: ./target/spool doctor

@@ -21,7 +21,8 @@ spool is written in Coil and packaged with `coil package`:
 ```bash
 ./bootstrap.sh              # → target/spool
 ./bootstrap.sh --install    # also: ~/.local/bin/spool, ~/.coil/stdlib,
-                            # and ~/.coil/bin/coil if bootstrap built it
+                            # and ~/.coil/bin/coil if bootstrap built or downloaded it
+./bootstrap.sh --channel edge --install   # same, with coil from the edge snapshot
 ```
 
 `bootstrap.sh`:
@@ -32,8 +33,9 @@ spool is written in Coil and packaged with `coil package`:
    previous bootstrap build is reused only while its checkout is still the
    newest `COIL_LANG_REF`; otherwise it is rebuilt (incrementally). It warns
    when the coil lacks `coil mutate` or `coil test --json`.
-2. If none qualifies, it downloads the latest GitHub release asset
-   `coil-<triple>.tar.gz`, when one exists.
+2. If none qualifies, it downloads the coil-lang GitHub release asset
+   `coil-<triple>.tar.gz` of the chosen channel (see below), when one exists.
+   When the release lists a `SHA256SUMS`, the archive is checked against it.
 3. If there is no release either, it builds coil-lang `main` from source into
    `.bootstrap/coil-lang` (needs `cargo`, libffi and pcre2 dev files).
 4. Fetches coil-stdlib (default branch), coil-toml and coil-json (at the `rev`s
@@ -41,10 +43,37 @@ spool is written in Coil and packaged with `coil package`:
    to build against `../coil-stdlib`, `../coil-toml` and `../coil-json` instead.
 5. Runs `coil package spool.hy -o target/spool`.
 
+### Coil channels
+
+`--channel NAME` (or `COIL_CHANNEL`) picks which coil-lang release step 2
+downloads:
+
+| Channel | Release |
+|---|---|
+| `stable` (default) | the latest tagged release; pre-releases are never picked |
+| `edge` | the rolling `edge` pre-release, rebuilt from coil-lang `main` after every green CI run (a snapshot, not a stable release) |
+| a tag, e.g. `v0.2.0` | that release |
+
+A channel other than `stable` is asked for on purpose, so step 1 is skipped
+(only an explicit `$COIL` still wins) and the release is downloaded again on
+every run, to follow the snapshot. A download is kept in
+`.bootstrap/release` for the channel it came from only. `edge` requires the
+release to publish `SHA256SUMS`; if it is missing or does not match,
+bootstrap refuses the archive and falls back to the source build.
+`GITHUB_TOKEN` is sent with the release lookup when set, which avoids API rate
+limits on shared CI runners.
+
+CI example (coil from edge, then spool built with it):
+
+```bash
+export COIL="$(./bootstrap.sh --channel edge --coil-only)"   # prints the coil path
+./bootstrap.sh                                               # uses $COIL
+```
+
 Other flags: `--from-source` (skip installed coil and releases),
 `--coil-only`. Overrides: `COIL_LANG_REPO/REF`, `COIL_STDLIB_REPO/REF`,
 `COIL_TOML_REPO/REF`, `COIL_JSON_REPO/REF`, `COIL_STDLIB_DIR`, `COIL_TOML_DIR`,
-`COIL_JSON_DIR`, `SPOOL_BOOTSTRAP_DIR`.
+`COIL_JSON_DIR`, `SPOOL_BOOTSTRAP_DIR`, `COIL_RELEASES_URL`.
 
 Runtime requirements: host `git` and `sh`. `curl` is needed for `download`.
 
@@ -409,8 +438,9 @@ credential helpers, or `url.<base>.insteadOf`.
 ## Develop
 
 ```bash
-./bootstrap.sh    # rerun to pick up a newer coil-lang COIL_LANG_REF
-export COIL=$PWD/.bootstrap/coil-lang/target/release/coil
+export COIL="$(./bootstrap.sh --channel edge --coil-only)"   # newest edge coil
+./bootstrap.sh    # → target/spool, built with that coil
+# To hack on coil-lang itself: ./bootstrap.sh --from-source (COIL_LANG_REF picks the ref)
 export COIL_STDLIB_DIR=$PWD/.bootstrap/coil-stdlib
 ./target/spool install        # links coil-toml (pinned rev in coil.toml)
 ./target/spool test           # unit tests
