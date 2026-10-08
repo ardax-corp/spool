@@ -142,9 +142,21 @@ spool runs `coil` from the project root with:
 - `--root <stdlib>` unless a manifest root already is a stdlib. The stdlib is
   found through `COIL_STDLIB_DIR`, `COIL_STDLIB`, `[stdlib] dir` in
   `~/.config/coil/config.toml`, or `~/.coil/stdlib`
-- grants the manifest records: `[env] allow_exec/allow_exit/allow_ffi_exec`,
-  `[ffi] allow_attach`, `[ffi] allow` (`--allow-dload`), and
-  `[ffi] search_paths` (`--ffi-search-path`)
+- grants the manifest records: `[permissions]` (`read`, `write`, `net`,
+  `env`, `exec`, `exit`, `attach` set to `true` give `--allow-<name>`, and
+  `all = true` gives `--allow-all`), the older `[env]
+  allow_exec/allow_exit/allow_ffi_exec` and `[ffi] allow_attach`, `[ffi]
+  allow` (`--allow-dload`), and `[ffi] search_paths` (`--ffi-search-path`)
+
+A program needs a grant for each capability its `main` (or a test) can
+reach: reading or writing files, the network, environment variables,
+running programs. coil names the missing flag when one is not granted:
+
+```toml
+[permissions]
+read = true
+net = true
+```
 
 The coil binary is `$COIL`, then `coil` on `PATH`, then `~/.coil/bin/coil`.
 

@@ -110,6 +110,14 @@ version_ge() {
   return 0
 }
 
+# The capability grants spool's own code needs (files, environment), for a
+# coil that checks them (`--allow-read` and friends); older ones take none.
+cap_flags() {
+  if "$1" --help 2>&1 | grep -q -- '--allow-read'; then
+    echo "--allow-read --allow-write --allow-env"
+  fi
+}
+
 # A valid coil: runs, meets the minimum version, has `package`, and compiles
 # a probe that uses the host APIs spool needs (args/exec/exit/set_cwd).
 coil_is_valid() {
@@ -155,7 +163,8 @@ fn main() {
 }
 EOF
   local ok=0
-  if ( cd "$probe_dir" && "$bin" --allow-exec --allow-exit probe.hy ) >/dev/null 2>"$probe_dir/err"; then
+  # shellcheck disable=SC2046
+  if ( cd "$probe_dir" && "$bin" --allow-exec --allow-exit $(cap_flags "$bin") probe.hy ) >/dev/null 2>"$probe_dir/err"; then
     ok=1
   else
     say "  $bin: coil $ver failed the host-API probe:"
@@ -379,7 +388,7 @@ say "packaging $OUT"
     --root "$STDLIB_DIR/src" \
     --root "$TOML_DIR/src" \
     --root "$JSON_DIR/src" \
-    --allow-exec --allow-exit \
+    --allow-exec --allow-exit $(cap_flags "$COIL_BIN") \
     -o "$OUT" spool.hy ) \
   || die "coil package failed"
 
