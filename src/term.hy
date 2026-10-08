@@ -2,7 +2,7 @@
 // io::sync's println/eprintln retry every write error as WouldBlock (coil
 // matches the first `IoError::` arm for any error, ardax-corp/coil-lang#579),
 // so a closed pipe (`spool tree | head`) would spin them forever.
-use io::{stdout, stderr, write_from, await_writable};
+use io::{stdout, stderr, write_from, wait_writable};
 use env::{exit};
 use string::{to_bytes};
 
@@ -27,7 +27,7 @@ fn write_text(Stream s, string text) -> int {
         if fails > 2 {
             exit(1);
         }
-        match await_writable(s) {
+        match wait_writable(s) {
             Result::Ok(_) => 0,
             Result::Err(_) => 0,
         };
