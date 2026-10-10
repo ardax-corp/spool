@@ -4,7 +4,7 @@ use string::{format};
 use util::{join2, join3, path_exists, path_is_absolute, home_dir, trim_or};
 use proc::{which, sh_capture, first_line};
 use manifest::{
-    manifest_body, module_roots_parse, section_string, section_bool, section_strings,
+    manifest_body, manifest_validate, module_roots_parse, section_string, section_bool, section_strings,
     trusted_deps_parse, ffi_natives_parse, native_name, native_package, native_version,
     native_path, native_requires, native_requires_hint,
 };
@@ -340,6 +340,7 @@ fn lock_text(string root) -> string {
 /// `dload` pins / trusted stems from coil.toml and coil.lock.
 fn grant_flags(string root) -> Result<Vec<string>, string> {
     let body = manifest_body(join2(root, "coil.toml"))?;
+    manifest_validate(body)?;
     let out: Vec<string> = Vec::new();
     // `[permissions] read = true` → `--allow-read`; `all = true` → `-A`.
     if section_bool(body, "permissions", "all")? {

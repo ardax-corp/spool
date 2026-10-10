@@ -2,7 +2,7 @@ use manifest::{
     deps_parse, dep_kind, dep_name, dep_git, dep_version, dep_path, deps_insert_line,
     make_git_dep, format_dep_line, deps_has_name, package_name_parse, package_coil_parse,
     package_include_parse, scripts_parse, scripts_path_of, script_rel_ok, dep_rev, dep_req,
-    deps_remove_line,
+    deps_remove_line, manifest_validate,
 };
 use text::{contains};
 
@@ -196,4 +196,81 @@ test("deps_remove_line drops only the named entry") {
     let deps = deps_parse(out)?;
     assert(len(deps) == 1)?;
     assert(dep_name(deps[0]) == "ab")?;
+}
+
+fn validate_err(string body) -> string {
+    return match manifest_validate(body) {
+        Result::Ok(_) => "",
+        Result::Err(e) => e,
+    };
+}
+
+test("manifest_validate accepts every known section and key") {
+    let body = "[package]
+name = \"app\"
+version = \"0.1.0\"
+coil = \">=0.1.0\"
+include = \"./hooks/include.sh\"
+
+[module]
+roots = [\"./src\"]
+
+[entry]
+file = \"./src/main.hy\"
+
+[permissions]
+read = true
+all = false
+
+[env]
+allow_exec = true
+allow_exit = true
+allow_ffi_exec = false
+
+[ffi]
+search_paths = [\"./native\"]
+allow = [\"plugin\"]
+allow_attach = true
+
+[[ffi.native]]
+name = \"regex\"
+version = \"0.3.0\"
+path = \"./native\"
+
+[scripts]
+pre_install = \"./scripts/pre.sh\"
+
+[dependencies]
+http = { git = \"https://x/http.git\", version = \"^0.2\", trusted = true }
+";
+    assert(validate_err(body) == "")?;
+    assert(validate_err("") == "")?;
+}
+
+test("manifest_validate rejects unknown sections and keys") {
+    assert(contains(validate_err("[permisions]
+read = true
+"), "unknown section [permisions]"))?;
+    assert(contains(validate_err("[env]
+allow_exce = true
+"), "unknown key env.allow_exce"))?;
+    assert(contains(validate_err("[package]
+name = \"a\"
+version = \"1\"
+authors = [\"x\"]
+"), "unknown key package.authors"))?;
+    assert(contains(validate_err("[module]
+preludes = []
+"), "unknown key module.preludes"))?;
+    assert(contains(validate_err("name = \"a\"
+"), "unknown key name"))?;
+    assert(contains(validate_err("[scripts]
+pre_build = \"./x.sh\"
+"), "unknown scripts key"))?;
+    assert(contains(validate_err("[[ffi.native]]
+name = \"r\"
+version = \"1\"
+path = \".\"
+url2 = \"x\"
+"), "unknown key ffi.native.url2"))?;
 }
