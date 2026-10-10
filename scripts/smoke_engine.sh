@@ -64,10 +64,10 @@ roots = ["./src"]
 allow_exec = true
 
 [scripts]
-preinstall = "./hooks/preinstall.sh"
-postinstall = "./hooks/preinstall.sh"
-preupdate = "./hooks/preinstall.sh"
-postupdate = "./hooks/preinstall.sh"
+pre_install = "./hooks/preinstall.sh"
+post_install = "./hooks/preinstall.sh"
+pre_update = "./hooks/preinstall.sh"
+post_update = "./hooks/preinstall.sh"
 EOF
   echo "// app" > "$dest/src/main.hy"
 }

@@ -630,6 +630,72 @@ fn section_strings(string body, string section, string key) -> Result<Vec<string
     };
 }
 
+/// Keys spool knows in a coil.toml section; "" for an unknown section.
+/// `[dependencies]` and `[scripts]` entries are checked by their parsers.
+fn manifest_section_keys(string section) -> string {
+    if section == "package" {
+        return ",name,version,coil,include,";
+    }
+    if section == "module" {
+        return ",roots,";
+    }
+    if section == "entry" {
+        return ",file,";
+    }
+    if section == "permissions" {
+        return ",read,write,net,env,exec,exit,attach,all,";
+    }
+    if section == "env" {
+        return ",allow_exec,allow_exit,allow_ffi_exec,";
+    }
+    if section == "ffi" {
+        return ",search_paths,allow,allow_attach,native,";
+    }
+    return "";
+}
+
+/// Reject unknown sections and keys in a project coil.toml, so a typo
+/// (`[permisions]`, `allow_exce`) fails instead of silently granting nothing.
+fn manifest_validate(string body) -> Result<int, string> {
+    let root = decode_manifest(body)?;
+    let i = 0;
+    let n = root.table_len();
+    while i < n {
+        let section = root.key_at(i);
+        let tab = root.child(i);
+        i = i + 1;
+        if section == "dependencies" || section == "scripts" {
+            if tab.is_table() == false {
+                raise format("[%s] must be a table", section);
+            }
+            continue;
+        }
+        let keys = manifest_section_keys(section);
+        if len(keys) == 0 {
+            if tab.is_table() {
+                raise format("unknown section [%s]", section);
+            }
+            raise format("unknown key %s (keys belong under a [section])", section);
+        }
+        if tab.is_table() == false {
+            raise format("[%s] must be a table", section);
+        }
+        let j = 0;
+        let m = tab.table_len();
+        while j < m {
+            let k = tab.key_at(j);
+            j = j + 1;
+            if contains(keys, "," + k + ",") == false {
+                raise format("unknown key %s.%s", section, k);
+            }
+        }
+    }
+    deps_parse(body)?;
+    scripts_parse(body)?;
+    ffi_natives_parse(body)?;
+    return 0;
+}
+
 /// `[module].roots`, or `["./src"]` when absent.
 fn module_roots_parse(string body) -> Result<Vec<string>, string> {
     let roots = section_strings(body, "module", "roots")?;
