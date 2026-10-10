@@ -13,6 +13,7 @@ use version::{spool_version};
 use proc::{run_in, spawn, sh_run, sh_capture, which};
 use toolchain::{
     find_coil, require_coil, coil_version_output, find_stdlib, compile_flags, project_roots, env_or,
+    ffi_native_flags,
 };
 use manifest::{
     deps_read, dep_kind, dep_name, make_git_rev_dep, make_path_dep, deps_append, deps_remove,
@@ -204,6 +205,7 @@ fn build_to(string root, string output, string opt_level) -> Result<int, string>
     ensure_dir(path_dirname(output))?;
     let argv = strs("package");
     argv = push_all(argv, compile_flags(root)?);
+    argv = push_all(argv, ffi_native_flags(root)?);
     if len(opt_level) > 0 {
         argv.push("-O");
         argv.push(opt_level);
@@ -348,6 +350,8 @@ fn compile_valued() -> Vec<string> {
     let v = strs4("-O", "--opt-level", "--root", "--entry");
     v.push("--allow-dload");
     v.push("--ffi-search-path");
+    v.push("--dload-pin");
+    v.push("--dload-trusted");
     return v;
 }
 
@@ -814,7 +818,16 @@ fn cmd_download(Vec<string> rest) -> Result<int, string> {
     at_most(pos, 1, "spool download [EXE]")?;
     let coil = require_coil()?;
     if len(pos) == 1 {
-        return download_natives(coil, current_dir()?, pos[0])?;
+        // URLs still come from the enclosing project's [[ffi.native]], if any.
+        let dir = match find_project() {
+            Result::Ok(r) => r,
+            Result::Err(_) => current_dir()?,
+        };
+        let exe = pos[0];
+        if path_is_absolute(exe) == false {
+            exe = join2(current_dir()?, exe);
+        }
+        return download_natives(coil, dir, exe)?;
     }
     return download_natives(coil, find_project()?, "")?;
 }

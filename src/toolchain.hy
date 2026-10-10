@@ -5,10 +5,13 @@ use util::{join2, join3, path_exists, path_is_absolute, home_dir, trim_or};
 use proc::{which, sh_capture, first_line};
 use manifest::{
     manifest_body, module_roots_parse, section_string, section_bool, section_strings,
+    trusted_deps_parse, ffi_natives_parse, native_name, native_package, native_version,
+    native_path, native_requires, native_requires_hint,
 };
+use lock::{lock_native_parse, lock_native_pkg, lock_native_stem, lock_native_sha};
 use config::{config_path};
 use io::file::{read_text};
-use text::{starts_with, slice};
+use text::{starts_with, slice, contains, replace, to_lower};
 
 fn env_or(string key, string fallback) -> string {
     return match var(key) {
@@ -172,7 +175,169 @@ fn project_roots(string root) -> Result<Vec<string>, string> {
     return out;
 }
 
-/// Host grants coil.toml records but coil does not apply by itself.
+/// The `dload` stem for a lock package: the native row's `stem` / `lib`, else
+/// the package name without its `coil-` prefix (`coil-tls` → `tls`).
+fn dload_stem(string pkg, string native_stem) -> string {
+    if len(native_stem) > 0 {
+        return native_stem;
+    }
+    if starts_with(pkg, "coil-") {
+        return match slice(pkg, 5, len(pkg)) {
+            Result::Ok(x) => x,
+            Result::Err(_) => pkg,
+        };
+    }
+    return pkg;
+}
+
+/// 64 hex digits (coil rejects any other `--dload-pin` hash).
+fn is_sha256_hex(string s) -> bool {
+    if len(s) != 64 {
+        return false;
+    }
+    let lower = match to_lower(s) {
+        Result::Ok(x) => x,
+        Result::Err(_) => {
+            return false;
+        },
+    };
+    let i = 0;
+    while i < 64 {
+        let c = match slice(lower, i, i + 1) {
+            Result::Ok(x) => x,
+            Result::Err(_) => {
+                return false;
+            },
+        };
+        if contains("0123456789abcdef", c) == false {
+            return false;
+        }
+        i = i + 1;
+    }
+    return true;
+}
+
+fn push_unique(Vec<string> v, string s) -> Vec<string> {
+    let i = 0;
+    while i < len(v) {
+        if v[i] == s {
+            return v;
+        }
+        i = i + 1;
+    }
+    v.push(s);
+    return v;
+}
+
+/// `dload` integrity flags from manifest and lock text (coil reads neither):
+/// `--dload-pin STEM=SHA256` per lock `[[package.native]]` with a 64-hex
+/// sha256, and `--dload-trusted STEM` for each `trusted = true` dependency:
+/// its name, the name without `coil-`, and its lock native stems.
+fn dload_flags(string manifest, string lock) -> Result<Vec<string>, string> {
+    let natives = lock_native_parse(lock);
+    let out: Vec<string> = Vec::new();
+    let pins: Vec<string> = Vec::new();
+    let i = 0;
+    while i < len(natives) {
+        let n = natives[i];
+        i = i + 1;
+        let sha = lock_native_sha(n);
+        if is_sha256_hex(sha) {
+            pins = push_unique(pins, dload_stem(lock_native_pkg(n), lock_native_stem(n)) + "=" + sha);
+        }
+    }
+    i = 0;
+    while i < len(pins) {
+        out.push("--dload-pin");
+        out.push(pins[i]);
+        i = i + 1;
+    }
+    let trusted = trusted_deps_parse(manifest)?;
+    let stems: Vec<string> = Vec::new();
+    i = 0;
+    while i < len(trusted) {
+        let name = trusted[i];
+        i = i + 1;
+        stems = push_unique(stems, name);
+        stems = push_unique(stems, dload_stem(name, ""));
+        let j = 0;
+        while j < len(natives) {
+            if lock_native_pkg(natives[j]) == name {
+                stems = push_unique(stems, dload_stem(name, lock_native_stem(natives[j])));
+            }
+            j = j + 1;
+        }
+    }
+    i = 0;
+    while i < len(stems) {
+        out.push("--dload-trusted");
+        out.push(stems[i]);
+        i = i + 1;
+    }
+    return out;
+}
+
+/// `\,` for each comma, so a value cannot end an `--ffi-native` field.
+fn spec_escape(string v) -> string {
+    return match replace(v, ",", "\\,") {
+        Result::Ok(x) => x,
+        Result::Err(_) => v,
+    };
+}
+
+/// One `--ffi-native` value per `[[ffi.native]]` row (relative `path` is
+/// resolved against `root`).
+fn ffi_native_specs(string root, string manifest) -> Result<Vec<string>, string> {
+    let rows = ffi_natives_parse(manifest)?;
+    let out: Vec<string> = Vec::new();
+    let i = 0;
+    while i < len(rows) {
+        let r = rows[i];
+        i = i + 1;
+        let spec = "name=" + spec_escape(native_name(r));
+        spec = spec + ",version=" + spec_escape(native_version(r));
+        spec = spec + ",path=" + spec_escape(abs_under(root, native_path(r)));
+        if native_package(r) != native_name(r) {
+            spec = spec + ",package=" + spec_escape(native_package(r));
+        }
+        if len(native_requires(r)) > 0 {
+            spec = spec + ",requires=" + spec_escape(native_requires(r));
+        }
+        if len(native_requires_hint(r)) > 0 {
+            spec = spec + ",requires-hint=" + spec_escape(native_requires_hint(r));
+        }
+        out.push(spec);
+    }
+    return out;
+}
+
+/// `--ffi-native SPEC` pairs for `coil package` / `coil natives dump`.
+fn ffi_native_flags(string root) -> Result<Vec<string>, string> {
+    let specs = ffi_native_specs(root, manifest_body(join2(root, "coil.toml"))?)?;
+    let out: Vec<string> = Vec::new();
+    let i = 0;
+    while i < len(specs) {
+        out.push("--ffi-native");
+        out.push(specs[i]);
+        i = i + 1;
+    }
+    return out;
+}
+
+/// coil.lock text, or "" when the project has none.
+fn lock_text(string root) -> string {
+    let path = join2(root, "coil.lock");
+    if path_exists(path) == false {
+        return "";
+    }
+    return match read_text(path) {
+        Result::Ok(s) => s,
+        Result::Err(_) => "",
+    };
+}
+
+/// Host grants coil.toml records but coil does not apply by itself, plus the
+/// `dload` pins / trusted stems from coil.toml and coil.lock.
 fn grant_flags(string root) -> Result<Vec<string>, string> {
     let body = manifest_body(join2(root, "coil.toml"))?;
     let out: Vec<string> = Vec::new();
@@ -212,6 +377,12 @@ fn grant_flags(string root) -> Result<Vec<string>, string> {
     while i < len(search) {
         out.push("--ffi-search-path");
         out.push(abs_under(root, search[i]));
+        i = i + 1;
+    }
+    let dload = dload_flags(body, lock_text(root))?;
+    i = 0;
+    while i < len(dload) {
+        out.push(dload[i]);
         i = i + 1;
     }
     return out;
