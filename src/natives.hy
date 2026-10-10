@@ -1,13 +1,18 @@
 // `spool download`: fetch direct FFI natives into
 // ~/.coil/natives/cache/<package>/<version>/<sha256_16>/<filename>
-// (root overridable with COIL_NATIVES_DIR). Input is `coil natives dump --tsv`.
+// (root overridable with COIL_NATIVES_DIR). The pins come from
+// `coil natives dump --tsv` (package, version, filename, sha256, size); coil
+// carries no URLs, so each one comes from the project's `[[ffi.native]] url`.
 use term::{println};
 use io::fs::{rename, remove_file};
 use text::{starts_with, slice, contains, to_lower};
 use string::{format};
 use util::{join2, ensure_dir, path_exists, home_dir, lines_of, trim_or, tsv_field};
 use proc::{sh_capture, sh_run, first_line};
-use toolchain::{env_or};
+use toolchain::{env_or, ffi_native_flags};
+use manifest::{
+    manifest_body, ffi_natives_parse, native_name, native_package, native_version, native_url,
+};
 
 fn natives_root() -> Result<string, string> {
     let r = env_or("COIL_NATIVES_DIR", "");
@@ -155,17 +160,75 @@ fn fetch_one(string root, string package, string version, string filename, strin
     return true;
 }
 
+/// `[[ffi.native]]` rows of `root`'s coil.toml (none without one).
+fn manifest_natives(string root) -> Result<Vec<string>, string> {
+    let path = join2(root, "coil.toml");
+    if path_exists(path) == false {
+        let empty: Vec<string> = Vec::new();
+        return empty;
+    }
+    return ffi_natives_parse(manifest_body(path)?)?;
+}
+
+/// Whether `filename` is the platform library file for stem `name`.
+fn lib_file_of(string filename, string name) -> bool {
+    let exts = [".so", ".dylib", ".dll"];
+    let i = 0;
+    while i < len(exts) {
+        if filename == "lib" + name + exts[i] || filename == name + exts[i] {
+            return true;
+        }
+        i = i + 1;
+    }
+    return false;
+}
+
+/// The `[[ffi.native]] url` for a dump row: same package and version, and
+/// (when several rows share those) the row whose stem names `filename`.
+fn url_for(Vec<string> rows, string package, string version, string filename) -> string {
+    let found = "";
+    let hits = 0;
+    let i = 0;
+    while i < len(rows) {
+        let r = rows[i];
+        i = i + 1;
+        if native_package(r) != package || native_version(r) != version {
+            continue;
+        }
+        if lib_file_of(filename, native_name(r)) {
+            return native_url(r);
+        }
+        found = native_url(r);
+        hits = hits + 1;
+    }
+    if hits == 1 {
+        return found;
+    }
+    return "";
+}
+
 /// Download natives for a packaged exe (`exe` non-empty) or the project.
+/// URLs come from `project_root`'s `[[ffi.native]]`; a row with none is
+/// skipped (the app also finds a library beside the exe or in its `lib/`).
 fn download_natives(string coil, string project_root, string exe) -> Result<int, string> {
+    let rows = manifest_natives(project_root)?;
     let a: Vec<string> = Vec::new();
     a.push(project_root);
     a.push(coil);
-    let script = "cd \"$1\" || exit 125; \"$2\" natives dump --tsv";
+    a.push("natives");
+    a.push("dump");
+    a.push("--tsv");
     if len(exe) > 0 {
         a.push(exe);
-        script = "cd \"$1\" || exit 125; \"$2\" natives dump --tsv \"$3\"";
+    } else {
+        let flags = ffi_native_flags(project_root)?;
+        let f = 0;
+        while f < len(flags) {
+            a.push(flags[f]);
+            f = f + 1;
+        }
     }
-    let res = sh_capture(script, a)?;
+    let res = sh_capture("cd \"$1\" || exit 125; shift; \"$@\"", a)?;
     let (code, tsv) = res;
     if code != 0 {
         if len(exe) > 0 {
@@ -180,10 +243,11 @@ fn download_natives(string coil, string project_root, string exe) -> Result<int,
     let lock_arch = "";
     let installed = 0;
     let skipped = 0;
-    let rows = lines_of(tsv);
+    let no_url = 0;
+    let lines = lines_of(tsv);
     let i = 0;
-    while i < len(rows) {
-        let line = rows[i];
+    while i < len(lines) {
+        let line = lines[i];
         i = i + 1;
         if starts_with(line, "# os=") {
             lock_os = after_prefix(line, "# os=");
@@ -206,14 +270,22 @@ fn download_natives(string coil, string project_root, string exe) -> Result<int,
         if len(package) == 0 {
             continue;
         }
+        let version = tsv_field(line, 1);
+        let filename = tsv_field(line, 2);
+        let url = url_for(rows, package, version, filename);
+        if len(url) == 0 {
+            println(format("spool download: no [[ffi.native]] url for %s %s (%s); skipped", package, version, filename));
+            no_url = no_url + 1;
+            continue;
+        }
         let fetched = fetch_one(
             root,
             package,
-            tsv_field(line, 1),
-            tsv_field(line, 2),
+            version,
+            filename,
+            url,
             tsv_field(line, 3),
             tsv_field(line, 4),
-            tsv_field(line, 5),
         )?;
         if fetched {
             installed = installed + 1;
@@ -221,10 +293,10 @@ fn download_natives(string coil, string project_root, string exe) -> Result<int,
             skipped = skipped + 1;
         }
     }
-    if installed == 0 && skipped == 0 {
+    if installed == 0 && skipped == 0 && no_url == 0 {
         println("spool download: nothing to download");
     } else {
-        println(format("spool download: ok (%i installed, %i skipped)", installed, skipped));
+        println(format("spool download: ok (%i installed, %i skipped, %i without url)", installed, skipped, no_url));
     }
     return 0;
 }
