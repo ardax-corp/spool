@@ -38,8 +38,9 @@ test("lock native stem is pinned and trusted") {
     let manifest = "[dependencies]\ncoil-crypto = { git = \"https://example.com/coil-crypto.git\", version = \"^0.1\", trusted = true }\n";
     let lock = lock_row("coil-crypto") + "\n[[package.native]]\nstem = 'hycrypto'\nsha256 = '" + sha("a") + "'\n\n" + lock_row("coil-tls") + "\n[[package.native]]\nsha256 = '" + sha("b") + "'\n";
     // spool's own lock reader still accepts the native rows.
-    assert(len(lock_parse(lock)?) == 2)?;
-    let natives = lock_native_parse(lock);
+    let pkgs = lock_parse(lock)?;
+    assert(len(pkgs) == 2)?;
+    let natives = lock_native_parse(lock)?;
     assert(len(natives) == 2)?;
     assert(lock_native_pkg(natives[0]) == "coil-crypto")?;
     assert(lock_native_stem(natives[0]) == "hycrypto")?;

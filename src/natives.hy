@@ -175,7 +175,11 @@ fn lib_file_of(string filename, string name) -> bool {
     let exts = [".so", ".dylib", ".dll"];
     let i = 0;
     while i < len(exts) {
-        if filename == "lib" + name + exts[i] || filename == name + exts[i] {
+        let ext = exts[i];
+        if filename == "lib" + name + ext {
+            return true;
+        }
+        if filename == name + ext {
             return true;
         }
         i = i + 1;

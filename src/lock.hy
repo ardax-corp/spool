@@ -717,7 +717,7 @@ fn push_native(Vec<string> out, string pkg, bool open, string stem, string sha) 
 
 /// Every `[[package.native]]` row in lock text. Lenient: other keys and
 /// sections are ignored, so this never fails on a lock lock_parse accepts.
-fn lock_native_parse(string source) -> Vec<string> {
+fn lock_native_parse(string source) -> Result<Vec<string>, string> {
     let out: Vec<string> = Vec::new();
     let lines = match split(source, "\n") {
         Result::Ok(ls) => ls,
@@ -755,12 +755,10 @@ fn lock_native_parse(string source) -> Vec<string> {
             }
             continue;
         }
-        let kv = match parse_kv_line(line) {
-            Result::Ok(x) => x,
-            Result::Err(_) => {
-                continue;
-            },
-        };
+        if contains(line, "=") == false {
+            continue;
+        }
+        let kv = parse_kv_line(line)?;
         let (k, v) = kv;
         if in_native {
             if k == "sha256" {

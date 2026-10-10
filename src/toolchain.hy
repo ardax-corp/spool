@@ -234,7 +234,7 @@ fn push_unique(Vec<string> v, string s) -> Vec<string> {
 /// sha256, and `--dload-trusted STEM` for each `trusted = true` dependency:
 /// its name, the name without `coil-`, and its lock native stems.
 fn dload_flags(string manifest, string lock) -> Result<Vec<string>, string> {
-    let natives = lock_native_parse(lock);
+    let natives = lock_native_parse(lock)?;
     let out: Vec<string> = Vec::new();
     let pins: Vec<string> = Vec::new();
     let i = 0;
