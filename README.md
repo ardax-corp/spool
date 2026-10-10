@@ -147,6 +147,20 @@ spool runs `coil` from the project root with:
   `all = true` gives `--allow-all`), the older `[env]
   allow_exec/allow_exit/allow_ffi_exec` and `[ffi] allow_attach`, `[ffi]
   allow` (`--allow-dload`), and `[ffi] search_paths` (`--ffi-search-path`)
+- `dload` integrity, which coil no longer reads from `coil.toml` /
+  `coil.lock` itself:
+  - `--dload-pin STEM=SHA256` for each `coil.lock` `[[package.native]]`
+    `sha256`. STEM is the native row's `stem` / `lib`, else the package name
+    without its `coil-` prefix. A hash that is not 64 hex digits is skipped.
+  - `--dload-trusted STEM` for each `trusted = true` dependency: its name,
+    the name without `coil-` (`coil-crypto` → `crypto`), and the lock's
+    native stems for it
+- `coil package` (`spool build` / `run`) and `coil natives dump` also get
+  one `--ffi-native name=…,version=…,path=…[,package=…][,requires=a;b][,requires-hint=…]`
+  per `[[ffi.native]]` row (`path` made absolute, `,` in a value escaped as
+  `\,`)
+
+`coil.toml.example` lists every key spool reads.
 
 A program needs a grant for each capability its `main` (or a test) can
 reach: reading or writing files, the network, environment variables,
@@ -174,8 +188,9 @@ local = { path = "../local" }
   (`">=1.2, <2"`). Prerelease tags are never picked by a range.
 - `rev` pins a branch, tag or commit. The lock stores the resolved sha plus the
   `ref`. `install` keeps the pin, and `update` moves a branch pin.
-- `trusted = true` is accepted, since coil's schema allows it. spool does not
-  use it.
+- `trusted = true` lets that dependency's `dload` stems skip the sha256 pin
+  (`--dload-trusted`, see [Compile flags](#compile-flags)). The stem still
+  needs `[ffi] allow`.
 
 Resolution walks the reachable graph: the project, its path deps, and every
 locked checkout's `coil.toml`. Compatible requirements unify. Incompatible
@@ -386,13 +401,30 @@ spool: error: include-hook http ./hooks/include.sh exited 9
 Direct shared libraries declared in `[[ffi.native]]` (or embedded in a
 packaged exe) are fetched into a content-addressed cache:
 
+```toml
+[[ffi.native]]
+name = "regex"              # dload stem
+package = "coil-regex"      # optional, default: name
+version = "0.3.0"
+path = "./native"           # holds libregex.so; coil hashes it
+url = "https://example.com/coil-regex/0.3.0/libregex.so"
+requires = ["libpcre2-8.so.0"]
+requires_hint = "apt install libpcre2-8-0"
+```
+
 ```text
 ~/.coil/natives/cache/<package>/<version>/<sha256_16>/<filename>
 ```
 
-Override the root with `COIL_NATIVES_DIR`. Only https URLs are fetched. Each
-file is checked against the lock's sha256 and size before it is moved into
-place. Transitive sonames (`requires`) must come from the OS.
+Override the root with `COIL_NATIVES_DIR`. The sha256 and size come from
+`coil natives dump --tsv` (`package, version, filename, sha256, size`); coil
+carries no URLs, so each one is the `url` of the project's `[[ffi.native]]`
+row with that package and version (for a packaged exe too: run it from the
+project). Rows without a `url` are skipped: a packaged app also finds a
+library beside the executable or in `lib/` there, and putting it there is up
+to you. Only https URLs are fetched. Each file is checked against the sha256
+and size before it is moved into place. Transitive sonames (`requires`) must
+come from the OS.
 
 ```bash
 spool download ./hello          # a packaged exe

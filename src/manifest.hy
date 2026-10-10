@@ -703,3 +703,174 @@ fn deps_remove(string path, string name) -> Result<int, string> {
         Result::Err(_) => raise format("failed to write %s", path),
     };
 }
+
+/// `[dependencies]` names whose inline table sets `trusted = true`.
+fn trusted_deps_parse(string body) -> Result<Vec<string>, string> {
+    let root = decode_manifest(body)?;
+    let out: Vec<string> = Vec::new();
+    match table_get(root, "dependencies") {
+        Option::None => {
+            return out;
+        },
+        Option::Some(tab) => {
+            let i = 0;
+            let n = tab.table_len();
+            while i < n {
+                let name = tab.key_at(i);
+                let spec = tab.child(i);
+                i = i + 1;
+                if spec.is_table() == false || spec.has("trusted") == false {
+                    continue;
+                }
+                let t = spec.get("trusted");
+                if t.is_bool() == false {
+                    raise format("dependency %s key trusted must be a bool", name);
+                }
+                if t.flag {
+                    out.push(name);
+                }
+            }
+            return out;
+        },
+    };
+}
+
+// `[[ffi.native]]` rows as tab-separated records:
+//   name \t package \t version \t path \t url \t requires (`;`-joined) \t requires_hint
+// `package` defaults to `name`. `url` is optional and only used by `spool download`.
+
+fn native_name(string r) -> string {
+    return dep_field(r, 0);
+}
+
+fn native_package(string r) -> string {
+    return dep_field(r, 1);
+}
+
+fn native_version(string r) -> string {
+    return dep_field(r, 2);
+}
+
+fn native_path(string r) -> string {
+    return dep_field(r, 3);
+}
+
+fn native_url(string r) -> string {
+    return dep_field(r, 4);
+}
+
+fn native_requires(string r) -> string {
+    return dep_field(r, 5);
+}
+
+fn native_requires_hint(string r) -> string {
+    return dep_field(r, 6);
+}
+
+fn ffi_native_row(TomlValue row, int idx) -> Result<string, string> {
+    if row.is_table() == false {
+        raise format("[[ffi.native]] #%i must be a table", idx);
+    }
+    let name = "";
+    let package = "";
+    let version = "";
+    let path = "";
+    let url = "";
+    let requires = "";
+    let hint = "";
+    let i = 0;
+    let n = row.table_len();
+    while i < n {
+        let k = row.key_at(i);
+        let v = row.child(i);
+        i = i + 1;
+        if k == "requires" {
+            if v.is_array() == false {
+                raise "[[ffi.native]] requires must be an array of strings";
+            }
+            let j = 0;
+            while j < v.array_len() {
+                let item = v.child(j);
+                j = j + 1;
+                if item.is_string() == false {
+                    raise "[[ffi.native]] requires must be an array of strings";
+                }
+                if len(requires) > 0 {
+                    requires = requires + ";";
+                }
+                requires = requires + item.s;
+            }
+            continue;
+        }
+        if v.is_string() == false {
+            raise format("[[ffi.native]] %s must be a string", k);
+        }
+        if contains(v.s, "\t") {
+            raise format("[[ffi.native]] %s cannot contain a tab", k);
+        }
+        if k == "name" {
+            name = v.s;
+            continue;
+        }
+        if k == "package" {
+            package = v.s;
+            continue;
+        }
+        if k == "version" {
+            version = v.s;
+            continue;
+        }
+        if k == "path" {
+            path = v.s;
+            continue;
+        }
+        if k == "url" {
+            url = v.s;
+            continue;
+        }
+        if k == "requires_hint" {
+            hint = v.s;
+            continue;
+        }
+        raise format("unknown key ffi.native.%s", k);
+    }
+    if len(name) == 0 {
+        raise "[[ffi.native]] missing required key name";
+    }
+    if len(version) == 0 {
+        raise format("[[ffi.native]] %s missing required key version", name);
+    }
+    if len(path) == 0 {
+        raise format("[[ffi.native]] %s missing required key path", name);
+    }
+    if len(package) == 0 {
+        package = name;
+    }
+    return name + "\t" + package + "\t" + version + "\t" + path + "\t" + url + "\t" + requires + "\t" + hint;
+}
+
+/// `[[ffi.native]]` rows (see the record layout above). Unknown keys hard-error.
+fn ffi_natives_parse(string body) -> Result<Vec<string>, string> {
+    let root = decode_manifest(body)?;
+    let out: Vec<string> = Vec::new();
+    match table_get(root, "ffi") {
+        Option::None => {
+            return out;
+        },
+        Option::Some(ffi) => {
+            if ffi.has("native") == false {
+                return out;
+            }
+            let rows = ffi.get("native");
+            if rows.is_array() == false {
+                raise "[ffi] native must be an array of tables ([[ffi.native]])";
+            }
+            let i = 0;
+            while i < rows.array_len() {
+                out.push(ffi_native_row(rows.child(i), i + 1)?);
+                i = i + 1;
+            }
+            return out;
+        },
+    };
+}

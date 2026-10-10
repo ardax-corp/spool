@@ -546,6 +546,8 @@ fn lock_parse_all(string source) -> Result<(Vec<string>, Vec<string>, Vec<string
     let in_pkg = false;
     let in_hooks = false;
     let in_scripts = false;
+    // `[[package.native]]` rows belong to the package above; lock_native_parse reads them.
+    let in_native = false;
     let name = "";
     let git = "";
     let tag = "";
@@ -576,6 +578,7 @@ fn lock_parse_all(string source) -> Result<(Vec<string>, Vec<string>, Vec<string
             in_pkg = false;
             in_hooks = true;
             in_scripts = false;
+            in_native = false;
             continue;
         }
         if line == "[scripts]" {
@@ -586,6 +589,7 @@ fn lock_parse_all(string source) -> Result<(Vec<string>, Vec<string>, Vec<string
             in_pkg = false;
             in_hooks = false;
             in_scripts = true;
+            in_native = false;
             continue;
         }
         if line == "[[package]]" {
@@ -596,6 +600,7 @@ fn lock_parse_all(string source) -> Result<(Vec<string>, Vec<string>, Vec<string
             in_pkg = true;
             in_hooks = false;
             in_scripts = false;
+            in_native = false;
             name = "";
             git = "";
             tag = "";
@@ -604,6 +609,16 @@ fn lock_parse_all(string source) -> Result<(Vec<string>, Vec<string>, Vec<string
             hook_path = "";
             hook_hash = "";
             src_ref = "";
+            continue;
+        }
+        if line == "[[package.native]]" {
+            if in_pkg == false {
+                raise "corrupt coil.lock: [[package.native]] outside a [[package]]";
+            }
+            in_native = true;
+            continue;
+        }
+        if in_native {
             continue;
         }
         if in_hooks {
@@ -674,6 +689,92 @@ fn lock_parse_all(string source) -> Result<(Vec<string>, Vec<string>, Vec<string
         out.push(pkg);
     }
     return (out, allow, scripts);
+}
+
+// Native pins: `[[package.native]]` under a `[[package]]` row, as tab-separated
+//   package \t stem \t sha256
+// `stem` is the row's `stem` / `lib`, else "" (see toolchain::dload_stem).
+// `sha256` is as written ("" when absent); callers check its shape.
+
+fn lock_native_pkg(string r) -> string {
+    return field_at(r, 0);
+}
+
+fn lock_native_stem(string r) -> string {
+    return field_at(r, 1);
+}
+
+fn lock_native_sha(string r) -> string {
+    return field_at(r, 2);
+}
+
+fn push_native(Vec<string> out, string pkg, bool open, string stem, string sha) -> Vec<string> {
+    if open && len(pkg) > 0 && (len(stem) > 0 || len(sha) > 0) {
+        out.push(pkg + "\t" + stem + "\t" + sha);
+    }
+    return out;
+}
+
+/// Every `[[package.native]]` row in lock text. Lenient: other keys and
+/// sections are ignored, so this never fails on a lock lock_parse accepts.
+fn lock_native_parse(string source) -> Result<Vec<string>, string> {
+    let out: Vec<string> = Vec::new();
+    let lines = match split(source, "\n") {
+        Result::Ok(ls) => ls,
+        Result::Err(_) => {
+            return out;
+        },
+    };
+    let pkg = "";
+    let in_pkg = false;
+    let in_native = false;
+    let stem = "";
+    let sha = "";
+    let i = 0;
+    while i < len(lines) {
+        let line = match trim(lines[i]) {
+            Result::Ok(t) => t,
+            Result::Err(_) => lines[i],
+        };
+        i = i + 1;
+        if len(line) == 0 || starts_with(line, "#") {
+            continue;
+        }
+        if starts_with(line, "[") {
+            out = push_native(out, pkg, in_native, stem, sha);
+            in_native = line == "[[package.native]]" && in_pkg;
+            stem = "";
+            sha = "";
+            if line == "[[package]]" {
+                in_pkg = true;
+                pkg = "";
+            } else {
+                if in_native == false {
+                    in_pkg = false;
+                }
+            }
+            continue;
+        }
+        if contains(line, "=") == false {
+            continue;
+        }
+        let kv = parse_kv_line(line)?;
+        let (k, v) = kv;
+        if in_native {
+            if k == "sha256" {
+                sha = v;
+            }
+            if k == "stem" || k == "lib" {
+                stem = v;
+            }
+            continue;
+        }
+        if in_pkg && k == "name" {
+            pkg = v;
+        }
+    }
+    out = push_native(out, pkg, in_native, stem, sha);
+    return out;
 }
 
 fn lock_parse(string source) -> Result<Vec<string>, string> {
