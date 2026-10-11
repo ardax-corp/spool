@@ -263,8 +263,8 @@ spool allow-include http
 ```
 
 `spool allow-include <name>` records the consumer allowlist in `coil.lock`,
-not in `coil.toml`. coil-lang still errors on unknown manifest sections, so do
-not add a `[hooks]` table there. `[package].include` is the include path on a
+not in `coil.toml`. spool rejects unknown `coil.toml` sections, so do not add
+a `[hooks]` table there. `[package].include` is the include path on a
 package. The allowlist is the lock `[hooks]` table:
 
 ```toml
@@ -291,7 +291,7 @@ hook hash mismatch for http
 
 The current project's `coil.toml` may declare lifecycle scripts. Paths are
 relative to the project root. Missing keys are no-ops. Unknown keys are errors
-(coil-lang already owns that schema).
+(spool rejects unknown `coil.toml` keys).
 
 ```toml
 [scripts]
@@ -479,7 +479,9 @@ export COIL_STDLIB_DIR=$PWD/.bootstrap/coil-stdlib
 
 ## Coil quirks this repo works around
 
-- No forward references within a module file.
+- A call to a function declared later in the file fails to typecheck when
+  that function's signature names an imported class (`expected Rec, found
+  rec::Rec`). Plain forward references work.
 - In a function that returns `Result`, a `Result`-typed **parameter** is
   corrupted (for example, its `Err` payload reads as empty). Helpers that
   inspect a `Result` return `bool` instead (see `tests/include.hy`).
@@ -487,5 +489,5 @@ export COIL_STDLIB_DIR=$PWD/.bootstrap/coil-stdlib
   value with no trailing newline. `decode_manifest` appends one.
 - coil-toml `main` predates field-visibility enforcement. Spool pins the
   default-branch commit with the fix.
-- Userland class types still cannot cross module boundaries (COI-12), so
-  records are tab-joined strings.
+- Records are tab-joined strings, from when userland class types could not
+  cross module boundaries (COI-12).
