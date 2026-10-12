@@ -1,3 +1,4 @@
+use tests::assert;
 use hooks::{
     may_run_hook, hooks_are_off, default_hooks_off, ignore_scripts_flag,
     enable_scripts_flag, hook_kind_include, hook_kind_script, include_gate_lock,
@@ -142,9 +143,9 @@ test("default: include does not run") {
     let marker = "scratch/coi104/default/INCLUDE_RAN";
     clear_marker(marker);
     let lock = http_lock("./hooks/include.sh", "abc", true);
-    assert(default_hooks_off())?;
-    assert(hooks_are_off(ignore_env(false, false)))?;
-    assert(denied_with(
+    assert!(default_hooks_off());
+    assert!(hooks_are_off(ignore_env(false, false)));
+    assert!(denied_with(
         include_from_lock(
             hooks_are_off(ignore_env(false, false)),
             lock,
@@ -153,8 +154,8 @@ test("default: include does not run") {
             "abc",
         ),
         "hooks are off",
-    ))?;
-    assert(marker_exists(marker) == false)?;
+    ));
+    assert!(marker_exists(marker) == false);
 }
 
 test("allowlisted + matching lock hash: may run") {
@@ -162,9 +163,9 @@ test("allowlisted + matching lock hash: may run") {
     let marker = "scratch/coi104/ok/INCLUDE_RAN";
     clear_marker(marker);
     let lock = http_lock("./hooks/include.sh", "abc", true);
-    assert(enable_scripts_flag("--enable-scripts"))?;
-    assert(contains(lock, "allow_include = ['http']"))?;
-    assert(mark_if_allowed(
+    assert!(enable_scripts_flag("--enable-scripts"));
+    assert!(contains(lock, "allow_include = ['http']"));
+    assert!(mark_if_allowed(
         marker,
         include_from_lock(
             hooks_are_off(ignore_env(false, true)),
@@ -173,8 +174,8 @@ test("allowlisted + matching lock hash: may run") {
             "./hooks/include.sh",
             "abc",
         ),
-    ))?;
-    assert(marker_exists(marker))?;
+    ));
+    assert!(marker_exists(marker));
 }
 
 test("not allowlisted: does not run even if hash matches") {
@@ -182,8 +183,8 @@ test("not allowlisted: does not run even if hash matches") {
     let marker = "scratch/coi104/noallow/INCLUDE_RAN";
     clear_marker(marker);
     let lock = http_lock("./hooks/include.sh", "abc", false);
-    assert(enable_scripts_flag("--enable-scripts"))?;
-    assert(denied_with(
+    assert!(enable_scripts_flag("--enable-scripts"));
+    assert!(denied_with(
         include_from_lock(
             hooks_are_off(ignore_env(false, true)),
             lock,
@@ -192,8 +193,8 @@ test("not allowlisted: does not run even if hash matches") {
             "abc",
         ),
         "not allowlisted",
-    ))?;
-    assert(marker_exists(marker) == false)?;
+    ));
+    assert!(marker_exists(marker) == false);
 }
 
 test("no lock row / missing hash: deny, no sh") {
@@ -204,11 +205,11 @@ test("no lock row / missing hash: deny, no sh") {
     let allow = Vec::new();
     allow.push("http");
     let lock = lock_serialize_full(pkgs, allow);
-    assert(contains(lock, "allow_include"))?;
+    assert!(contains(lock, "allow_include"));
     let parsed = lock_parse(lock)?;
-    assert(len(parsed) == 0)?;
+    assert!(len(parsed) == 0);
     let rec = lock_find(parsed, "http");
-    assert(len(rec) == 0)?;
+    assert!(len(rec) == 0);
     let decided = include_gate_lock(
         len(rec) > 0,
         lock_pkg_hook_path(rec),
@@ -217,10 +218,10 @@ test("no lock row / missing hash: deny, no sh") {
         "abc",
     );
     let (lp, lh, first_pin) = decided;
-    assert(first_pin == false)?;
-    assert(lp == "")?;
-    assert(lh == "")?;
-    assert(denied_with(
+    assert!(first_pin == false);
+    assert!(lp == "");
+    assert!(lh == "");
+    assert!(denied_with(
         include_from_lock(
             hooks_are_off(ignore_env(false, true)),
             lock,
@@ -229,8 +230,8 @@ test("no lock row / missing hash: deny, no sh") {
             "abc",
         ),
         "missing lock hash",
-    ))?;
-    assert(denied_with(
+    ));
+    assert!(denied_with(
         may_run_hook(
             false,
             hook_kind_include(),
@@ -242,8 +243,8 @@ test("no lock row / missing hash: deny, no sh") {
             true,
         ),
         "missing lock hash",
-    ))?;
-    assert(marker_exists(marker) == false)?;
+    ));
+    assert!(marker_exists(marker) == false);
 }
 
 test("changed include after pin: fail closed, no sh") {
@@ -261,9 +262,9 @@ test("changed include after pin: fail closed, no sh") {
         "changed",
     );
     let (lp, lh, first_pin) = decided;
-    assert(first_pin == false)?;
-    assert(lh == "abc")?;
-    assert(denied_with(
+    assert!(first_pin == false);
+    assert!(lh == "abc");
+    assert!(denied_with(
         include_from_lock(
             hooks_are_off(ignore_env(false, true)),
             lock,
@@ -272,9 +273,9 @@ test("changed include after pin: fail closed, no sh") {
             "changed",
         ),
         "hook hash mismatch",
-    ))?;
-    assert(lock_pkg_hook_hash(lock_find(pkgs, "http")) == "abc")?;
-    assert(marker_exists(marker) == false)?;
+    ));
+    assert!(lock_pkg_hook_hash(lock_find(pkgs, "http")) == "abc");
+    assert!(marker_exists(marker) == false);
 }
 
 test("--ignore-scripts: stays off even if allowlisted") {
@@ -282,10 +283,10 @@ test("--ignore-scripts: stays off even if allowlisted") {
     let marker = "scratch/coi104/ignore/INCLUDE_RAN";
     clear_marker(marker);
     let lock = http_lock("./hooks/include.sh", "abc", true);
-    assert(ignore_scripts_flag("--ignore-scripts"))?;
-    assert(enable_scripts_flag("--enable-scripts"))?;
-    assert(hooks_are_off(ignore_env(true, true)))?;
-    assert(denied_with(
+    assert!(ignore_scripts_flag("--ignore-scripts"));
+    assert!(enable_scripts_flag("--enable-scripts"));
+    assert!(hooks_are_off(ignore_env(true, true)));
+    assert!(denied_with(
         include_from_lock(
             hooks_are_off(ignore_env(true, true)),
             lock,
@@ -294,8 +295,8 @@ test("--ignore-scripts: stays off even if allowlisted") {
             "abc",
         ),
         "hooks are off",
-    ))?;
-    assert(marker_exists(marker) == false)?;
+    ));
+    assert!(marker_exists(marker) == false);
 }
 
 test("first-pin must write a lock row; empty hash without pin is deny") {
@@ -307,7 +308,7 @@ test("first-pin must write a lock row; empty hash without pin is deny") {
     write_lock_text(lock_path, lock)?;
     let pkgs = lock_parse(lock)?;
     let rec = lock_find(pkgs, "http");
-    assert(denied_with(
+    assert!(denied_with(
         may_run_hook(
             false,
             hook_kind_include(),
@@ -319,8 +320,8 @@ test("first-pin must write a lock row; empty hash without pin is deny") {
             true,
         ),
         "missing lock hash",
-    ))?;
-    assert(marker_exists(marker) == false)?;
+    ));
+    assert!(marker_exists(marker) == false);
     let decided = include_gate_lock(
         true,
         lock_pkg_hook_path(rec),
@@ -329,14 +330,14 @@ test("first-pin must write a lock row; empty hash without pin is deny") {
         "abc",
     );
     let (lp, lh, first_pin) = decided;
-    assert(first_pin)?;
+    assert!(first_pin);
     rec = lock_pkg_with_hook(rec, lp, lh);
     pkgs = lock_upsert(pkgs, rec);
     lock_write(lock_path, pkgs)?;
     let written = lock_read(lock_path)?;
-    assert(lock_pkg_hook_path(lock_find(written, "http")) == "./hooks/include.sh")?;
-    assert(lock_pkg_hook_hash(lock_find(written, "http")) == "abc")?;
-    assert(mark_if_allowed(
+    assert!(lock_pkg_hook_path(lock_find(written, "http")) == "./hooks/include.sh");
+    assert!(lock_pkg_hook_hash(lock_find(written, "http")) == "abc");
+    assert!(mark_if_allowed(
         marker,
         may_run_hook(
             false,
@@ -348,8 +349,8 @@ test("first-pin must write a lock row; empty hash without pin is deny") {
             lh,
             true,
         ),
-    ))?;
-    assert(marker_exists(marker))?;
+    ));
+    assert!(marker_exists(marker));
     pkgs = lock_upsert(
         pkgs,
         make_git_pkg_hook(
@@ -362,7 +363,7 @@ test("first-pin must write a lock row; empty hash without pin is deny") {
             "stale",
         ),
     );
-    assert(lock_pkg_hook_hash(lock_find(pkgs, "http")) == "abc")?;
+    assert!(lock_pkg_hook_hash(lock_find(pkgs, "http")) == "abc");
 }
 
 test("dependency [scripts] are not the include gate") {
@@ -374,10 +375,10 @@ include = \"./hooks/include.sh\"
 [scripts]
 pre_install = \"./scripts/pre-install.sh\"
 ";
-    assert(package_include_parse(body) == "./hooks/include.sh")?;
+    assert!(package_include_parse(body) == "./hooks/include.sh");
     let recs = scripts_parse(body)?;
-    assert(scripts_path_of(recs, "pre_install") == "./scripts/pre-install.sh")?;
-    assert(denied_with(
+    assert!(scripts_path_of(recs, "pre_install") == "./scripts/pre-install.sh");
+    assert!(denied_with(
         may_run_hook(
             false,
             hook_kind_script(),
@@ -389,7 +390,7 @@ pre_install = \"./scripts/pre-install.sh\"
             true,
         ),
         "missing lock hash",
-    ))?;
+    ));
 }
 
 test("missing include is a no-op") {
@@ -397,9 +398,9 @@ test("missing include is a no-op") {
 name = \"http\"
 version = \"1.0.0\"
 ";
-    assert(package_include_parse(body) == "")?;
+    assert!(package_include_parse(body) == "");
     let pkgs = Vec::new();
     pkgs.push(make_git_pkg("http", "https://x/y.git", "v1.0.0", "rev1", "tree1"));
-    assert(lock_pkg_hook_path(pkgs[0]) == "")?;
-    assert(lock_pkg_hook_hash(pkgs[0]) == "")?;
+    assert!(lock_pkg_hook_path(pkgs[0]) == "");
+    assert!(lock_pkg_hook_hash(pkgs[0]) == "");
 }

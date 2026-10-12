@@ -1,3 +1,4 @@
+use tests::assert;
 use hooks::{
     may_run_hook, hooks_are_off, default_hooks_off, ignore_scripts_flag,
     enable_scripts_flag, hook_kind_script, script_gate_lock,
@@ -115,9 +116,9 @@ test("default: consumer scripts do not run") {
     let marker = "scratch/coi103/default/HOOK_RAN";
     clear_marker(marker);
     let lock = app_lock_scripts("./scripts/pre-install.sh", "abc");
-    assert(default_hooks_off())?;
-    assert(hooks_are_off(ignore_env(false, false)))?;
-    assert(denied_with(
+    assert!(default_hooks_off());
+    assert!(hooks_are_off(ignore_env(false, false)));
+    assert!(denied_with(
         script_from_lock(
             hooks_are_off(ignore_env(false, false)),
             lock,
@@ -125,8 +126,8 @@ test("default: consumer scripts do not run") {
             "abc",
         ),
         "hooks are off",
-    ))?;
-    assert(marker_exists(marker) == false)?;
+    ));
+    assert!(marker_exists(marker) == false);
 }
 
 test("--enable-scripts: allowed script may run") {
@@ -134,9 +135,9 @@ test("--enable-scripts: allowed script may run") {
     let marker = "scratch/coi103/enable/HOOK_RAN";
     clear_marker(marker);
     let lock = app_lock_scripts("./scripts/pre-install.sh", "abc");
-    assert(enable_scripts_flag("--enable-scripts"))?;
-    assert(hooks_are_off(ignore_env(false, true)) == false)?;
-    assert(mark_if_allowed(
+    assert!(enable_scripts_flag("--enable-scripts"));
+    assert!(hooks_are_off(ignore_env(false, true)) == false);
+    assert!(mark_if_allowed(
         marker,
         script_from_lock(
             hooks_are_off(ignore_env(false, true)),
@@ -144,8 +145,8 @@ test("--enable-scripts: allowed script may run") {
             "./scripts/pre-install.sh",
             "abc",
         ),
-    ))?;
-    assert(marker_exists(marker))?;
+    ));
+    assert!(marker_exists(marker));
 }
 
 test("--ignore-scripts wins over --enable-scripts") {
@@ -153,10 +154,10 @@ test("--ignore-scripts wins over --enable-scripts") {
     let marker = "scratch/coi103/ignore/HOOK_RAN";
     clear_marker(marker);
     let lock = app_lock_scripts("./scripts/pre-install.sh", "abc");
-    assert(ignore_scripts_flag("--ignore-scripts"))?;
-    assert(enable_scripts_flag("--enable-scripts"))?;
-    assert(hooks_are_off(ignore_env(true, true)))?;
-    assert(denied_with(
+    assert!(ignore_scripts_flag("--ignore-scripts"));
+    assert!(enable_scripts_flag("--enable-scripts"));
+    assert!(hooks_are_off(ignore_env(true, true)));
+    assert!(denied_with(
         script_from_lock(
             hooks_are_off(ignore_env(true, true)),
             lock,
@@ -164,24 +165,24 @@ test("--ignore-scripts wins over --enable-scripts") {
             "abc",
         ),
         "hooks are off",
-    ))?;
-    assert(marker_exists(marker) == false)?;
+    ));
+    assert!(marker_exists(marker) == false);
 }
 
 test("lock [scripts] hash lives off the package row") {
     let lock = app_lock_scripts("./scripts/pre-install.sh", "abc");
-    assert(contains(lock, "[scripts]"))?;
-    assert(contains(lock, "pre_install = './scripts/pre-install.sh'"))?;
-    assert(contains(lock, "pre_install_hash = 'abc'"))?;
-    assert(contains(lock, "name = 'app'") == false)?;
+    assert!(contains(lock, "[scripts]"));
+    assert!(contains(lock, "pre_install = './scripts/pre-install.sh'"));
+    assert!(contains(lock, "pre_install_hash = 'abc'"));
+    assert!(contains(lock, "name = 'app'") == false);
     let pkgs = lock_parse(lock)?;
-    assert(len(pkgs) == 1)?;
-    assert(lock_pkg_hook_path(pkgs[0]) == "")?;
-    assert(lock_pkg_hook_hash(pkgs[0]) == "")?;
+    assert!(len(pkgs) == 1);
+    assert!(lock_pkg_hook_path(pkgs[0]) == "");
+    assert!(lock_pkg_hook_hash(pkgs[0]) == "");
     let scripts = lock_parse_scripts(lock)?;
     let rec = lock_find_script(scripts, "pre_install");
-    assert(lock_script_path(rec) == "./scripts/pre-install.sh")?;
-    assert(lock_script_hash(rec) == "abc")?;
+    assert!(lock_script_path(rec) == "./scripts/pre-install.sh");
+    assert!(lock_script_hash(rec) == "abc");
 }
 
 test("changed script with a lock pin mismatches and does not sh") {
@@ -198,9 +199,9 @@ test("changed script with a lock pin mismatches and does not sh") {
         "changed",
     );
     let (lp, lh, first_pin) = decided;
-    assert(first_pin == false)?;
-    assert(lh == "abc")?;
-    assert(denied_with(
+    assert!(first_pin == false);
+    assert!(lh == "abc");
+    assert!(denied_with(
         may_run_hook(
             false,
             hook_kind_script(),
@@ -212,8 +213,8 @@ test("changed script with a lock pin mismatches and does not sh") {
             false,
         ),
         "hook hash mismatch",
-    ))?;
-    assert(denied_with(
+    ));
+    assert!(denied_with(
         script_from_lock(
             hooks_are_off(ignore_env(false, true)),
             lock,
@@ -221,8 +222,8 @@ test("changed script with a lock pin mismatches and does not sh") {
             "changed",
         ),
         "hook hash mismatch",
-    ))?;
-    assert(marker_exists(marker) == false)?;
+    ));
+    assert!(marker_exists(marker) == false);
 }
 
 test("missing lock pin first-pins then gates; empty hash does not skip the gate") {
@@ -230,10 +231,10 @@ test("missing lock pin first-pins then gates; empty hash does not skip the gate"
     let marker = "scratch/coi103/first/HOOK_RAN";
     clear_marker(marker);
     let lock = empty_scripts_lock();
-    assert(contains(lock, "pre_install_hash") == false)?;
+    assert!(contains(lock, "pre_install_hash") == false);
     let scripts = lock_parse_scripts(lock)?;
     let rec = lock_find_script(scripts, "pre_install");
-    assert(denied_with(
+    assert!(denied_with(
         may_run_hook(
             false,
             hook_kind_script(),
@@ -245,8 +246,8 @@ test("missing lock pin first-pins then gates; empty hash does not skip the gate"
             false,
         ),
         "missing lock hash",
-    ))?;
-    assert(marker_exists(marker) == false)?;
+    ));
+    assert!(marker_exists(marker) == false);
     let decided = script_gate_lock(
         lock_script_path(rec),
         lock_script_hash(rec),
@@ -254,10 +255,10 @@ test("missing lock pin first-pins then gates; empty hash does not skip the gate"
         "abc",
     );
     let (lp, lh, first_pin) = decided;
-    assert(first_pin)?;
-    assert(lp == "./scripts/pre-install.sh")?;
-    assert(lh == "abc")?;
-    assert(mark_if_allowed(
+    assert!(first_pin);
+    assert!(lp == "./scripts/pre-install.sh");
+    assert!(lh == "abc");
+    assert!(mark_if_allowed(
         marker,
         may_run_hook(
             false,
@@ -269,6 +270,6 @@ test("missing lock pin first-pins then gates; empty hash does not skip the gate"
             lh,
             false,
         ),
-    ))?;
-    assert(marker_exists(marker))?;
+    ));
+    assert!(marker_exists(marker));
 }
