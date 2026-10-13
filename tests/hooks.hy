@@ -1,3 +1,4 @@
+use tests::assert;
 use hooks::{
     may_run_hook, hooks_are_off, default_hooks_off, ignore_scripts_flag,
     enable_scripts_flag, git_identity_trusted, allow_include_has, allow_include_add,
@@ -67,19 +68,19 @@ fn http_lock(bool allowlisted) -> string {
 }
 
 test("default and --ignore-scripts are hooks-off") {
-    assert(default_hooks_off())?;
-    assert(hooks_are_off(""))?;
-    assert(hooks_are_off("1"))?;
-    assert(hooks_are_off("--ignore-scripts"))?;
-    assert(ignore_scripts_flag("--ignore-scripts"))?;
-    assert(ignore_scripts_flag("--hooks") == false)?;
-    assert(hooks_are_off("0") == false)?;
-    assert(enable_scripts_flag("--enable-scripts"))?;
-    assert(enable_scripts_flag("--ignore-scripts") == false)?;
+    assert!(default_hooks_off());
+    assert!(hooks_are_off(""));
+    assert!(hooks_are_off("1"));
+    assert!(hooks_are_off("--ignore-scripts"));
+    assert!(ignore_scripts_flag("--ignore-scripts"));
+    assert!(ignore_scripts_flag("--hooks") == false);
+    assert!(hooks_are_off("0") == false);
+    assert!(enable_scripts_flag("--enable-scripts"));
+    assert!(enable_scripts_flag("--ignore-scripts") == false);
 }
 
 test("hooks-off denies before allowlist or hash") {
-    assert(denied_with(
+    assert!(denied_with(
         may_run_hook(
             true,
             hook_kind_include(),
@@ -91,11 +92,11 @@ test("hooks-off denies before allowlist or hash") {
             true,
         ),
         "hooks are off",
-    ))?;
+    ));
 }
 
 test("missing allowlist denies include-hook") {
-    assert(denied_with(
+    assert!(denied_with(
         may_run_hook(
             false,
             hook_kind_include(),
@@ -107,11 +108,11 @@ test("missing allowlist denies include-hook") {
             false,
         ),
         "not allowlisted",
-    ))?;
+    ));
 }
 
 test("missing lock hash denies") {
-    assert(denied_with(
+    assert!(denied_with(
         may_run_hook(
             false,
             hook_kind_include(),
@@ -123,8 +124,8 @@ test("missing lock hash denies") {
             true,
         ),
         "missing lock hash",
-    ))?;
-    assert(denied_with(
+    ));
+    assert!(denied_with(
         may_run_hook(
             false,
             hook_kind_include(),
@@ -136,11 +137,11 @@ test("missing lock hash denies") {
             true,
         ),
         "missing lock hash",
-    ))?;
+    ));
 }
 
 test("mismatched lock hash denies") {
-    assert(denied_with(
+    assert!(denied_with(
         may_run_hook(
             false,
             hook_kind_include(),
@@ -152,11 +153,11 @@ test("mismatched lock hash denies") {
             true,
         ),
         "hook hash mismatch",
-    ))?;
+    ));
 }
 
 test("mismatched hook path denies") {
-    assert(denied_with(
+    assert!(denied_with(
         may_run_hook(
             false,
             hook_kind_include(),
@@ -168,7 +169,7 @@ test("mismatched hook path denies") {
             true,
         ),
         "hook path mismatch",
-    ))?;
+    ));
 }
 
 test("allowlisted matching hash is eligible and does not exec") {
@@ -182,13 +183,13 @@ test("allowlisted matching hash is eligible and does not exec") {
         "abc",
         true,
     )?;
-    assert(n == 0)?;
+    assert!(n == 0);
 }
 
 test("unsigned git identity is not a substitute") {
-    assert(git_identity_trusted("https://github.com/acme/http.git") == false)?;
-    assert(git_identity_trusted("git@github.com:acme/http.git") == false)?;
-    assert(denied_with(
+    assert!(git_identity_trusted("https://github.com/acme/http.git") == false);
+    assert!(git_identity_trusted("git@github.com:acme/http.git") == false);
+    assert!(denied_with(
         may_run_hook(
             false,
             hook_kind_include(),
@@ -200,11 +201,11 @@ test("unsigned git identity is not a substitute") {
             true,
         ),
         "missing lock hash",
-    ))?;
+    ));
 }
 
 test("consumer scripts skip allowlist but still need a lock hash") {
-    assert(denied_with(
+    assert!(denied_with(
         may_run_hook(
             false,
             hook_kind_script(),
@@ -216,7 +217,7 @@ test("consumer scripts skip allowlist but still need a lock hash") {
             false,
         ),
         "missing lock hash",
-    ))?;
+    ));
     let n = may_run_hook(
         false,
         hook_kind_script(),
@@ -227,7 +228,7 @@ test("consumer scripts skip allowlist but still need a lock hash") {
         "abc",
         false,
     )?;
-    assert(n == 0)?;
+    assert!(n == 0);
 }
 
 test("changed script with an existing lock hash is a mismatch") {
@@ -238,9 +239,9 @@ test("changed script with an existing lock hash is a mismatch") {
         "changed",
     );
     let (lp, lh, first_pin) = decided;
-    assert(first_pin == false)?;
-    assert(lh == "abc")?;
-    assert(denied_with(
+    assert!(first_pin == false);
+    assert!(lh == "abc");
+    assert!(denied_with(
         may_run_hook(
             false,
             hook_kind_script(),
@@ -252,15 +253,15 @@ test("changed script with an existing lock hash is a mismatch") {
             false,
         ),
         "hook hash mismatch",
-    ))?;
+    ));
 }
 
 test("empty lock hash is first-pin then gate, not a silent refresh") {
     let decided = script_gate_lock("", "", "./scripts/pre-install.sh", "abc");
     let (lp, lh, first_pin) = decided;
-    assert(first_pin)?;
-    assert(lp == "./scripts/pre-install.sh")?;
-    assert(lh == "abc")?;
+    assert!(first_pin);
+    assert!(lp == "./scripts/pre-install.sh");
+    assert!(lh == "abc");
     let n = may_run_hook(
         false,
         hook_kind_script(),
@@ -271,8 +272,8 @@ test("empty lock hash is first-pin then gate, not a silent refresh") {
         lh,
         false,
     )?;
-    assert(n == 0)?;
-    assert(denied_with(
+    assert!(n == 0);
+    assert!(denied_with(
         may_run_hook(
             false,
             hook_kind_script(),
@@ -284,22 +285,22 @@ test("empty lock hash is first-pin then gate, not a silent refresh") {
             false,
         ),
         "missing lock hash",
-    ))?;
+    ));
 }
 
 test("allow_include list is explicit") {
     let names: Vec<string> = Vec::new();
-    assert(allow_include_has(names, "http") == false)?;
+    assert!(allow_include_has(names, "http") == false);
     names = allow_include_add(names, "http");
-    assert(allow_include_has(names, "http"))?;
+    assert!(allow_include_has(names, "http"));
     names = allow_include_add(names, "http");
-    assert(len(names) == 1)?;
+    assert!(len(names) == 1);
 }
 
 test("default: include hook not allowed") {
     let lock = http_lock(false);
-    assert(contains(lock, "allow_include =") == false)?;
-    assert(denied_with(
+    assert!(contains(lock, "allow_include =") == false);
+    assert!(denied_with(
         include_from_lock(
             default_hooks_off(),
             lock,
@@ -308,8 +309,8 @@ test("default: include hook not allowed") {
             "hookabc",
         ),
         "hooks are off",
-    ))?;
-    assert(denied_with(
+    ));
+    assert!(denied_with(
         include_from_lock(
             hooks_are_off("0"),
             lock,
@@ -318,14 +319,14 @@ test("default: include hook not allowed") {
             "hookabc",
         ),
         "not allowlisted",
-    ))?;
+    ));
 }
 
 test("after allow-include: may_run_hook only for recorded path and hash") {
     let lock = http_lock(true);
-    assert(contains(lock, "allow_include = ['http']"))?;
-    assert(contains(lock, "hook_path = './hooks/include.sh'"))?;
-    assert(contains(lock, "hook_hash = 'hookabc'"))?;
+    assert!(contains(lock, "allow_include = ['http']"));
+    assert!(contains(lock, "hook_path = './hooks/include.sh'"));
+    assert!(contains(lock, "hook_hash = 'hookabc'"));
     let n = include_from_lock(
         hooks_are_off("0"),
         lock,
@@ -333,8 +334,8 @@ test("after allow-include: may_run_hook only for recorded path and hash") {
         "./hooks/include.sh",
         "hookabc",
     )?;
-    assert(n == 0)?;
-    assert(denied_with(
+    assert!(n == 0);
+    assert!(denied_with(
         include_from_lock(
             hooks_are_off("0"),
             lock,
@@ -343,8 +344,8 @@ test("after allow-include: may_run_hook only for recorded path and hash") {
             "hookabc",
         ),
         "hook path mismatch",
-    ))?;
-    assert(denied_with(
+    ));
+    assert!(denied_with(
         include_from_lock(
             hooks_are_off("0"),
             lock,
@@ -353,13 +354,13 @@ test("after allow-include: may_run_hook only for recorded path and hash") {
             "hookabc",
         ),
         "not allowlisted",
-    ))?;
+    ));
 }
 
 test("--ignore-scripts: false even when allowlisted") {
     let lock = http_lock(true);
-    assert(ignore_scripts_flag("--ignore-scripts"))?;
-    assert(denied_with(
+    assert!(ignore_scripts_flag("--ignore-scripts"));
+    assert!(denied_with(
         include_from_lock(
             hooks_are_off("1"),
             lock,
@@ -368,8 +369,8 @@ test("--ignore-scripts: false even when allowlisted") {
             "hookabc",
         ),
         "hooks are off",
-    ))?;
-    assert(denied_with(
+    ));
+    assert!(denied_with(
         include_from_lock(
             hooks_are_off("--ignore-scripts"),
             lock,
@@ -378,12 +379,12 @@ test("--ignore-scripts: false even when allowlisted") {
             "hookabc",
         ),
         "hooks are off",
-    ))?;
+    ));
 }
 
 test("wrong or missing hook_hash fail closed") {
     let lock = http_lock(true);
-    assert(denied_with(
+    assert!(denied_with(
         include_from_lock(
             hooks_are_off("0"),
             lock,
@@ -392,7 +393,7 @@ test("wrong or missing hook_hash fail closed") {
             "wrong",
         ),
         "hook hash mismatch",
-    ))?;
+    ));
     let pkgs = Vec::new();
     pkgs.push(make_git_pkg_hook(
         "http",
@@ -406,7 +407,7 @@ test("wrong or missing hook_hash fail closed") {
     let allow = Vec::new();
     allow.push("http");
     let missing = lock_serialize_full(pkgs, allow);
-    assert(denied_with(
+    assert!(denied_with(
         include_from_lock(
             hooks_are_off("0"),
             missing,
@@ -415,7 +416,7 @@ test("wrong or missing hook_hash fail closed") {
             "hookabc",
         ),
         "missing lock hash",
-    ))?;
+    ));
 }
 
 test("no [hooks] section in coil.toml is required") {
@@ -429,8 +430,8 @@ roots = [\"./src\"]
 [dependencies]
 http = { git = \"https://x/y.git\", version = \"^1.0\" }
 ";
-    assert(contains(toml, "[hooks]") == false)?;
-    assert(package_include_parse(toml) == "")?;
+    assert!(contains(toml, "[hooks]") == false);
+    assert!(package_include_parse(toml) == "");
     let stray = "[package]
 name = \"app\"
 version = \"0.0.1\"
@@ -438,7 +439,7 @@ version = \"0.0.1\"
 [hooks]
 allow_include = [\"http\"]
 ";
-    assert(package_include_parse(stray) == "")?;
+    assert!(package_include_parse(stray) == "");
     let lock = http_lock(true);
     let n = include_from_lock(
         hooks_are_off("0"),
@@ -447,5 +448,5 @@ allow_include = [\"http\"]
         "./hooks/include.sh",
         "hookabc",
     )?;
-    assert(n == 0)?;
+    assert!(n == 0);
 }
