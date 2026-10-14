@@ -174,6 +174,11 @@ fn has_deps(string root) -> Result<bool, string> {
 
 /// Install first when dependencies are declared but never linked.
 fn ensure_installed(string root) -> Result<int, string> {
+    return link_deps(root, hooks_are_off(env_or("SPOOL_IGNORE_SCRIPTS", "1")))?;
+}
+
+/// Install when the project has dependencies but none are linked yet.
+fn link_deps(string root, bool hooks_off) -> Result<int, string> {
     if has_deps(root)? == false {
         return 0;
     }
@@ -181,7 +186,6 @@ fn ensure_installed(string root) -> Result<int, string> {
         return 0;
     }
     say("dependencies not linked yet; running install");
-    let hooks_off = hooks_are_off(env_or("SPOOL_IGNORE_SCRIPTS", "1"));
     return sync(root, false, no_strs(), hooks_off, "pre_install", "post_install")?;
 }
 
@@ -570,16 +574,32 @@ fn cmd_fmt(Vec<string> rest) -> Result<int, string> {
 }
 
 /// The language server talks over stdio, so nothing here may print to stdout.
-/// In a project, the server gets the same roots and grants as every other
-/// coil command (needs a coil whose `coil lsp` takes `--root`,
-/// ardax-corp/coil-lang#589; older ones get no flags).
+/// In a project (found upward from the editor's directory), dependencies are
+/// linked first and the server gets the project directory (`--workspace`)
+/// plus the same roots and grants as every other coil command, whatever
+/// folder the editor opened. Needs a coil whose `coil lsp` takes `--root`
+/// (ardax-corp/coil-lang#589) and `--workspace`; older ones get what they
+/// accept.
 fn cmd_lsp(Vec<string> rest) -> Result<int, string> {
     let argv = strs("lsp");
     let dir = "";
     match find_project() {
         Result::Ok(root) => {
             dir = root;
+            // Scripts stay off: their output would corrupt the protocol
+            // stream. A failed install still starts the server; imports of
+            // the missing packages are reported as unresolved.
+            match link_deps(root, true) {
+                Result::Ok(_) => {},
+                Result::Err(e) => {
+                    say("dependencies not installed: " + e);
+                },
+            };
             let lsp_help = coil_help(require_coil()?, strs("lsp"));
+            if contains(lsp_help, "--workspace") {
+                argv.push("--workspace");
+                argv.push(root);
+            }
             if contains(lsp_help, "--root") {
                 argv = push_all(argv, compile_flags(root)?);
             } else {

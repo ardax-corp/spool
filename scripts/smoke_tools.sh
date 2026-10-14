@@ -76,4 +76,23 @@ reply="$({ printf 'Content-Length: %d\r\n\r\n%s' "${#body}" "$body"; sleep 3; } 
   | timeout 20 "$SPOOL" lsp 2>/dev/null || true)"
 grep -q '"capabilities"' <<<"$reply" || fail "lsp did not answer initialize"
 
+# lsp from a subdirectory, with a client that sends no root: the server
+# still checks the file as part of the project, so `use util` resolves and
+# the type error behind it is reported (single-file checking misses it).
+lsp_msg() { printf 'Content-Length: %d\r\n\r\n%s' "${#1}" "$1"; }
+if "$SPOOL" coil lsp --help 2>&1 | grep -q -- "--workspace"; then
+  printf '%s\n' 'fn helper(int a) -> int {' '    return a;' '}' > src/util.hy
+  main_text='use util::{helper};\n\nfn main() {\n    let s: string = helper(1);\n}\n'
+  main_uri="file://$PWD/src/lsp_main.hy"
+  printf "$main_text" > src/lsp_main.hy
+  open='{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"'"$main_uri"'","languageId":"coil","version":1,"text":"'"$main_text"'"}}}'
+  reply="$(cd src && { lsp_msg "$body"; lsp_msg '{"jsonrpc":"2.0","method":"initialized","params":{}}'; lsp_msg "$open"; sleep 5; } \
+    | timeout 30 "$SPOOL" lsp 2>/dev/null || true)"
+  grep -F "\"$main_uri\"" <<<"$reply" | grep -q 'expected `string`, found `int`' \
+    || fail "lsp did not resolve a project module from a subdirectory: $reply"
+  rm -f src/util.hy src/lsp_main.hy
+else
+  echo "smoke_tools: coil lsp has no --workspace; skipping the project-root check"
+fi
+
 echo "smoke_tools: ok"
