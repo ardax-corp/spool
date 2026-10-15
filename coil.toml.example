@@ -1,0 +1,164 @@
+# Example coil.toml — copy this to your project root as `coil.toml`.
+#
+# `coil.toml` is the project manifest and `coil.lock` is its lockfile. spool
+# reads both; coil reads neither. spool turns them into flags on every `coil`
+# command it runs (`run`, `test`, `compile`, `package`, `natives dump`, `lsp`,
+# `debug`, …). Running `coil` by hand means passing those flags yourself.
+#
+# Naming:
+#   spool          — the project tool: deps (install / add / update), build, run, test
+#   coil package   — embed a .hyc into a runner executable (`spool build`)
+
+# Optional package identity (required keys when the section is present).
+# [package]
+# name = "my_app"
+# version = "0.1.0"
+# coil = ">=0.1.0"                 # optional engine range; omit = no constraint
+# include = "./hooks/include.sh"    # optional; relative to this package checkout
+
+[module]
+# Search roots for `use` resolution, relative to this file. Each one is
+# passed as `--root DIR`; coil searches them in order and the first file
+# that exists wins. spool adds `.spool/deps` (after `spool install`) and
+# the stdlib (unless a root here already is one).
+roots = ["./src"]
+
+[entry]
+# Optional: the entry-point file (relative to the project root). `spool
+# build` / `run` / `check` / `debug` use it when no file is given.
+# file = "./src/main.hy"
+
+# --------------------------------------------------------------------------
+# Permissions
+# --------------------------------------------------------------------------
+#
+# Each `true` becomes `--allow-<name>`; `all = true` is `--allow-all`.
+# A program needs a grant for each capability its `main` (or a test) can
+# reach; coil names the missing flag.
+#
+# [permissions]
+# read = true
+# write = true
+# net = true
+# env = true
+# exec = true
+# exit = true
+# attach = true
+#
+# The older spellings still work:
+#
+# [env]
+# allow_exec = true        # --allow-exec: env::exec only. Not FFI system/execve.
+# allow_exit = true        # --allow-exit: env::exit. Independent of allow_exec.
+# allow_ffi_exec = true    # --allow-ffi-exec: FFI system/execve resolve.
+
+# --------------------------------------------------------------------------
+# Dependencies
+# --------------------------------------------------------------------------
+#
+# `spool install` links them under `.spool/deps`, which spool passes as a
+# root, so `use` resolves a package by its short name here (never its URL).
+#
+# [dependencies]
+# http = { git = "https://github.com/coil-lang/http.git", version = "^0.2" }
+# toml = { git = "https://github.com/ardax-corp/coil-toml.git", rev = "3e0da9d…" }
+# local_http = { path = "../local-http" }
+#
+# `trusted` is a bool on that git/path row (default false); any other type
+# is an error. A trusted dep's `dload` stems skip the sha256 check, and
+# only those: spool passes `--dload-trusted STEM` for the dep name, the
+# name without a `coil-` prefix, and any `[[package.native]] stem` / `lib`
+# the lock records for it. Not git content_hash, not hooks, not engine,
+# never `dload("c")`. The stem still needs `[ffi] allow`.
+# crypto = { git = "https://github.com/ardax-corp/coil-crypto.git", trusted = true }
+
+# --------------------------------------------------------------------------
+# Lifecycle scripts (current project only)
+# --------------------------------------------------------------------------
+#
+# [scripts]
+# pre_install = "./scripts/pre-install.sh"
+# post_install = "./scripts/post-install.sh"
+# pre_update = "./scripts/pre-update.sh"
+# post_update = "./scripts/post-update.sh"
+
+# --------------------------------------------------------------------------
+# FFI (`dload`)
+# --------------------------------------------------------------------------
+#
+# The gate looks at the filename stem. An absolute path is not a bypass:
+# `dload("/abs/libplugin.so")` is still stem `plugin`.
+#
+# Every `dload` stem needs `[ffi] allow` (`--allow-dload STEM`), then either
+# a pin or a trusted stem:
+#
+#   - pin: each coil.lock `[[package]]` → `[[package.native]] sha256` gives
+#     `--dload-pin STEM=SHA256`. STEM is the native row's `stem` / `lib`,
+#     else the package name without `coil-` (`coil-tls` → `tls`). A sha256
+#     that is not 64 hex digits is skipped.
+#   - trusted: `trusted = true` on the dependency (above).
+#
+# `crypto`, `tls`, `regex`, and `time` follow the same rule. A stem without
+# allow is `LibraryDenied`; allow with neither a pin nor a trusted stem is
+# denied at run time. `dload("c")` / libc aliases stay denied even if
+# listed in `allow`, pinned, or trusted.
+#
+# coil-crypto bootstrap is allow plus trusted (or a lock pin):
+#
+#   [ffi]
+#   allow = ["crypto"]
+#   [dependencies]
+#   crypto = { git = "https://github.com/ardax-corp/coil-crypto.git", trusted = true }
+#
+# `search_paths` locates files (`--ffi-search-path`); it is not a grant.
+# `Stream.attach` installs a C vtable on any Stream; it is off unless
+# `allow_attach = true` (`--allow-attach`). `allow` does not grant attach.
+#
+# [ffi]
+# search_paths = ["./.spool/native"]
+# allow = ["plugin"]
+# allow_attach = true
+#
+# Shared libraries a packaged app (`spool build`) loads. Each row becomes
+# `--ffi-native name=…,version=…,path=…[,package=…][,requires=a;b][,requires-hint=…]`
+# on `coil package` and `coil natives dump`; coil hashes `path/lib<name>.so`
+# (`.dylib`, `.dll`) into the lock embedded in the executable. Every stem the
+# program loads needs a row (system libraries like `c` need none). Keys:
+#
+#   name           # required; the dload stem
+#   version        # required
+#   path           # required; directory holding the library, relative to this file
+#   package        # optional; cache / package name (default: name)
+#   url            # optional; https:// URL `spool download` fetches (spool only)
+#   requires       # optional; sonames the OS must provide (diagnostics only)
+#   requires_hint  # optional; install hint when a `requires` soname is missing
+#
+# The packaged app looks for each library in the natives cache, beside the
+# executable and in `lib/` there. `spool download` fills the cache from
+# `url`; a row without one is left for you to put in place.
+#
+# [[ffi.native]]
+# name = "regex"
+# package = "coil-regex"
+# version = "0.3.0"
+# path = "./native"
+# url = "https://example.com/coil-regex/0.3.0/libregex.so"
+# requires = ["libpcre2-8.so.0"]
+# requires_hint = "apt install libpcre2-8-0"
+
+# --------------------------------------------------------------------------
+# Accepted keys
+# --------------------------------------------------------------------------
+#
+#   [package]       name, version, coil, include
+#   [module]        roots
+#   [entry]         file
+#   [permissions]   read, write, net, env, exec, exit, attach, all
+#   [env]           allow_exec, allow_exit, allow_ffi_exec
+#   [ffi]           search_paths, allow, allow_attach
+#   [[ffi.native]]  name, version, path, package, url, requires, requires_hint
+#   [scripts]       pre_install, post_install, pre_update, post_update
+#   [dependencies]  name = { git = "…", version = "…", rev = "…" } | { path = "…" },
+#                   each with an optional `trusted = true`
+#
+# Unknown `[scripts]`, `[[ffi.native]]` and dependency keys are errors.

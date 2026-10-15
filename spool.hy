@@ -13,6 +13,7 @@ use version::{spool_version};
 use proc::{run_in, spawn, sh_run, sh_capture, which};
 use toolchain::{
     find_coil, require_coil, coil_version_output, find_stdlib, compile_flags, project_roots, env_or,
+    ffi_native_flags,
 };
 use manifest::{
     deps_read, dep_kind, dep_name, make_git_rev_dep, make_path_dep, deps_append, deps_remove,
@@ -173,6 +174,11 @@ fn has_deps(string root) -> Result<bool, string> {
 
 /// Install first when dependencies are declared but never linked.
 fn ensure_installed(string root) -> Result<int, string> {
+    return link_deps(root, hooks_are_off(env_or("SPOOL_IGNORE_SCRIPTS", "1")))?;
+}
+
+/// Install when the project has dependencies but none are linked yet.
+fn link_deps(string root, bool hooks_off) -> Result<int, string> {
     if has_deps(root)? == false {
         return 0;
     }
@@ -180,7 +186,6 @@ fn ensure_installed(string root) -> Result<int, string> {
         return 0;
     }
     say("dependencies not linked yet; running install");
-    let hooks_off = hooks_are_off(env_or("SPOOL_IGNORE_SCRIPTS", "1"));
     return sync(root, false, no_strs(), hooks_off, "pre_install", "post_install")?;
 }
 
@@ -204,6 +209,7 @@ fn build_to(string root, string output, string opt_level) -> Result<int, string>
     ensure_dir(path_dirname(output))?;
     let argv = strs("package");
     argv = push_all(argv, compile_flags(root)?);
+    argv = push_all(argv, ffi_native_flags(root)?);
     if len(opt_level) > 0 {
         argv.push("-O");
         argv.push(opt_level);
@@ -348,6 +354,8 @@ fn compile_valued() -> Vec<string> {
     let v = strs4("-O", "--opt-level", "--root", "--entry");
     v.push("--allow-dload");
     v.push("--ffi-search-path");
+    v.push("--dload-pin");
+    v.push("--dload-trusted");
     return v;
 }
 
@@ -566,16 +574,32 @@ fn cmd_fmt(Vec<string> rest) -> Result<int, string> {
 }
 
 /// The language server talks over stdio, so nothing here may print to stdout.
-/// In a project, the server gets the same roots and grants as every other
-/// coil command (needs a coil whose `coil lsp` takes `--root`,
-/// ardax-corp/coil-lang#589; older ones get no flags).
+/// In a project (found upward from the editor's directory), dependencies are
+/// linked first and the server gets the project directory (`--workspace`)
+/// plus the same roots and grants as every other coil command, whatever
+/// folder the editor opened. Needs a coil whose `coil lsp` takes `--root`
+/// (ardax-corp/coil-lang#589) and `--workspace`; older ones get what they
+/// accept.
 fn cmd_lsp(Vec<string> rest) -> Result<int, string> {
     let argv = strs("lsp");
     let dir = "";
     match find_project() {
         Result::Ok(root) => {
             dir = root;
+            // Scripts stay off: their output would corrupt the protocol
+            // stream. A failed install still starts the server; imports of
+            // the missing packages are reported as unresolved.
+            match link_deps(root, true) {
+                Result::Ok(_) => {},
+                Result::Err(e) => {
+                    say("dependencies not installed: " + e);
+                },
+            };
             let lsp_help = coil_help(require_coil()?, strs("lsp"));
+            if contains(lsp_help, "--workspace") {
+                argv.push("--workspace");
+                argv.push(root);
+            }
             if contains(lsp_help, "--root") {
                 argv = push_all(argv, compile_flags(root)?);
             } else {
@@ -814,7 +838,16 @@ fn cmd_download(Vec<string> rest) -> Result<int, string> {
     at_most(pos, 1, "spool download [EXE]")?;
     let coil = require_coil()?;
     if len(pos) == 1 {
-        return download_natives(coil, current_dir()?, pos[0])?;
+        // URLs still come from the enclosing project's [[ffi.native]], if any.
+        let dir = match find_project() {
+            Result::Ok(r) => r,
+            Result::Err(_) => current_dir()?,
+        };
+        let exe = pos[0];
+        if path_is_absolute(exe) == false {
+            exe = join2(current_dir()?, exe);
+        }
+        return download_natives(coil, dir, exe)?;
     }
     return download_natives(coil, find_project()?, "")?;
 }

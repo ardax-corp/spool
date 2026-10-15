@@ -13,6 +13,11 @@ file = "spool.hy"
 allow_exec = true
 allow_exit = true
 
+[permissions]
+read = true
+write = true
+env = true
+
 [dependencies]
 # coil-toml has no release tags yet; pin the commit with the pub-API fix (COI-392).
 toml = { git = "https://github.com/ardax-corp/coil-toml.git", rev = "3e0da9d38f0fb0d090f56869e2547fa2bebd8453" }

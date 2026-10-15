@@ -12,7 +12,7 @@ use lock::{
     lock_read_or_empty, lock_write, lock_serialize, lock_pkg_name, lock_pkg_git, lock_pkg_rev,
     lock_pkg_hash,
 };
-use manifest::{deps_read};
+use manifest::{deps_read, manifest_body, manifest_validate};
 use resolve::{
     collect, resolve_all, reachable_names, prune, link_rows, check_engine_all,
 };
@@ -100,6 +100,7 @@ fn sync(
     if path_exists(toml) == false {
         raise "coil.toml not found";
     }
+    manifest_validate(manifest_body(toml)?)?;
     deps_read(toml)?;
     let lock_path = join2(root, "coil.lock");
     let had_lock = path_exists(lock_path);

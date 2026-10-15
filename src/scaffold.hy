@@ -32,11 +32,11 @@ fn lib_template() -> string {
 }
 
 fn lib_test_template(string name) -> string {
-    return "use " + name + "::{hello};\n\ntest(\"hello greets\") {\n    assert(hello(\"coil\") == \"hello, coil\")?;\n}\n";
+    return "use " + name + "::{hello};\nuse tests::assert;\n\ntest(\"hello greets\") {\n    assert!(hello(\"coil\") == \"hello, coil\");\n}\n";
 }
 
 fn bin_test_template() -> string {
-    return "test(\"arithmetic still works\") {\n    assert(1 + 1 == 2)?;\n}\n";
+    return "use tests::assert;\n\ntest(\"arithmetic still works\") {\n    assert!(1 + 1 == 2);\n}\n";
 }
 
 fn ensure_gitignore(string dir) -> Result<int, string> {

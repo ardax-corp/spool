@@ -1,9 +1,13 @@
+use tests::assert;
 use lock::{
     make_git_pkg, make_git_pkg_hook, lock_serialize, lock_serialize_full, lock_serialize_all,
     lock_parse, lock_parse_allow, lock_parse_scripts, lock_pkg_name, lock_pkg_hash,
     lock_pkg_hook_path, lock_pkg_hook_hash, lock_hashes_match, lock_upsert,
     make_lock_script, lock_script_path, lock_script_hash, lock_find_script,
+    lock_write, lock_read, lock_native_parse, lock_native_pkg, lock_native_stem, lock_native_sha,
 };
+use io::file::{write_text, read_text};
+use io::fs::{create_dir_all};
 use text::{contains};
 
 test("lock round-trip preserves fields and sorts by name") {
@@ -12,10 +16,10 @@ test("lock round-trip preserves fields and sorts by name") {
     pkgs.push(make_git_pkg("alpha", "https://a", "v1.2.3", "b", "tb"));
     let text = lock_serialize(pkgs);
     let back = lock_parse(text)?;
-    assert(len(back) == 2)?;
-    assert(lock_pkg_name(back[0]) == "alpha")?;
-    assert(lock_pkg_name(back[1]) == "zeta")?;
-    assert(lock_pkg_hash(back[0]) == "tb")?;
+    assert!(len(back) == 2);
+    assert!(lock_pkg_name(back[0]) == "alpha");
+    assert!(lock_pkg_name(back[1]) == "zeta");
+    assert!(lock_pkg_hash(back[0]) == "tb");
 }
 
 test("lock_hashes_match detects mismatch") {
@@ -23,28 +27,28 @@ test("lock_hashes_match detects mismatch") {
     pkgs.push(make_git_pkg("http", "https://x/y.git", "v1", "c", "h1"));
     let ok = Vec::new();
     ok.push(("http", "h1"));
-    assert(lock_hashes_match(pkgs, ok))?;
+    assert!(lock_hashes_match(pkgs, ok));
     let bad = Vec::new();
     bad.push(("http", "h2"));
-    assert(lock_hashes_match(pkgs, bad) == false)?;
+    assert!(lock_hashes_match(pkgs, bad) == false);
 }
 
 test("lock_upsert replaces by name") {
     let pkgs = Vec::new();
     pkgs.push(make_git_pkg("http", "https://x", "v1", "c1", "h1"));
     pkgs = lock_upsert(pkgs, make_git_pkg("http", "https://x", "v2", "c2", "h2"));
-    assert(len(pkgs) == 1)?;
-    assert(lock_pkg_hash(pkgs[0]) == "h2")?;
+    assert!(len(pkgs) == 1);
+    assert!(lock_pkg_hash(pkgs[0]) == "h2");
 }
 
 test("lock_parse names corrupt files") {
     let r = lock_parse("not a lock\n");
     match r {
         Result::Ok(_) => {
-            assert(false)?;
+            assert!(false);
         },
         Result::Err(e) => {
-            assert(contains(e, "corrupt coil.lock"))?;
+            assert!(contains(e, "corrupt coil.lock"));
         },
     };
 }
@@ -61,20 +65,20 @@ test("lock round-trip keeps hook path and hash") {
         "hookabc",
     ));
     let text = lock_serialize(pkgs);
-    assert(contains(text, "hook_path = './hooks/include.sh'"))?;
-    assert(contains(text, "hook_hash = 'hookabc'"))?;
+    assert!(contains(text, "hook_path = './hooks/include.sh'"));
+    assert!(contains(text, "hook_hash = 'hookabc'"));
     let back = lock_parse(text)?;
-    assert(len(back) == 1)?;
-    assert(lock_pkg_hook_path(back[0]) == "./hooks/include.sh")?;
-    assert(lock_pkg_hook_hash(back[0]) == "hookabc")?;
+    assert!(len(back) == 1);
+    assert!(lock_pkg_hook_path(back[0]) == "./hooks/include.sh");
+    assert!(lock_pkg_hook_hash(back[0]) == "hookabc");
 }
 
 test("lock omits empty hook fields") {
     let pkgs = Vec::new();
     pkgs.push(make_git_pkg("http", "https://x", "v1", "c", "h1"));
     let text = lock_serialize(pkgs);
-    assert(contains(text, "hook_path") == false)?;
-    assert(contains(text, "hook_hash") == false)?;
+    assert!(contains(text, "hook_path") == false);
+    assert!(contains(text, "hook_hash") == false);
 }
 
 test("lock without [hooks] has empty allow_include") {
@@ -89,9 +93,9 @@ test("lock without [hooks] has empty allow_include") {
         "hookabc",
     ));
     let text = lock_serialize(pkgs);
-    assert(contains(text, "allow_include =") == false)?;
+    assert!(contains(text, "allow_include =") == false);
     let names = lock_parse_allow(text)?;
-    assert(len(names) == 0)?;
+    assert!(len(names) == 0);
 }
 
 test("lock allow_include round-trip") {
@@ -101,22 +105,22 @@ test("lock allow_include round-trip") {
     allow.push("zeta");
     allow.push("http");
     let text = lock_serialize_full(pkgs, allow);
-    assert(contains(text, "[hooks]"))?;
-    assert(contains(text, "allow_include"))?;
+    assert!(contains(text, "[hooks]"));
+    assert!(contains(text, "allow_include"));
     let names = lock_parse_allow(text)?;
-    assert(len(names) == 2)?;
-    assert(names[0] == "http")?;
-    assert(names[1] == "zeta")?;
+    assert!(len(names) == 2);
+    assert!(names[0] == "http");
+    assert!(names[1] == "zeta");
 }
 
 test("lock_upsert keeps hook fields when the new pin omits them") {
     let pkgs = Vec::new();
     pkgs.push(make_git_pkg_hook("http", "https://x", "v1", "c1", "h1", "./h.sh", "abc"));
     pkgs = lock_upsert(pkgs, make_git_pkg("http", "https://x", "v2", "c2", "h2"));
-    assert(len(pkgs) == 1)?;
-    assert(lock_pkg_hash(pkgs[0]) == "h2")?;
-    assert(lock_pkg_hook_path(pkgs[0]) == "./h.sh")?;
-    assert(lock_pkg_hook_hash(pkgs[0]) == "abc")?;
+    assert!(len(pkgs) == 1);
+    assert!(lock_pkg_hash(pkgs[0]) == "h2");
+    assert!(lock_pkg_hook_path(pkgs[0]) == "./h.sh");
+    assert!(lock_pkg_hook_hash(pkgs[0]) == "abc");
 }
 
 test("lock_upsert does not refresh a present hook hash") {
@@ -126,9 +130,9 @@ test("lock_upsert does not refresh a present hook hash") {
         pkgs,
         make_git_pkg_hook("http", "https://x", "v2", "c2", "h2", "./h.sh", "changed"),
     );
-    assert(lock_pkg_hash(pkgs[0]) == "h2")?;
-    assert(lock_pkg_hook_path(pkgs[0]) == "./h.sh")?;
-    assert(lock_pkg_hook_hash(pkgs[0]) == "abc")?;
+    assert!(lock_pkg_hash(pkgs[0]) == "h2");
+    assert!(lock_pkg_hook_path(pkgs[0]) == "./h.sh");
+    assert!(lock_pkg_hook_hash(pkgs[0]) == "abc");
 }
 
 test("lock [scripts] round-trip is not a package row") {
@@ -139,17 +143,73 @@ test("lock [scripts] round-trip is not a package row") {
     scripts.push(make_lock_script("pre_install", "./scripts/pre-install.sh", "abc123"));
     scripts.push(make_lock_script("post_install", "./scripts/post-install.sh", "def456"));
     let text = lock_serialize_all(pkgs, allow, scripts);
-    assert(contains(text, "[scripts]"))?;
-    assert(contains(text, "pre_install = './scripts/pre-install.sh'"))?;
-    assert(contains(text, "pre_install_hash = 'abc123'"))?;
-    assert(contains(text, "name = 'app'") == false)?;
+    assert!(contains(text, "[scripts]"));
+    assert!(contains(text, "pre_install = './scripts/pre-install.sh'"));
+    assert!(contains(text, "pre_install_hash = 'abc123'"));
+    assert!(contains(text, "name = 'app'") == false);
     let back = lock_parse_scripts(text)?;
-    assert(len(back) == 2)?;
+    assert!(len(back) == 2);
     let pre = lock_find_script(back, "pre_install");
-    assert(lock_script_path(pre) == "./scripts/pre-install.sh")?;
-    assert(lock_script_hash(pre) == "abc123")?;
+    assert!(lock_script_path(pre) == "./scripts/pre-install.sh");
+    assert!(lock_script_hash(pre) == "abc123");
     let pkgs_back = lock_parse(text)?;
-    assert(len(pkgs_back) == 1)?;
-    assert(lock_pkg_name(pkgs_back[0]) == "http")?;
-    assert(lock_pkg_hook_path(pkgs_back[0]) == "")?;
+    assert!(len(pkgs_back) == 1);
+    assert!(lock_pkg_name(pkgs_back[0]) == "http");
+    assert!(lock_pkg_hook_path(pkgs_back[0]) == "");
+}
+
+fn native_sha(string c) -> string {
+    let out = "";
+    let i = 0;
+    while i < 64 {
+        out = out + c;
+        i = i + 1;
+    }
+    return out;
+}
+
+test("lock rewrite keeps [[package.native]] rows under their package") {
+    match create_dir_all("scratch/lock_natives") {
+        Result::Ok(_) => 0,
+        Result::Err(_) => raise "mkdir failed",
+    };
+    let path = "scratch/lock_natives/coil.lock";
+    let body = "[[package]]\nname = 'coil-crypto'\ngit = 'https://c'\ntag = 'v1'\nrev = 'r1'\ncontent_hash = 'h1'\n\n"
+        + "[[package.native]]\nstem = 'hycrypto'\nsha256 = '" + native_sha("a") + "'\n\n"
+        + "[[package]]\nname = 'coil-tls'\ngit = 'https://t'\ntag = 'v2'\nrev = 'r2'\ncontent_hash = 'h2'\n\n"
+        + "[[package.native]]\nsha256 = '" + native_sha("b") + "'\n";
+    match write_text(path, body) {
+        Result::Ok(_) => 0,
+        Result::Err(_) => raise "lock write failed",
+    };
+    // Rewrite with coil-tls updated and a new package added.
+    let pkgs = lock_read(path)?;
+    pkgs = lock_upsert(pkgs, make_git_pkg("coil-tls", "https://t", "v3", "r3", "h3"));
+    pkgs = lock_upsert(pkgs, make_git_pkg("aaa", "https://a", "v0", "r0", "h0"));
+    lock_write(path, pkgs)?;
+    let text = match read_text(path) {
+        Result::Ok(t) => t,
+        Result::Err(_) => raise "lock read failed",
+    };
+    let natives = lock_native_parse(text)?;
+    assert!(len(natives) == 2);
+    assert!(lock_native_pkg(natives[0]) == "coil-crypto");
+    assert!(lock_native_stem(natives[0]) == "hycrypto");
+    assert!(lock_native_sha(natives[0]) == native_sha("a"));
+    assert!(lock_native_pkg(natives[1]) == "coil-tls");
+    assert!(lock_native_sha(natives[1]) == native_sha("b"));
+    let reread = lock_read(path)?;
+    assert!(len(reread) == 3);
+
+    // A package dropped from the lock takes its native rows with it.
+    let kept = Vec::new();
+    kept.push(make_git_pkg("coil-tls", "https://t", "v3", "r3", "h3"));
+    lock_write(path, kept)?;
+    let after = match read_text(path) {
+        Result::Ok(t) => t,
+        Result::Err(_) => raise "lock read failed",
+    };
+    let left = lock_native_parse(after)?;
+    assert!(len(left) == 1);
+    assert!(lock_native_pkg(left[0]) == "coil-tls");
 }

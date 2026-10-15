@@ -153,12 +153,14 @@ which of these the coil it found has.
 `coil FILE` cannot pass program arguments, and the packaged binary sees a
 normal argv.
 
-Editors: point the Coil LSP client at `spool lsp`. It starts `coil lsp` with
-the same roots (`[module].roots`, `.spool/deps`, the stdlib) and grants as
-every other command, so dependencies resolve and granted calls such as
-`env::exec` are not flagged. That needs a coil whose `coil lsp` accepts
-`--root` (ardax-corp/coil-lang#589); with an older one spool says so and
-starts it without flags.
+Editors: point the Coil LSP client at `spool lsp`; it is the only thing to
+start. From any folder inside the project it links missing dependencies
+(scripts off), then starts `coil lsp` with the project directory
+(`--workspace`) and the same roots (`[module].roots`, `.spool/deps`, the
+stdlib) and grants as every other command, so imports resolve and granted
+calls such as `env::exec` are not flagged, whatever folder the editor sent.
+That needs a coil whose `coil lsp` accepts `--root` (ardax-corp/coil-lang#589)
+and `--workspace`; with an older one spool passes what it accepts.
 
 `add` and `remove` restore `coil.toml` and `coil.lock` if the install fails.
 
@@ -171,9 +173,35 @@ spool runs `coil` from the project root with:
 - `--root <stdlib>` unless a manifest root already is a stdlib. The stdlib is
   found through `COIL_STDLIB_DIR`, `COIL_STDLIB`, `[stdlib] dir` in
   `~/.config/coil/config.toml`, or `~/.coil/stdlib`
-- grants the manifest records: `[env] allow_exec/allow_exit/allow_ffi_exec`,
-  `[ffi] allow_attach`, `[ffi] allow` (`--allow-dload`), and
-  `[ffi] search_paths` (`--ffi-search-path`)
+- grants the manifest records: `[permissions]` (`read`, `write`, `net`,
+  `env`, `exec`, `exit`, `attach` set to `true` give `--allow-<name>`, and
+  `all = true` gives `--allow-all`), the older `[env]
+  allow_exec/allow_exit/allow_ffi_exec` and `[ffi] allow_attach`, `[ffi]
+  allow` (`--allow-dload`), and `[ffi] search_paths` (`--ffi-search-path`)
+- `dload` integrity, which coil no longer reads from `coil.toml` /
+  `coil.lock` itself:
+  - `--dload-pin STEM=SHA256` for each `coil.lock` `[[package.native]]`
+    `sha256`. STEM is the native row's `stem` / `lib`, else the package name
+    without its `coil-` prefix. A hash that is not 64 hex digits is skipped.
+  - `--dload-trusted STEM` for each `trusted = true` dependency: its name,
+    the name without `coil-` (`coil-crypto` → `crypto`), and the lock's
+    native stems for it
+- `coil package` (`spool build` / `run`) and `coil natives dump` also get
+  one `--ffi-native name=…,version=…,path=…[,package=…][,requires=a;b][,requires-hint=…]`
+  per `[[ffi.native]]` row (`path` made absolute, `,` in a value escaped as
+  `\,`)
+
+`coil.toml.example` lists every key spool reads.
+
+A program needs a grant for each capability its `main` (or a test) can
+reach: reading or writing files, the network, environment variables,
+running programs. coil names the missing flag when one is not granted:
+
+```toml
+[permissions]
+read = true
+net = true
+```
 
 The coil binary is `$COIL`, then `coil` on `PATH`, then `~/.coil/bin/coil`.
 
@@ -191,8 +219,9 @@ local = { path = "../local" }
   (`">=1.2, <2"`). Prerelease tags are never picked by a range.
 - `rev` pins a branch, tag or commit. The lock stores the resolved sha plus the
   `ref`. `install` keeps the pin, and `update` moves a branch pin.
-- `trusted = true` is accepted, since coil's schema allows it. spool does not
-  use it.
+- `trusted = true` lets that dependency's `dload` stems skip the sha256 pin
+  (`--dload-trusted`, see [Compile flags](#compile-flags)). The stem still
+  needs `[ffi] allow`.
 
 Resolution walks the reachable graph: the project, its path deps, and every
 locked checkout's `coil.toml`. Compatible requirements unify. Incompatible
@@ -265,8 +294,8 @@ spool allow-include http
 ```
 
 `spool allow-include <name>` records the consumer allowlist in `coil.lock`,
-not in `coil.toml`. coil-lang still errors on unknown manifest sections, so do
-not add a `[hooks]` table there. `[package].include` is the include path on a
+not in `coil.toml`. spool rejects unknown `coil.toml` sections, so do not add
+a `[hooks]` table there. `[package].include` is the include path on a
 package. The allowlist is the lock `[hooks]` table:
 
 ```toml
@@ -293,7 +322,7 @@ hook hash mismatch for http
 
 The current project's `coil.toml` may declare lifecycle scripts. Paths are
 relative to the project root. Missing keys are no-ops. Unknown keys are errors
-(coil-lang already owns that schema).
+(spool rejects unknown `coil.toml` keys).
 
 ```toml
 [scripts]
@@ -403,13 +432,30 @@ spool: error: include-hook http ./hooks/include.sh exited 9
 Direct shared libraries declared in `[[ffi.native]]` (or embedded in a
 packaged exe) are fetched into a content-addressed cache:
 
+```toml
+[[ffi.native]]
+name = "regex"              # dload stem
+package = "coil-regex"      # optional, default: name
+version = "0.3.0"
+path = "./native"           # holds libregex.so; coil hashes it
+url = "https://example.com/coil-regex/0.3.0/libregex.so"
+requires = ["libpcre2-8.so.0"]
+requires_hint = "apt install libpcre2-8-0"
+```
+
 ```text
 ~/.coil/natives/cache/<package>/<version>/<sha256_16>/<filename>
 ```
 
-Override the root with `COIL_NATIVES_DIR`. Only https URLs are fetched. Each
-file is checked against the lock's sha256 and size before it is moved into
-place. Transitive sonames (`requires`) must come from the OS.
+Override the root with `COIL_NATIVES_DIR`. The sha256 and size come from
+`coil natives dump --tsv` (`package, version, filename, sha256, size`); coil
+carries no URLs, so each one is the `url` of the project's `[[ffi.native]]`
+row with that package and version (for a packaged exe too: run it from the
+project). Rows without a `url` are skipped: a packaged app also finds a
+library beside the executable or in `lib/` there, and putting it there is up
+to you. Only https URLs are fetched. Each file is checked against the sha256
+and size before it is moved into place. Transitive sonames (`requires`) must
+come from the OS.
 
 ```bash
 spool download ./hello          # a packaged exe
@@ -465,7 +511,9 @@ export COIL_STDLIB_DIR=$PWD/.bootstrap/coil-stdlib
 
 ## Coil quirks this repo works around
 
-- No forward references within a module file.
+- A call to a function declared later in the file fails to typecheck when
+  that function's signature names an imported class (`expected Rec, found
+  rec::Rec`). Plain forward references work.
 - In a function that returns `Result`, a `Result`-typed **parameter** is
   corrupted (for example, its `Err` payload reads as empty). Helpers that
   inspect a `Result` return `bool` instead (see `tests/include.hy`).
@@ -473,5 +521,5 @@ export COIL_STDLIB_DIR=$PWD/.bootstrap/coil-stdlib
   value with no trailing newline. `decode_manifest` appends one.
 - coil-toml `main` predates field-visibility enforcement. Spool pins the
   default-branch commit with the fix.
-- Userland class types still cannot cross module boundaries (COI-12), so
-  records are tab-joined strings.
+- Records are tab-joined strings, from when userland class types could not
+  cross module boundaries (COI-12).
