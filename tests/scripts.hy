@@ -176,7 +176,7 @@ test("lock [scripts] hash lives off the package row") {
     assert!(contains(lock, "pre_install_hash = 'abc'"));
     assert!(contains(lock, "name = 'app'") == false);
     let pkgs = lock_parse(lock)?;
-    assert!(len(pkgs) == 1);
+    assert!(pkgs.len() == 1);
     assert!(lock_pkg_hook_path(pkgs[0]) == "");
     assert!(lock_pkg_hook_hash(pkgs[0]) == "");
     let scripts = lock_parse_scripts(lock)?;

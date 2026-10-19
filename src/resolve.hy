@@ -27,7 +27,7 @@ fn resolve_dep_path(string root, string p) -> string {
 
 fn root_requester(string root) -> string {
     let n = package_name_read(join2(root, "coil.toml"));
-    if len(n) == 0 {
+    if n.len() == 0 {
         return "root";
     }
     return n;
@@ -57,7 +57,7 @@ fn con_who(string c) -> string {
 /// a transitive manifest is untrusted input.
 fn push_git_cons(Vec<string> cons, Vec<string> deps, string who) -> Result<Vec<string>, string> {
     let i = 0;
-    while i < len(deps) {
+    while i < deps.len() {
         let d = deps[i];
         i = i + 1;
         if dep_kind(d) != "g" {
@@ -68,7 +68,7 @@ fn push_git_cons(Vec<string> cons, Vec<string> deps, string who) -> Result<Vec<s
         check_pkg_name(name)?;
         check_git_url(git)?;
         let j = 0;
-        while j < len(cons) {
+        while j < cons.len() {
             if con_name(cons[j]) == name && con_git(cons[j]) != git {
                 raise "package " + name + ": git url mismatch (" + con_who(cons[j]) + " wants " + con_git(cons[j]) + ", " + who + " wants " + git + ")";
             }
@@ -97,7 +97,7 @@ fn root_cons(string root) -> Result<Vec<string>, string> {
     cons = scan_toml_cons(cons, toml, root_requester(root))?;
     let deps = deps_read(toml)?;
     let i = 0;
-    while i < len(deps) {
+    while i < deps.len() {
         let d = deps[i];
         i = i + 1;
         if dep_kind(d) != "p" {
@@ -113,7 +113,7 @@ fn root_cons(string root) -> Result<Vec<string>, string> {
 fn reqs_for(Vec<string> cons, string name) -> Vec<string> {
     let out: Vec<string> = Vec::new();
     let i = 0;
-    while i < len(cons) {
+    while i < cons.len() {
         if con_name(cons[i]) == name {
             out.push(con_req(cons[i]));
         }
@@ -124,7 +124,7 @@ fn reqs_for(Vec<string> cons, string name) -> Vec<string> {
 
 fn git_for(Vec<string> cons, string name) -> string {
     let i = 0;
-    while i < len(cons) {
+    while i < cons.len() {
         if con_name(cons[i]) == name {
             return con_git(cons[i]);
         }
@@ -136,7 +136,7 @@ fn git_for(Vec<string> cons, string name) -> string {
 fn unique_names(Vec<string> cons) -> Vec<string> {
     let out: Vec<string> = Vec::new();
     let i = 0;
-    while i < len(cons) {
+    while i < cons.len() {
         let n = con_name(cons[i]);
         if vec_has(out, n) == false {
             out.push(n);
@@ -149,13 +149,13 @@ fn unique_names(Vec<string> cons) -> Vec<string> {
 fn format_diamond(string name, Vec<string> cons) -> string {
     let bits = "";
     let i = 0;
-    while i < len(cons) {
+    while i < cons.len() {
         let c = cons[i];
         i = i + 1;
         if con_name(c) != name {
             continue;
         }
-        if len(bits) > 0 {
+        if bits.len() > 0 {
             bits = bits + ", ";
         }
         bits = bits + con_who(c) + " requires " + con_req(c);
@@ -164,7 +164,7 @@ fn format_diamond(string name, Vec<string> cons) -> string {
 }
 
 fn strip_at(string req) -> string {
-    return match slice(req, 1, len(req)) {
+    return match slice(req, 1, req.len()) {
         Result::Ok(x) => x,
         Result::Err(_) => req,
     };
@@ -175,12 +175,12 @@ fn pin_of(string name, Vec<string> reqs, Vec<string> cons) -> Result<string, str
     let pin = "";
     let ranges = 0;
     let i = 0;
-    while i < len(reqs) {
+    while i < reqs.len() {
         let r = reqs[i];
         i = i + 1;
         if starts_with(r, "@") {
             let p = strip_at(r);
-            if len(pin) > 0 && pin != p {
+            if pin.len() > 0 && pin != p {
                 raise format_diamond(name, cons);
             }
             pin = p;
@@ -188,7 +188,7 @@ fn pin_of(string name, Vec<string> reqs, Vec<string> cons) -> Result<string, str
             ranges = ranges + 1;
         }
     }
-    if len(pin) > 0 && ranges > 0 {
+    if pin.len() > 0 && ranges > 0 {
         raise format_diamond(name, cons);
     }
     return pin;
@@ -196,13 +196,13 @@ fn pin_of(string name, Vec<string> reqs, Vec<string> cons) -> Result<string, str
 
 /// Does the locked row still satisfy every constraint on its name?
 fn locked_ok(string locked, string url, Vec<string> reqs, string pin) -> bool {
-    if len(locked) == 0 {
+    if locked.len() == 0 {
         return false;
     }
     if lock_pkg_git(locked) != url {
         return false;
     }
-    if len(pin) > 0 {
+    if pin.len() > 0 {
         if lock_pkg_ref(locked) != pin {
             return false;
         }
@@ -211,7 +211,7 @@ fn locked_ok(string locked, string url, Vec<string> reqs, string pin) -> bool {
         }
         return true;
     }
-    if len(lock_pkg_ref(locked)) > 0 {
+    if lock_pkg_ref(locked).len() > 0 {
         return false;
     }
     return match tag_satisfies_all(lock_pkg_tag(locked), reqs) {
@@ -232,7 +232,7 @@ fn collect(string root, Vec<string> packages, Vec<string> force) -> Result<(Vec<
         changed = false;
         let names = unique_names(cons);
         let i = 0;
-        while i < len(names) {
+        while i < names.len() {
             let name = names[i];
             i = i + 1;
             if vec_has(scanned, name) {
@@ -255,7 +255,7 @@ fn collect(string root, Vec<string> packages, Vec<string> force) -> Result<(Vec<
     // A later scan can add a constraint that a locked pick no longer meets.
     let names = unique_names(cons);
     let k = 0;
-    while k < len(names) {
+    while k < names.len() {
         let name = names[k];
         k = k + 1;
         let url = git_for(cons, name);
@@ -275,19 +275,19 @@ fn collect(string root, Vec<string> packages, Vec<string> force) -> Result<(Vec<
 /// Pick and fetch one package; returns its new lock row.
 fn resolve_one(string name, string url, Vec<string> cons) -> Result<string, string> {
     let reqs = reqs_for(cons, name);
-    if len(reqs) == 0 {
+    if reqs.len() == 0 {
         raise format("no requirement for %s", name);
     }
     let pin = pin_of(name, reqs, cons)?;
     let tag = "";
     let sha = "";
-    if len(pin) > 0 {
+    if pin.len() > 0 {
         sha = ls_remote_ref(url, pin)?;
     } else {
         let body = ls_remote_tags(url)?;
         let rows = parse_ls_remote(body)?;
         let tag_names = ls_remote_tag_names(rows);
-        if len(reqs) == 1 {
+        if reqs.len() == 1 {
             tag = match select_tag(reqs[0], tag_names) {
                 Result::Ok(t) => t,
                 Result::Err(e) => raise format("%s: %s", name, e),
@@ -312,11 +312,11 @@ fn resolve_all(string root, Vec<string> packages, Vec<string> force) -> Result<V
         pass = pass + 1;
         let res = collect(root, packages, f)?;
         let (cons, todo) = res;
-        if len(todo) == 0 {
+        if todo.len() == 0 {
             return packages;
         }
         let i = 0;
-        while i < len(todo) {
+        while i < todo.len() {
             let name = tsv_field(todo[i], 0);
             let url = tsv_field(todo[i], 1);
             i = i + 1;
@@ -345,7 +345,7 @@ fn reachable_names(string root, Vec<string> packages) -> Result<Vec<string>, str
 fn prune(Vec<string> packages, Vec<string> keep) -> Vec<string> {
     let out: Vec<string> = Vec::new();
     let i = 0;
-    while i < len(packages) {
+    while i < packages.len() {
         if vec_has(keep, lock_pkg_name(packages[i])) {
             out.push(packages[i]);
         }
@@ -358,7 +358,7 @@ fn prune(Vec<string> packages, Vec<string> keep) -> Vec<string> {
 fn link_rows(string root, Vec<string> packages) -> Result<Vec<string>, string> {
     let out: Vec<string> = Vec::new();
     let i = 0;
-    while i < len(packages) {
+    while i < packages.len() {
         let p = packages[i];
         i = i + 1;
         check_pkg_name(lock_pkg_name(p))?;
@@ -367,7 +367,7 @@ fn link_rows(string root, Vec<string> packages) -> Result<Vec<string>, string> {
     }
     let deps = deps_read(join2(root, "coil.toml"))?;
     i = 0;
-    while i < len(deps) {
+    while i < deps.len() {
         let d = deps[i];
         i = i + 1;
         if dep_kind(d) != "p" {
@@ -392,10 +392,10 @@ fn check_one_toml(string toml_path, string fallback_name, string running) -> Res
         Result::Err(_) => raise format("failed to read %s", toml_path),
     };
     let name = package_name_parse(body);
-    if len(name) == 0 {
+    if name.len() == 0 {
         name = fallback_name;
     }
-    if len(name) == 0 {
+    if name.len() == 0 {
         name = toml_path;
     }
     return enforce_engine(name, package_coil_parse(body), running)?;
@@ -407,7 +407,7 @@ fn check_engine_all(string root, Vec<string> packages, string running) -> Result
     check_one_toml(toml, root_requester(root), running)?;
     let deps = deps_read(toml)?;
     let i = 0;
-    while i < len(deps) {
+    while i < deps.len() {
         let d = deps[i];
         i = i + 1;
         if dep_kind(d) != "p" {
@@ -417,7 +417,7 @@ fn check_engine_all(string root, Vec<string> packages, string running) -> Result
         check_one_toml(join2(dest, "coil.toml"), dep_name(d), running)?;
     }
     i = 0;
-    while i < len(packages) {
+    while i < packages.len() {
         let p = packages[i];
         i = i + 1;
         let dest = checkout_path(lock_pkg_hash(p))?;

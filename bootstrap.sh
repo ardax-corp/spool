@@ -183,7 +183,7 @@ coil_is_valid() {
 use env::{args, exec, exit, set_cwd};
 fn main() {
     let a = match args() {
-        Result::Ok(v) => len(v),
+        Result::Ok(v) => v.len(),
         Result::Err(_) => 0,
     };
     let argv: Vec<string> = Vec::new();

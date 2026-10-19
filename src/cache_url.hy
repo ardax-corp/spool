@@ -13,12 +13,12 @@ fn replace_first_colon(string s) -> string {
             empty
         },
     };
-    if len(parts) < 2 {
+    if parts.len() < 2 {
         return s;
     }
     let out = parts[0] + "/" + parts[1];
     let i = 2;
-    while i < len(parts) {
+    while i < parts.len() {
         out = out + ":" + parts[i];
         i = i + 1;
     }
@@ -38,7 +38,7 @@ fn strip_scheme(string url) -> string {
                 empty
             },
         };
-        if len(parts) >= 2 {
+        if parts.len() >= 2 {
             return parts[1];
         }
         return u;
@@ -51,20 +51,20 @@ fn strip_scheme(string url) -> string {
                 empty
             },
         };
-        if len(parts) >= 2 {
+        if parts.len() >= 2 {
             return parts[1];
         }
         return u;
     }
     if starts_with(u, "ssh://") || starts_with(u, "git://") {
-        let after = match slice(u, 6, len(u)) {
+        let after = match slice(u, 6, u.len()) {
             Result::Ok(x) => x,
             Result::Err(_) => u,
         };
         let at = find(after, "@");
         let slash = find(after, "/");
         if at >= 0 && (slash < 0 || at < slash) {
-            return match slice(after, at + 1, len(after)) {
+            return match slice(after, at + 1, after.len()) {
                 Result::Ok(x) => x,
                 Result::Err(_) => after,
             };
@@ -79,7 +79,7 @@ fn strip_scheme(string url) -> string {
                 empty
             },
         };
-        if len(parts) >= 2 {
+        if parts.len() >= 2 {
             return replace_first_colon(parts[1]);
         }
         return u;
@@ -92,7 +92,7 @@ fn strip_scheme(string url) -> string {
                 empty
             },
         };
-        if len(parts) >= 2 {
+        if parts.len() >= 2 {
             return parts[1];
         }
         return u;
@@ -104,14 +104,14 @@ fn strip_scheme(string url) -> string {
 /// `my.gitea.io/o/r.git` keeps its host.
 fn strip_git_suffix(string s) -> string {
     let t = s;
-    while ends_with(t, "/") && len(t) > 1 {
-        t = match slice(t, 0, len(t) - 1) {
+    while ends_with(t, "/") && t.len() > 1 {
+        t = match slice(t, 0, t.len() - 1) {
             Result::Ok(x) => x,
             Result::Err(_) => t,
         };
     }
-    if ends_with(t, ".git") && len(t) > 4 {
-        return match slice(t, 0, len(t) - 4) {
+    if ends_with(t, ".git") && t.len() > 4 {
+        return match slice(t, 0, t.len() - 4) {
             Result::Ok(x) => x,
             Result::Err(_) => t,
         };
@@ -131,15 +131,15 @@ fn url_cache_key(string url) -> Result<(string, string, string), string> {
     };
     let segs: Vec<string> = Vec::new();
     let i = 0;
-    while i < len(parts) {
-        if len(parts[i]) > 0 {
+    while i < parts.len() {
+        if parts[i].len() > 0 {
             segs.push(parts[i]);
         }
         i = i + 1;
     }
-    if len(segs) < 3 {
+    if segs.len() < 3 {
         raise format("cannot parse git url: %s", url);
     }
-    let n = len(segs);
+    let n = segs.len();
     return (segs[n - 3], segs[n - 2], segs[n - 1]);
 }

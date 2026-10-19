@@ -294,7 +294,7 @@ test("allow_include list is explicit") {
     names = allow_include_add(names, "http");
     assert!(allow_include_has(names, "http"));
     names = allow_include_add(names, "http");
-    assert!(len(names) == 1);
+    assert!(names.len() == 1);
 }
 
 test("default: include hook not allowed") {

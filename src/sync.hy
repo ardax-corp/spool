@@ -24,7 +24,7 @@ use toolchain::{find_coil, coil_version_output};
 
 fn running_coil_version() -> string {
     let coil = find_coil();
-    if len(coil) == 0 {
+    if coil.len() == 0 {
         return "";
     }
     return match parse_coil_version_output(coil_version_output(coil)) {
@@ -36,7 +36,7 @@ fn running_coil_version() -> string {
 /// Check out every locked package and verify its tree id.
 fn fetch_locked(Vec<string> packages) -> Result<int, string> {
     let i = 0;
-    while i < len(packages) {
+    while i < packages.len() {
         let p = packages[i];
         i = i + 1;
         let dest = ensure_checkout(lock_pkg_git(p), lock_pkg_rev(p), lock_pkg_hash(p))?;
@@ -61,7 +61,7 @@ fn fetch_locked(Vec<string> packages) -> Result<int, string> {
 fn todo_names(Vec<string> todo) -> string {
     let names: Vec<string> = Vec::new();
     let i = 0;
-    while i < len(todo) {
+    while i < todo.len() {
         names.push(tsv_field(todo[i], 0));
         i = i + 1;
     }
@@ -71,13 +71,13 @@ fn todo_names(Vec<string> todo) -> string {
 fn dropped_names(Vec<string> before, Vec<string> after) -> string {
     let keep: Vec<string> = Vec::new();
     let i = 0;
-    while i < len(after) {
+    while i < after.len() {
         keep.push(lock_pkg_name(after[i]));
         i = i + 1;
     }
     let gone: Vec<string> = Vec::new();
     i = 0;
-    while i < len(before) {
+    while i < before.len() {
         let n = lock_pkg_name(before[i]);
         if vec_has(keep, n) == false {
             gone.push(n);
@@ -116,7 +116,7 @@ fn sync(
         let empty: Vec<string> = Vec::new();
         let res = collect(root, before, empty)?;
         let (cons, todo) = res;
-        if len(todo) > 0 {
+        if todo.len() > 0 {
             raise format(
                 "coil.lock is out of date (needs %s); run without --locked to update it",
                 todo_names(todo),
@@ -128,7 +128,7 @@ fn sync(
 
     let keep = reachable_names(root, packages)?;
     let pruned = prune(packages, keep);
-    if len(pruned) != len(packages) {
+    if pruned.len() != packages.len() {
         if locked {
             raise format(
                 "coil.lock has unused packages (%s); run without --locked to prune them",
@@ -138,7 +138,7 @@ fn sync(
         eprintln(format("spool: pruned %s", dropped_names(packages, pruned)));
     }
     let changed = lock_serialize(pruned) != lock_serialize(before);
-    if changed && (had_lock || len(pruned) > 0) {
+    if changed && (had_lock || pruned.len() > 0) {
         lock_write(lock_path, pruned)?;
     }
 

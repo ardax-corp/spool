@@ -20,6 +20,6 @@ env = true
 
 [dependencies]
 # coil-toml has no release tags yet; pin the commit with the pub-API fix (COI-392).
-toml = { git = "https://github.com/ardax-corp/coil-toml.git", rev = "3e0da9d38f0fb0d090f56869e2547fa2bebd8453" }
+toml = { git = "https://github.com/ardax-corp/coil-toml.git", rev = "3286add4c8286627146cb300c23ff026b4d9a042" }
 # Read API (get/at/as_*) for coil test/mutate --json events: ardax-corp/coil-json#10.
-json = { git = "https://github.com/ardax-corp/coil-json.git", rev = "50d521698a1dd0bb6ec604a5cd24238c737f4f14" }
+json = { git = "https://github.com/ardax-corp/coil-json.git", rev = "b39175852e270c0bd3cd0c0a48b50de0b08c9f61" }

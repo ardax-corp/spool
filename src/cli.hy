@@ -11,7 +11,7 @@ fn parse_args(Vec<string> args, Vec<string> valued, Vec<string> bools) -> Result
     let out: Vec<string> = Vec::new();
     let i = 0;
     let raw = false;
-    while i < len(args) {
+    while i < args.len() {
         let a = args[i];
         i = i + 1;
         if raw {
@@ -38,7 +38,7 @@ fn parse_args(Vec<string> args, Vec<string> valued, Vec<string> bools) -> Result
                     out.push("o\t" + key + "\t" + inline);
                     continue;
                 }
-                if i >= len(args) {
+                if i >= args.len() {
                     raise format("%s needs a value", key);
                 }
                 out.push("o\t" + key + "\t" + args[i]);
@@ -59,7 +59,7 @@ fn parse_args(Vec<string> args, Vec<string> valued, Vec<string> bools) -> Result
 fn opt(Vec<string> parsed, string key) -> string {
     let v = "";
     let i = 0;
-    while i < len(parsed) {
+    while i < parsed.len() {
         if tsv_field(parsed[i], 0) == "o" && tsv_field(parsed[i], 1) == key {
             v = tsv_field(parsed[i], 2);
         }
@@ -70,7 +70,7 @@ fn opt(Vec<string> parsed, string key) -> string {
 
 fn has(Vec<string> parsed, string key) -> bool {
     let i = 0;
-    while i < len(parsed) {
+    while i < parsed.len() {
         if tsv_field(parsed[i], 0) == "b" && tsv_field(parsed[i], 1) == key {
             return true;
         }
@@ -82,7 +82,7 @@ fn has(Vec<string> parsed, string key) -> bool {
 fn items_of(Vec<string> parsed, string kind) -> Vec<string> {
     let out: Vec<string> = Vec::new();
     let i = 0;
-    while i < len(parsed) {
+    while i < parsed.len() {
         if tsv_field(parsed[i], 0) == kind {
             out.push(tsv_field(parsed[i], 1));
         }
@@ -100,7 +100,7 @@ fn raw_args(Vec<string> parsed) -> Vec<string> {
 }
 
 fn at_most(Vec<string> pos, int n, string usage) -> Result<int, string> {
-    if len(pos) > n {
+    if pos.len() > n {
         raise format("unexpected argument %s\nusage: %s", pos[n], usage);
     }
     return 0;

@@ -34,7 +34,7 @@ fn ls_remote_tags(string url) -> Result<string, string> {
 }
 
 fn is_hex_sha(string s) -> bool {
-    if len(s) != 40 {
+    if s.len() != 40 {
         return false;
     }
     let hex = "0123456789abcdef";
@@ -78,7 +78,7 @@ fn ls_remote_ref(string url, string rev) -> Result<string, string> {
         raise git_failed("ls-remote", url);
     }
     let sha = first_line(body);
-    if len(sha) == 0 {
+    if sha.len() == 0 {
         raise format("rev `%s` not found in %s", rev, url);
     }
     return sha;
@@ -140,7 +140,7 @@ fn fetch_rev(string url, string rev) -> Result<string, string> {
         raise format("git checkout of %s at %s failed (exit %i)", url, rev, code);
     }
     let tree = first_line(body);
-    if len(tree) == 0 {
+    if tree.len() == 0 {
         raise format("git checkout of %s at %s produced no tree", url, rev);
     }
     return tree;

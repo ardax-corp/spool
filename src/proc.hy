@@ -22,7 +22,7 @@ fn sh_run(string script, Vec<string> args) -> Result<int, string> {
     argv.push(script);
     argv.push("spool");
     let i = 0;
-    while i < len(args) {
+    while i < args.len() {
         argv.push(args[i]);
         i = i + 1;
     }
@@ -35,7 +35,7 @@ fn run_in(string dir, string program, Vec<string> args) -> Result<int, string> {
     a.push(dir);
     a.push(program);
     let i = 0;
-    while i < len(args) {
+    while i < args.len() {
         a.push(args[i]);
         i = i + 1;
     }
@@ -64,7 +64,7 @@ fn sh_capture(string script, Vec<string> args) -> Result<(int, string), string> 
     a.push(out);
     a.push(script);
     let i = 0;
-    while i < len(args) {
+    while i < args.len() {
         a.push(args[i]);
         i = i + 1;
     }
@@ -97,7 +97,7 @@ fn first_line(string s) -> string {
             return trim_or(s);
         },
     };
-    if len(parts) == 0 {
+    if parts.len() == 0 {
         return "";
     }
     return trim_or(parts[0]);

@@ -55,10 +55,10 @@ fn ensure_gitignore(string dir) -> Result<int, string> {
     if contains(body, "/.spool/") == false {
         add = add + "/.spool/\n";
     }
-    if len(add) == 0 {
+    if add.len() == 0 {
         return 0;
     }
-    if len(body) > 0 && ends_with(body, "\n") == false {
+    if body.len() > 0 && ends_with(body, "\n") == false {
         body = body + "\n";
     }
     return match write_text(path, body + add) {

@@ -40,9 +40,9 @@ test("lock native stem is pinned and trusted") {
     let lock = lock_row("coil-crypto") + "\n[[package.native]]\nstem = 'hycrypto'\nsha256 = '" + sha("a") + "'\n\n" + lock_row("coil-tls") + "\n[[package.native]]\nsha256 = '" + sha("b") + "'\n";
     // spool's own lock reader still accepts the native rows.
     let pkgs = lock_parse(lock)?;
-    assert!(len(pkgs) == 2);
+    assert!(pkgs.len() == 2);
     let natives = lock_native_parse(lock)?;
-    assert!(len(natives) == 2);
+    assert!(natives.len() == 2);
     assert!(lock_native_pkg(natives[0]) == "coil-crypto");
     assert!(lock_native_stem(natives[0]) == "hycrypto");
     assert!(lock_native_sha(natives[1]) == sha("b"));
@@ -69,7 +69,7 @@ test("trusted coil-crypto bootstraps the crypto stem") {
 test("pins with a malformed sha256 are skipped") {
     let lock = lock_row("coil-tls") + "\n[[package.native]]\nsha256 = 'abc123'\n\n" + lock_row("regex") + "\n[[package.native]]\nlib = 'pcre'\nsha256 = '" + sha("z") + "'\n";
     let f = flags_of("[package]\nname = \"app\"\n", lock)?;
-    assert!(len(f) == 0);
+    assert!(f.len() == 0);
 }
 
 test("trusted must be a bool") {
@@ -87,7 +87,7 @@ test("trusted must be a bool") {
 test("ffi.native rows become --ffi-native specs") {
     let manifest = "[[ffi.native]]\nname = \"re\"\npackage = \"coil-regex\"\nversion = \"1.2.0\"\npath = \"native\"\nurl = \"https://example.com/libre.so\"\nrequires = [\"libpcre2.so\", \"libz.so\"]\nrequires_hint = \"apt install pcre2, zlib\"\n\n[[ffi.native]]\nname = \"sum\"\nversion = \"0.1.0\"\npath = \"/opt/sum\"\n";
     let rows = ffi_natives_parse(manifest)?;
-    assert!(len(rows) == 2);
+    assert!(rows.len() == 2);
     assert!(native_package(rows[1]) == "sum");
     assert!(native_url(rows[0]) == "https://example.com/libre.so");
     assert!(native_requires(rows[0]) == "libpcre2.so;libz.so");

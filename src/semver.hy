@@ -16,7 +16,7 @@ fn strip_v(string raw) -> string {
     if starts_with(s, "v") == false {
         return s;
     }
-    if len(s) <= 1 {
+    if s.len() <= 1 {
         return s;
     }
     let parts = match split(s, "v") {
@@ -26,7 +26,7 @@ fn strip_v(string raw) -> string {
             empty
         },
     };
-    if len(parts) >= 2 {
+    if parts.len() >= 2 {
         return parts[1];
     }
     return s;
@@ -36,7 +36,7 @@ fn strip_caret(string req) -> string {
     if starts_with(req, "^") == false {
         return req;
     }
-    if len(req) <= 1 {
+    if req.len() <= 1 {
         return req;
     }
     let parts = match split(req, "^") {
@@ -46,7 +46,7 @@ fn strip_caret(string req) -> string {
             empty
         },
     };
-    if len(parts) >= 2 {
+    if parts.len() >= 2 {
         return parts[1];
     }
     return req;
@@ -56,7 +56,7 @@ fn rest_after(string s, string prefix) -> string {
     if starts_with(s, prefix) == false {
         return s;
     }
-    let rest = match slice(s, len(prefix), len(s)) {
+    let rest = match slice(s, prefix.len(), s.len()) {
         Result::Ok(r) => r,
         Result::Err(_) => {
             return s;
@@ -70,7 +70,7 @@ fn rest_after(string s, string prefix) -> string {
 
 /// Cut a `-prerelease` / `+build` suffix (`1.2.3-rc.1` → `1.2.3`).
 fn strip_pre(string s) -> string {
-    let cut = len(s);
+    let cut = s.len();
     let dash = find(s, "-");
     if dash >= 0 && dash < cut {
         cut = dash;
@@ -79,7 +79,7 @@ fn strip_pre(string s) -> string {
     if plus >= 0 && plus < cut {
         cut = plus;
     }
-    if cut == len(s) {
+    if cut == s.len() {
         return s;
     }
     return match slice(s, 0, cut) {
@@ -98,16 +98,16 @@ fn parse_semver(string raw) -> Result<SemVer, string> {
         Result::Ok(p) => p,
         Result::Err(_) => raise "bad semver",
     };
-    if len(parts) < 1 {
+    if parts.len() < 1 {
         raise "bad semver";
     }
     let major = parse_int(parts[0])?;
     let minor = 0;
     let patch = 0;
-    if len(parts) > 1 {
+    if parts.len() > 1 {
         minor = parse_int(parts[1])?;
     }
-    if len(parts) > 2 {
+    if parts.len() > 2 {
         patch = parse_int(parts[2])?;
     }
     return SemVer::Ver(major, minor, patch);
@@ -183,7 +183,7 @@ fn component_count(string raw) -> int {
             return 0;
         },
     };
-    return len(parts);
+    return parts.len();
 }
 
 /// `~1.2.3` / `~1.2` → same major.minor; `~1` → same major.
@@ -219,7 +219,7 @@ fn satisfies_range(string requirement, SemVer version) -> Result<bool, string> {
     if req == "*" {
         return true;
     }
-    if len(req) == 0 {
+    if req.len() == 0 {
         return true;
     }
     if contains(req, ",") {
@@ -228,7 +228,7 @@ fn satisfies_range(string requirement, SemVer version) -> Result<bool, string> {
             Result::Err(_) => raise format("bad requirement %s", req),
         };
         let i = 0;
-        while i < len(parts) {
+        while i < parts.len() {
             let ok = satisfies_range(parts[i], version)?;
             if ok == false {
                 return false;
@@ -283,7 +283,7 @@ fn select_tag(string requirement, Vec<string> tags) -> Result<string, string> {
     let has_best = false;
     let best = SemVer::Ver(0, 0, 0);
     let i = 0;
-    while i < len(tags) {
+    while i < tags.len() {
         let tag = tags[i];
         i = i + 1;
         if is_prerelease(tag) {
@@ -319,7 +319,7 @@ fn select_tag(string requirement, Vec<string> tags) -> Result<string, string> {
 fn tag_satisfies_all(string tag, Vec<string> reqs) -> Result<bool, string> {
     let ver = parse_semver(tag)?;
     let i = 0;
-    while i < len(reqs) {
+    while i < reqs.len() {
         let ok = satisfies_caret(reqs[i], ver)?;
         if ok == false {
             return false;
@@ -330,14 +330,14 @@ fn tag_satisfies_all(string tag, Vec<string> reqs) -> Result<bool, string> {
 }
 
 fn select_tag_all(Vec<string> reqs, Vec<string> tags) -> Result<string, string> {
-    if len(reqs) == 0 {
+    if reqs.len() == 0 {
         raise "no version requirements";
     }
     let best_tag = "";
     let has_best = false;
     let best = SemVer::Ver(0, 0, 0);
     let i = 0;
-    while i < len(tags) {
+    while i < tags.len() {
         let tag = tags[i];
         i = i + 1;
         if is_prerelease(tag) {

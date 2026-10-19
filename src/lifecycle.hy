@@ -38,7 +38,7 @@ fn run_project_script(string root, string slot, bool hooks_off) -> Result<int, s
     }
     let recs = scripts_read(join2(root, "coil.toml"))?;
     let rel = scripts_path_of(recs, slot);
-    if len(rel) == 0 {
+    if rel.len() == 0 {
         return 0;
     }
     let file = join2(root, rel);
@@ -47,7 +47,7 @@ fn run_project_script(string root, string slot, bool hooks_off) -> Result<int, s
     }
     let hash = hash_object(file)?;
     let pkg = package_name_read(join2(root, "coil.toml"));
-    if len(pkg) == 0 {
+    if pkg.len() == 0 {
         pkg = "app";
     }
     let lock_path = join2(root, "coil.lock");
@@ -55,7 +55,7 @@ fn run_project_script(string root, string slot, bool hooks_off) -> Result<int, s
     let rec = lock_find_script(scripts, slot);
     let decided = script_gate_lock(lock_script_path(rec), lock_script_hash(rec), rel, hash);
     let (lp, lh, first_pin) = decided;
-    if first_pin && len(lh) > 0 {
+    if first_pin && lh.len() > 0 {
         scripts = lock_upsert_script(scripts, make_lock_script(slot, lp, lh));
         lock_write_scripts(lock_path, scripts)?;
     }
@@ -71,12 +71,12 @@ fn run_include_hooks(string root, Vec<string> rows, bool hooks_off) -> Result<in
     }
     let lock_path = join2(root, "coil.lock");
     let i = 0;
-    while i < len(rows) {
+    while i < rows.len() {
         let name = tsv_field(rows[i], 0);
         let dest = tsv_field(rows[i], 1);
         i = i + 1;
         let rel = package_include_read(join2(dest, "coil.toml"))?;
-        if len(rel) == 0 {
+        if rel.len() == 0 {
             continue;
         }
         let file = join2(dest, rel);
@@ -88,14 +88,14 @@ fn run_include_hooks(string root, Vec<string> rows, bool hooks_off) -> Result<in
         let allow = lock_read_allow_or_empty(lock_path)?;
         let rec = lock_find(packages, name);
         let decided = include_gate_lock(
-            len(rec) > 0,
+            rec.len() > 0,
             lock_pkg_hook_path(rec),
             lock_pkg_hook_hash(rec),
             rel,
             hash,
         );
         let (lp, lh, first_pin) = decided;
-        if first_pin && len(lh) > 0 && len(rec) > 0 {
+        if first_pin && lh.len() > 0 && rec.len() > 0 {
             packages = lock_upsert(packages, lock_pkg_with_hook(rec, lp, lh));
             lock_write(lock_path, packages)?;
         }

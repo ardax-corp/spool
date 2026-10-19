@@ -75,8 +75,8 @@ fn link_dep(string project_root, string name, string checkout_path) -> Result<in
 }
 
 fn strip_hy(string entry) -> string {
-    if ends_with(entry, ".hy") && len(entry) > 3 {
-        return match slice(entry, 0, len(entry) - 3) {
+    if ends_with(entry, ".hy") && entry.len() > 3 {
+        return match slice(entry, 0, entry.len() - 3) {
             Result::Ok(x) => x,
             Result::Err(_) => entry,
         };
@@ -88,7 +88,7 @@ fn strip_hy(string entry) -> string {
 fn link_all(string project_root, Vec<string> rows) -> Result<int, string> {
     let names: Vec<string> = Vec::new();
     let i = 0;
-    while i < len(rows) {
+    while i < rows.len() {
         names.push(tsv_field(rows[i], 0));
         i = i + 1;
     }
@@ -99,7 +99,7 @@ fn link_all(string project_root, Vec<string> rows) -> Result<int, string> {
         Result::Err(_) => raise format("cannot list %s", deps),
     };
     i = 0;
-    while i < len(entries) {
+    while i < entries.len() {
         let e = entries[i];
         i = i + 1;
         if vec_has(names, strip_hy(e)) == false {
@@ -107,7 +107,7 @@ fn link_all(string project_root, Vec<string> rows) -> Result<int, string> {
         }
     }
     i = 0;
-    while i < len(rows) {
+    while i < rows.len() {
         link_dep(project_root, tsv_field(rows[i], 0), tsv_field(rows[i], 1))?;
         i = i + 1;
     }

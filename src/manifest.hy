@@ -26,7 +26,7 @@ fn dep_field(string d, int idx) -> string {
             empty
         },
     };
-    if idx < len(parts) {
+    if idx < parts.len() {
         return parts[idx];
     }
     return "";
@@ -72,7 +72,7 @@ fn dep_rev(string d) -> string {
 /// Constraint string for a git dep: `@<rev>` when pinned, else the range.
 fn dep_req(string d) -> string {
     let r = dep_rev(d);
-    if len(r) > 0 {
+    if r.len() > 0 {
         return "@" + r;
     }
     return dep_version(d);
@@ -174,17 +174,17 @@ fn parse_dep_spec_value(string name, TomlValue value) -> Result<string, string> 
             }
         }
     }
-    if len(git) > 0 {
-        if len(path) > 0 {
+    if git.len() > 0 {
+        if path.len() > 0 {
             raise "git and path cannot be combined";
         }
-        if len(version) == 0 && len(rev) == 0 {
+        if version.len() == 0 && rev.len() == 0 {
             raise format("git dependency %s needs version or rev", name);
         }
         return make_git_rev_dep(name, git, version, rev);
     }
-    if len(path) > 0 {
-        if len(version) > 0 || len(rev) > 0 {
+    if path.len() > 0 {
+        if version.len() > 0 || rev.len() > 0 {
             raise "path dependency cannot set version or rev";
         }
         return make_path_dep(name, path);
@@ -205,7 +205,7 @@ fn deps_parse(string body) -> Result<Vec<string>, string> {
             while i < n {
                 let name = tab.key_at(i);
                 let j = 0;
-                while j < len(out) {
+                while j < out.len() {
                     if dep_name(out[j]) == name {
                         raise format("duplicate dependency %s", name);
                     }
@@ -267,7 +267,7 @@ fn script_slot_known(string k) -> bool {
 }
 
 fn script_rel_ok(string p) -> bool {
-    if len(p) == 0 {
+    if p.len() == 0 {
         return false;
     }
     if starts_with(p, "/") {
@@ -280,7 +280,7 @@ fn script_rel_ok(string p) -> bool {
         },
     };
     let i = 0;
-    while i < len(parts) {
+    while i < parts.len() {
         if parts[i] == ".." {
             return false;
         }
@@ -302,7 +302,7 @@ fn package_include_read(string path) -> Result<string, string> {
         Result::Err(_) => raise format("failed to read %s", path),
     };
     let rel = package_include_parse(body);
-    if len(rel) == 0 {
+    if rel.len() == 0 {
         return "";
     }
     if script_rel_ok(rel) == false {
@@ -319,7 +319,7 @@ fn scripts_field(string rec, int idx) -> string {
             empty
         },
     };
-    if idx < len(parts) {
+    if idx < parts.len() {
         return parts[idx];
     }
     return "";
@@ -335,7 +335,7 @@ fn scripts_rel(string rec) -> string {
 
 fn scripts_path_of(Vec<string> recs, string slot) -> string {
     let i = 0;
-    while i < len(recs) {
+    while i < recs.len() {
         if scripts_slot(recs[i]) == slot {
             return scripts_rel(recs[i]);
         }
@@ -366,14 +366,14 @@ fn scripts_parse(string body) -> Result<Vec<string>, string> {
                     raise format("scripts key %s must be a string", k);
                 }
                 let path = v.s;
-                if len(path) == 0 {
+                if path.len() == 0 {
                     continue;
                 }
                 if script_rel_ok(path) == false {
                     raise format("script path must be relative to the project root: %s", path);
                 }
                 let j = 0;
-                while j < len(out) {
+                while j < out.len() {
                     if scripts_slot(out[j]) == k {
                         raise format("duplicate scripts key %s", k);
                     }
@@ -438,10 +438,10 @@ fn format_dep_line(string dep) -> Result<string, string> {
     let name = dep_name(dep);
     if dep_kind(dep) == "g" {
         let line = name + " = { git = \"" + dep_git(dep) + "\"";
-        if len(dep_version(dep)) > 0 {
+        if dep_version(dep).len() > 0 {
             line = line + ", version = \"" + dep_version(dep) + "\"";
         }
-        if len(dep_rev(dep)) > 0 {
+        if dep_rev(dep).len() > 0 {
             line = line + ", rev = \"" + dep_rev(dep) + "\"";
         }
         return line + " }";
@@ -455,7 +455,7 @@ fn format_dep_line(string dep) -> Result<string, string> {
 /// Push `line` before any trailing blank lines already in `out`.
 fn push_before_blanks(Vec<string> out, string line) -> Vec<string> {
     let blanks = 0;
-    while len(out) > 0 && len(out[len(out) - 1]) == 0 {
+    while out.len() > 0 && out[out.len() - 1].len() == 0 {
         out.pop();
         blanks = blanks + 1;
     }
@@ -477,7 +477,7 @@ fn deps_insert_line(string body, string line) -> Result<string, string> {
     let in_deps = false;
     let inserted = false;
     let saw_deps = false;
-    while i < len(lines) {
+    while i < lines.len() {
         let raw = lines[i];
         let trimmed = match trim(raw) {
             Result::Ok(t) => t,
@@ -501,7 +501,7 @@ fn deps_insert_line(string body, string line) -> Result<string, string> {
         inserted = true;
     }
     if saw_deps == false {
-        while len(out) > 0 && len(out[len(out) - 1]) == 0 {
+        while out.len() > 0 && out[out.len() - 1].len() == 0 {
             out.pop();
         }
         out.push("");
@@ -517,7 +517,7 @@ fn deps_insert_line(string body, string line) -> Result<string, string> {
 
 fn deps_has_name(Vec<string> deps, string name) -> bool {
     let i = 0;
-    while i < len(deps) {
+    while i < deps.len() {
         if dep_name(deps[i]) == name {
             return true;
         }
@@ -528,7 +528,7 @@ fn deps_has_name(Vec<string> deps, string name) -> bool {
 
 fn find_dep(Vec<string> deps, string name) -> Result<string, string> {
     let i = 0;
-    while i < len(deps) {
+    while i < deps.len() {
         if dep_name(deps[i]) == name {
             return deps[i];
         }
@@ -671,7 +671,7 @@ fn manifest_validate(string body) -> Result<int, string> {
             continue;
         }
         let keys = manifest_section_keys(section);
-        if len(keys) == 0 {
+        if keys.len() == 0 {
             if tab.is_table() {
                 raise format("unknown section [%s]", section);
             }
@@ -699,7 +699,7 @@ fn manifest_validate(string body) -> Result<int, string> {
 /// `[module].roots`, or `["./src"]` when absent.
 fn module_roots_parse(string body) -> Result<Vec<string>, string> {
     let roots = section_strings(body, "module", "roots")?;
-    if len(roots) == 0 {
+    if roots.len() == 0 {
         roots.push("./src");
     }
     return roots;
@@ -720,7 +720,7 @@ fn deps_remove_line(string body, string name) -> Result<string, string> {
     let in_deps = false;
     let removed = false;
     let i = 0;
-    while i < len(lines) {
+    while i < lines.len() {
         let raw = lines[i];
         i = i + 1;
         let t = match trim(raw) {
@@ -734,7 +734,7 @@ fn deps_remove_line(string body, string name) -> Result<string, string> {
         }
         if in_deps && removed == false {
             if starts_with(t, name) {
-                let tail = match slice(t, len(name), len(t)) {
+                let tail = match slice(t, name.len(), t.len()) {
                     Result::Ok(x) => x,
                     Result::Err(_) => "",
                 };
@@ -861,7 +861,7 @@ fn ffi_native_row(TomlValue row, int idx) -> Result<string, string> {
                 if item.is_string() == false {
                     raise "[[ffi.native]] requires must be an array of strings";
                 }
-                if len(requires) > 0 {
+                if requires.len() > 0 {
                     requires = requires + ";";
                 }
                 requires = requires + item.s;
@@ -900,16 +900,16 @@ fn ffi_native_row(TomlValue row, int idx) -> Result<string, string> {
         }
         raise format("unknown key ffi.native.%s", k);
     }
-    if len(name) == 0 {
+    if name.len() == 0 {
         raise "[[ffi.native]] missing required key name";
     }
-    if len(version) == 0 {
+    if version.len() == 0 {
         raise format("[[ffi.native]] %s missing required key version", name);
     }
-    if len(path) == 0 {
+    if path.len() == 0 {
         raise format("[[ffi.native]] %s missing required key path", name);
     }
-    if len(package) == 0 {
+    if package.len() == 0 {
         package = name;
     }
     return name + "\t" + package + "\t" + version + "\t" + path + "\t" + url + "\t" + requires + "\t" + hint;

@@ -36,7 +36,7 @@ fn enable_scripts_flag(string arg) -> bool {
 
 /// Unsigned git remotes are never a trust signal. Missing lock hash stays deny.
 fn git_identity_trusted(string url) -> bool {
-    if len(url) == 0 {
+    if url.len() == 0 {
         return false;
     }
     return false;
@@ -44,7 +44,7 @@ fn git_identity_trusted(string url) -> bool {
 
 fn allow_include_has(Vec<string> names, string pkg) -> bool {
     let i = 0;
-    while i < len(names) {
+    while i < names.len() {
         if names[i] == pkg {
             return true;
         }
@@ -69,7 +69,7 @@ fn script_gate_lock(
     string path,
     string actual_hash,
 ) -> (string, string, bool) {
-    if len(lock_hash) == 0 {
+    if lock_hash.len() == 0 {
         return (path, actual_hash, true);
     }
     return (lock_path, lock_hash, false);
@@ -113,10 +113,10 @@ fn may_run_hook(
             raise "include-hook for " + pkg + " is not allowlisted";
         }
     }
-    if len(lock_path) == 0 {
+    if lock_path.len() == 0 {
         raise "untrusted hook: missing lock hash for " + pkg;
     }
-    if len(lock_hash) == 0 {
+    if lock_hash.len() == 0 {
         raise "untrusted hook: missing lock hash for " + pkg;
     }
     if path != lock_path {

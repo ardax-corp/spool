@@ -7,15 +7,15 @@
 name = 'json'
 git = 'https://github.com/ardax-corp/coil-json.git'
 tag = ''
-ref = '50d521698a1dd0bb6ec604a5cd24238c737f4f14'
-rev = '50d521698a1dd0bb6ec604a5cd24238c737f4f14'
-content_hash = 'db65fbed32fae14b52fc985414f87775c59f6bb8'
+ref = 'b39175852e270c0bd3cd0c0a48b50de0b08c9f61'
+rev = 'b39175852e270c0bd3cd0c0a48b50de0b08c9f61'
+content_hash = '8e8e9268b91c42c1807d7b35f286f14f8ed0caa3'
 
 [[package]]
 name = 'toml'
 git = 'https://github.com/ardax-corp/coil-toml.git'
 tag = ''
-ref = '3e0da9d38f0fb0d090f56869e2547fa2bebd8453'
-rev = '3e0da9d38f0fb0d090f56869e2547fa2bebd8453'
-content_hash = 'e2495441f7b2ceaec72e52719fa32cfdddb28938'
+ref = '3286add4c8286627146cb300c23ff026b4d9a042'
+rev = '3286add4c8286627146cb300c23ff026b4d9a042'
+content_hash = '852f2e1a0ef0c6b47e10ff7b8f2d89405693a0a4'
 

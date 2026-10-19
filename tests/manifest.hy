@@ -12,7 +12,7 @@ test("parse git dependency inline table") {
 http = { git = \"https://github.com/a/b.git\", version = \"^0.2\" }
 ";
     let deps = deps_parse(body)?;
-    assert!(len(deps) == 1);
+    assert!(deps.len() == 1);
     assert!(dep_kind(deps[0]) == "g");
     assert!(dep_name(deps[0]) == "http");
     assert!(dep_git(deps[0]) == "https://github.com/a/b.git");
@@ -28,7 +28,7 @@ version = \"0.1.0\"
 local_http = { path = \"../local-http\" }
 ";
     let deps = deps_parse(body)?;
-    assert!(len(deps) == 1);
+    assert!(deps.len() == 1);
     assert!(dep_kind(deps[0]) == "p");
     assert!(dep_name(deps[0]) == "local_http");
     assert!(dep_path(deps[0]) == "../local-http");
@@ -145,7 +145,7 @@ test("scripts_parse missing keys are omitted") {
 pre_install = \"./scripts/pre-install.sh\"
 ";
     let recs = scripts_parse(body)?;
-    assert!(len(recs) == 1);
+    assert!(recs.len() == 1);
     assert!(scripts_path_of(recs, "post_install") == "");
 }
 
@@ -174,14 +174,14 @@ test("deps_insert_line keeps entries together and ends with a newline") {
     let out = deps_insert_line(body, "b = { path = \"../b\" }")?;
     assert!(contains(out, "a = { path = \"../a\" }\nb = { path = \"../b\" }\n"));
     let deps = deps_parse(out)?;
-    assert!(len(deps) == 2);
+    assert!(deps.len() == 2);
 }
 
 test("deps_insert_line output without trailing newline still decodes") {
     let body = "[package]\nname = \"app\"\nversion = \"0.1.0\"";
     let out = deps_insert_line(body, "b = { path = \"../b\" }")?;
     let deps = deps_parse(out)?;
-    assert!(len(deps) == 1);
+    assert!(deps.len() == 1);
 }
 
 test("git deps accept rev pins and trusted") {
@@ -195,7 +195,7 @@ test("deps_remove_line drops only the named entry") {
     let body = "[dependencies]\nab = { path = \"../ab\" }\na = { path = \"../a\" }\n";
     let out = deps_remove_line(body, "a")?;
     let deps = deps_parse(out)?;
-    assert!(len(deps) == 1);
+    assert!(deps.len() == 1);
     assert!(dep_name(deps[0]) == "ab");
 }
 

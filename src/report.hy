@@ -11,7 +11,7 @@ use semver::{select_tag, select_tag_all};
 use git::{checkout_path, ls_remote_tags, is_hex_sha};
 
 fn short_sha(string s) -> string {
-    if len(s) <= 10 {
+    if s.len() <= 10 {
         return s;
     }
     return match slice(s, 0, 10) {
@@ -24,7 +24,7 @@ fn describe_locked(string p) -> string {
     if is_hex_sha(lock_pkg_ref(p)) {
         return lock_pkg_name(p) + " @ " + short_sha(lock_pkg_rev(p));
     }
-    if len(lock_pkg_ref(p)) > 0 {
+    if lock_pkg_ref(p).len() > 0 {
         return lock_pkg_name(p) + " " + lock_pkg_ref(p) + " @ " + short_sha(lock_pkg_rev(p));
     }
     return lock_pkg_name(p) + " " + lock_pkg_tag(p);
@@ -43,7 +43,7 @@ fn children_of(string toml) -> Vec<string> {
         },
     };
     let i = 0;
-    while i < len(deps) {
+    while i < deps.len() {
         let d = deps[i];
         i = i + 1;
         if dep_kind(d) == "g" {
@@ -57,10 +57,10 @@ fn children_of(string toml) -> Vec<string> {
 
 fn print_children(string root, Vec<string> packages, Vec<string> kids, string prefix, Vec<string> stack) {
     let i = 0;
-    while i < len(kids) {
+    while i < kids.len() {
         let k = kids[i];
         i = i + 1;
-        let last = i == len(kids);
+        let last = i == kids.len();
         let branch = "├── ";
         let next_prefix = prefix + "│   ";
         if last {
@@ -76,7 +76,7 @@ fn print_children(string root, Vec<string> packages, Vec<string> kids, string pr
             let sub = children_of(join2(dir, "coil.toml"));
             let git_only: Vec<string> = Vec::new();
             let j = 0;
-            while j < len(sub) {
+            while j < sub.len() {
                 if tsv_field(sub[j], 0) == "g" {
                     git_only.push(sub[j]);
                 }
@@ -86,7 +86,7 @@ fn print_children(string root, Vec<string> packages, Vec<string> kids, string pr
             continue;
         }
         let p = lock_find(packages, name);
-        if len(p) == 0 {
+        if p.len() == 0 {
             println(prefix + branch + name + " (not locked; run spool install)");
             continue;
         }
@@ -102,7 +102,7 @@ fn print_children(string root, Vec<string> packages, Vec<string> kids, string pr
         let sub = children_of(join2(dest, "coil.toml"));
         let git_only: Vec<string> = Vec::new();
         let j = 0;
-        while j < len(sub) {
+        while j < sub.len() {
             if tsv_field(sub[j], 0) == "g" {
                 git_only.push(sub[j]);
             }
@@ -111,7 +111,7 @@ fn print_children(string root, Vec<string> packages, Vec<string> kids, string pr
         // Vec is a reference; copy so siblings keep their own stack.
         let st: Vec<string> = Vec::new();
         let m = 0;
-        while m < len(stack) {
+        while m < stack.len() {
             st.push(stack[m]);
             m = m + 1;
         }
@@ -124,11 +124,11 @@ fn print_tree(string root, Vec<string> packages) -> Result<int, string> {
     let toml = join2(root, "coil.toml");
     let body = manifest_body(toml)?;
     let name = package_name_read(toml);
-    if len(name) == 0 {
+    if name.len() == 0 {
         name = "(root)";
     }
     let ver = package_version_parse(body);
-    if len(ver) > 0 {
+    if ver.len() > 0 {
         println(name + " v" + ver);
     } else {
         println(name);
@@ -140,7 +140,7 @@ fn print_tree(string root, Vec<string> packages) -> Result<int, string> {
 
 fn pad(string s, int width) -> string {
     let out = s;
-    while len(out) < width {
+    while out.len() < width {
         out = out + " ";
     }
     return out + " ";
@@ -154,11 +154,11 @@ fn print_outdated(string root, Vec<string> packages) -> Result<int, string> {
     println(pad("name", 16) + pad("locked", 12) + pad("compatible", 12) + "latest");
     let behind = 0;
     let i = 0;
-    while i < len(packages) {
+    while i < packages.len() {
         let p = packages[i];
         i = i + 1;
         let name = lock_pkg_name(p);
-        if len(lock_pkg_ref(p)) > 0 {
+        if lock_pkg_ref(p).len() > 0 {
             println(pad(name, 16) + pad("@" + lock_pkg_ref(p), 12) + pad("-", 12) + "-");
             continue;
         }
@@ -171,7 +171,7 @@ fn print_outdated(string root, Vec<string> packages) -> Result<int, string> {
         };
         let reqs = reqs_for(cons, name);
         let compatible = "-";
-        if len(reqs) > 0 {
+        if reqs.len() > 0 {
             compatible = match select_tag_all(reqs, tag_names) {
                 Result::Ok(t) => t,
                 Result::Err(_) => "-",
