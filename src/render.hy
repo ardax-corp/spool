@@ -1,9 +1,9 @@
 // Render `coil test --json` / `coil mutate --json` NDJSON events (stdin) as a
 // short report. Runs as `spool __render <test|infect> <color|plain>` at the
 // end of a pipe, so results show up while coil is still running.
-use io::{stdin, read, wait_readable, from_bytes as io_from_bytes};
+use io::{stdin, read, wait_readable};
 use term::{print, println};
-use string::{format};
+use string::{format, from_bytes};
 use text::{split};
 use json::{Json, JsonValue};
 
@@ -52,7 +52,7 @@ fn next_line(Stream s) -> Option<string> {
         }
         fails = 0;
         if one[0] == lf {
-            return Option::Some(match io_from_bytes(acc) {
+            return Option::Some(match from_bytes(acc) {
                 Result::Ok(t) => t,
                 Result::Err(_) => "",
             });
@@ -62,7 +62,7 @@ fn next_line(Stream s) -> Option<string> {
     if len(acc) == 0 {
         return Option::None;
     }
-    return Option::Some(match io_from_bytes(acc) {
+    return Option::Some(match from_bytes(acc) {
         Result::Ok(t) => t,
         Result::Err(_) => "",
     });
