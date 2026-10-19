@@ -17,7 +17,7 @@ fn env_or(string key, string fallback) -> string {
     return match var(key) {
         Result::Ok(v) => {
             let t = trim_or(v);
-            if len(t) == 0 {
+            if t.len() == 0 {
                 return fallback;
             }
             return t;
@@ -29,11 +29,11 @@ fn env_or(string key, string fallback) -> string {
 /// `$COIL`, then `coil` on PATH, then ~/.coil/bin/coil. "" when none.
 fn find_coil() -> string {
     let c = env_or("COIL", "");
-    if len(c) > 0 {
+    if c.len() > 0 {
         return c;
     }
     let on_path = which("coil");
-    if len(on_path) > 0 {
+    if on_path.len() > 0 {
         return on_path;
     }
     match home_dir() {
@@ -50,7 +50,7 @@ fn find_coil() -> string {
 
 fn require_coil() -> Result<string, string> {
     let c = find_coil();
-    if len(c) == 0 {
+    if c.len() == 0 {
         raise "coil not found: set COIL, put coil on PATH, or run ./bootstrap.sh --install";
     }
     return c;
@@ -96,7 +96,7 @@ fn stdlib_from_config() -> string {
 
 /// A stdlib checkout dir (with src/) or a src dir itself → the src dir.
 fn stdlib_src_of(string dir) -> string {
-    if len(dir) == 0 {
+    if dir.len() == 0 {
         return "";
     }
     let src = join2(dir, "src");
@@ -113,15 +113,15 @@ fn stdlib_src_of(string dir) -> string {
 /// then ~/.coil/stdlib. "" when none is found.
 fn find_stdlib() -> string {
     let s = stdlib_src_of(env_or("COIL_STDLIB_DIR", ""));
-    if len(s) > 0 {
+    if s.len() > 0 {
         return s;
     }
     s = stdlib_src_of(env_or("COIL_STDLIB", ""));
-    if len(s) > 0 {
+    if s.len() > 0 {
         return s;
     }
     s = stdlib_src_of(stdlib_from_config());
-    if len(s) > 0 {
+    if s.len() > 0 {
         return s;
     }
     match home_dir() {
@@ -138,7 +138,7 @@ fn abs_under(string root, string p) -> string {
         return p;
     }
     if starts_with(p, "./") {
-        return join2(root, match slice(p, 2, len(p)) {
+        return join2(root, match slice(p, 2, p.len()) {
             Result::Ok(x) => x,
             Result::Err(_) => p,
         });
@@ -154,7 +154,7 @@ fn project_roots(string root) -> Result<Vec<string>, string> {
     let out: Vec<string> = Vec::new();
     let has_stdlib = false;
     let i = 0;
-    while i < len(rel) {
+    while i < rel.len() {
         let r = abs_under(root, rel[i]);
         i = i + 1;
         if path_exists(join2(r, "text.hy")) && path_exists(join3(r, "io", "file.hy")) {
@@ -168,7 +168,7 @@ fn project_roots(string root) -> Result<Vec<string>, string> {
     }
     if has_stdlib == false {
         let stdlib = find_stdlib();
-        if len(stdlib) > 0 {
+        if stdlib.len() > 0 {
             out.push(stdlib);
         }
     }
@@ -178,11 +178,11 @@ fn project_roots(string root) -> Result<Vec<string>, string> {
 /// The `dload` stem for a lock package: the native row's `stem` / `lib`, else
 /// the package name without its `coil-` prefix (`coil-tls` → `tls`).
 fn dload_stem(string pkg, string native_stem) -> string {
-    if len(native_stem) > 0 {
+    if native_stem.len() > 0 {
         return native_stem;
     }
     if starts_with(pkg, "coil-") {
-        return match slice(pkg, 5, len(pkg)) {
+        return match slice(pkg, 5, pkg.len()) {
             Result::Ok(x) => x,
             Result::Err(_) => pkg,
         };
@@ -192,7 +192,7 @@ fn dload_stem(string pkg, string native_stem) -> string {
 
 /// 64 hex digits (coil rejects any other `--dload-pin` hash).
 fn is_sha256_hex(string s) -> bool {
-    if len(s) != 64 {
+    if s.len() != 64 {
         return false;
     }
     let lower = match to_lower(s) {
@@ -219,7 +219,7 @@ fn is_sha256_hex(string s) -> bool {
 
 fn push_unique(Vec<string> v, string s) -> Vec<string> {
     let i = 0;
-    while i < len(v) {
+    while i < v.len() {
         if v[i] == s {
             return v;
         }
@@ -238,7 +238,7 @@ fn dload_flags(string manifest, string lock) -> Result<Vec<string>, string> {
     let out: Vec<string> = Vec::new();
     let pins: Vec<string> = Vec::new();
     let i = 0;
-    while i < len(natives) {
+    while i < natives.len() {
         let n = natives[i];
         i = i + 1;
         let sha = lock_native_sha(n);
@@ -247,7 +247,7 @@ fn dload_flags(string manifest, string lock) -> Result<Vec<string>, string> {
         }
     }
     i = 0;
-    while i < len(pins) {
+    while i < pins.len() {
         out.push("--dload-pin");
         out.push(pins[i]);
         i = i + 1;
@@ -255,13 +255,13 @@ fn dload_flags(string manifest, string lock) -> Result<Vec<string>, string> {
     let trusted = trusted_deps_parse(manifest)?;
     let stems: Vec<string> = Vec::new();
     i = 0;
-    while i < len(trusted) {
+    while i < trusted.len() {
         let name = trusted[i];
         i = i + 1;
         stems = push_unique(stems, name);
         stems = push_unique(stems, dload_stem(name, ""));
         let j = 0;
-        while j < len(natives) {
+        while j < natives.len() {
             if lock_native_pkg(natives[j]) == name {
                 stems = push_unique(stems, dload_stem(name, lock_native_stem(natives[j])));
             }
@@ -269,7 +269,7 @@ fn dload_flags(string manifest, string lock) -> Result<Vec<string>, string> {
         }
     }
     i = 0;
-    while i < len(stems) {
+    while i < stems.len() {
         out.push("--dload-trusted");
         out.push(stems[i]);
         i = i + 1;
@@ -291,7 +291,7 @@ fn ffi_native_specs(string root, string manifest) -> Result<Vec<string>, string>
     let rows = ffi_natives_parse(manifest)?;
     let out: Vec<string> = Vec::new();
     let i = 0;
-    while i < len(rows) {
+    while i < rows.len() {
         let r = rows[i];
         i = i + 1;
         let spec = "name=" + spec_escape(native_name(r));
@@ -300,10 +300,10 @@ fn ffi_native_specs(string root, string manifest) -> Result<Vec<string>, string>
         if native_package(r) != native_name(r) {
             spec = spec + ",package=" + spec_escape(native_package(r));
         }
-        if len(native_requires(r)) > 0 {
+        if native_requires(r).len() > 0 {
             spec = spec + ",requires=" + spec_escape(native_requires(r));
         }
-        if len(native_requires_hint(r)) > 0 {
+        if native_requires_hint(r).len() > 0 {
             spec = spec + ",requires-hint=" + spec_escape(native_requires_hint(r));
         }
         out.push(spec);
@@ -316,7 +316,7 @@ fn ffi_native_flags(string root) -> Result<Vec<string>, string> {
     let specs = ffi_native_specs(root, manifest_body(join2(root, "coil.toml"))?)?;
     let out: Vec<string> = Vec::new();
     let i = 0;
-    while i < len(specs) {
+    while i < specs.len() {
         out.push("--ffi-native");
         out.push(specs[i]);
         i = i + 1;
@@ -348,7 +348,7 @@ fn grant_flags(string root) -> Result<Vec<string>, string> {
     }
     let caps = ["read", "write", "net", "env", "exec", "exit", "attach"];
     let c = 0;
-    while c < len(caps) {
+    while c < caps.len() {
         if section_bool(body, "permissions", caps[c])? {
             out.push("--allow-" + caps[c]);
         }
@@ -368,21 +368,21 @@ fn grant_flags(string root) -> Result<Vec<string>, string> {
     }
     let stems = section_strings(body, "ffi", "allow")?;
     let i = 0;
-    while i < len(stems) {
+    while i < stems.len() {
         out.push("--allow-dload");
         out.push(stems[i]);
         i = i + 1;
     }
     let search = section_strings(body, "ffi", "search_paths")?;
     i = 0;
-    while i < len(search) {
+    while i < search.len() {
         out.push("--ffi-search-path");
         out.push(abs_under(root, search[i]));
         i = i + 1;
     }
     let dload = dload_flags(body, lock_text(root))?;
     i = 0;
-    while i < len(dload) {
+    while i < dload.len() {
         out.push(dload[i]);
         i = i + 1;
     }
@@ -394,14 +394,14 @@ fn compile_flags(string root) -> Result<Vec<string>, string> {
     let roots = project_roots(root)?;
     let out: Vec<string> = Vec::new();
     let i = 0;
-    while i < len(roots) {
+    while i < roots.len() {
         out.push("--root");
         out.push(roots[i]);
         i = i + 1;
     }
     let grants = grant_flags(root)?;
     i = 0;
-    while i < len(grants) {
+    while i < grants.len() {
         out.push(grants[i]);
         i = i + 1;
     }

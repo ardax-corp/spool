@@ -16,7 +16,7 @@ test("lock round-trip preserves fields and sorts by name") {
     pkgs.push(make_git_pkg("alpha", "https://a", "v1.2.3", "b", "tb"));
     let text = lock_serialize(pkgs);
     let back = lock_parse(text)?;
-    assert!(len(back) == 2);
+    assert!(back.len() == 2);
     assert!(lock_pkg_name(back[0]) == "alpha");
     assert!(lock_pkg_name(back[1]) == "zeta");
     assert!(lock_pkg_hash(back[0]) == "tb");
@@ -37,7 +37,7 @@ test("lock_upsert replaces by name") {
     let pkgs = Vec::new();
     pkgs.push(make_git_pkg("http", "https://x", "v1", "c1", "h1"));
     pkgs = lock_upsert(pkgs, make_git_pkg("http", "https://x", "v2", "c2", "h2"));
-    assert!(len(pkgs) == 1);
+    assert!(pkgs.len() == 1);
     assert!(lock_pkg_hash(pkgs[0]) == "h2");
 }
 
@@ -68,7 +68,7 @@ test("lock round-trip keeps hook path and hash") {
     assert!(contains(text, "hook_path = './hooks/include.sh'"));
     assert!(contains(text, "hook_hash = 'hookabc'"));
     let back = lock_parse(text)?;
-    assert!(len(back) == 1);
+    assert!(back.len() == 1);
     assert!(lock_pkg_hook_path(back[0]) == "./hooks/include.sh");
     assert!(lock_pkg_hook_hash(back[0]) == "hookabc");
 }
@@ -95,7 +95,7 @@ test("lock without [hooks] has empty allow_include") {
     let text = lock_serialize(pkgs);
     assert!(contains(text, "allow_include =") == false);
     let names = lock_parse_allow(text)?;
-    assert!(len(names) == 0);
+    assert!(names.len() == 0);
 }
 
 test("lock allow_include round-trip") {
@@ -108,7 +108,7 @@ test("lock allow_include round-trip") {
     assert!(contains(text, "[hooks]"));
     assert!(contains(text, "allow_include"));
     let names = lock_parse_allow(text)?;
-    assert!(len(names) == 2);
+    assert!(names.len() == 2);
     assert!(names[0] == "http");
     assert!(names[1] == "zeta");
 }
@@ -117,7 +117,7 @@ test("lock_upsert keeps hook fields when the new pin omits them") {
     let pkgs = Vec::new();
     pkgs.push(make_git_pkg_hook("http", "https://x", "v1", "c1", "h1", "./h.sh", "abc"));
     pkgs = lock_upsert(pkgs, make_git_pkg("http", "https://x", "v2", "c2", "h2"));
-    assert!(len(pkgs) == 1);
+    assert!(pkgs.len() == 1);
     assert!(lock_pkg_hash(pkgs[0]) == "h2");
     assert!(lock_pkg_hook_path(pkgs[0]) == "./h.sh");
     assert!(lock_pkg_hook_hash(pkgs[0]) == "abc");
@@ -148,12 +148,12 @@ test("lock [scripts] round-trip is not a package row") {
     assert!(contains(text, "pre_install_hash = 'abc123'"));
     assert!(contains(text, "name = 'app'") == false);
     let back = lock_parse_scripts(text)?;
-    assert!(len(back) == 2);
+    assert!(back.len() == 2);
     let pre = lock_find_script(back, "pre_install");
     assert!(lock_script_path(pre) == "./scripts/pre-install.sh");
     assert!(lock_script_hash(pre) == "abc123");
     let pkgs_back = lock_parse(text)?;
-    assert!(len(pkgs_back) == 1);
+    assert!(pkgs_back.len() == 1);
     assert!(lock_pkg_name(pkgs_back[0]) == "http");
     assert!(lock_pkg_hook_path(pkgs_back[0]) == "");
 }
@@ -192,14 +192,14 @@ test("lock rewrite keeps [[package.native]] rows under their package") {
         Result::Err(_) => raise "lock read failed",
     };
     let natives = lock_native_parse(text)?;
-    assert!(len(natives) == 2);
+    assert!(natives.len() == 2);
     assert!(lock_native_pkg(natives[0]) == "coil-crypto");
     assert!(lock_native_stem(natives[0]) == "hycrypto");
     assert!(lock_native_sha(natives[0]) == native_sha("a"));
     assert!(lock_native_pkg(natives[1]) == "coil-tls");
     assert!(lock_native_sha(natives[1]) == native_sha("b"));
     let reread = lock_read(path)?;
-    assert!(len(reread) == 3);
+    assert!(reread.len() == 3);
 
     // A package dropped from the lock takes its native rows with it.
     let kept = Vec::new();
@@ -210,6 +210,6 @@ test("lock rewrite keeps [[package.native]] rows under their package") {
         Result::Err(_) => raise "lock read failed",
     };
     let left = lock_native_parse(after)?;
-    assert!(len(left) == 1);
+    assert!(left.len() == 1);
     assert!(lock_native_pkg(left[0]) == "coil-tls");
 }

@@ -10,7 +10,7 @@ fn ls_field(string row, int idx) -> string {
             empty
         },
     };
-    if idx < len(parts) {
+    if idx < parts.len() {
         return parts[idx];
     }
     return "";
@@ -62,7 +62,7 @@ fn parse_tag_ref(string refname) -> Result<(string, bool), string> {
 
 fn upsert_tag_sha(Vec<string> rows, string tag, string sha, bool peeled) -> Vec<string> {
     let i = 0;
-    while i < len(rows) {
+    while i < rows.len() {
         if ls_field(rows[i], 0) == tag {
             if peeled {
                 rows[i] = tag + "\t" + sha;
@@ -82,13 +82,13 @@ fn parse_ls_remote(string body) -> Result<Vec<string>, string> {
     };
     let rows: Vec<string> = Vec::new();
     let i = 0;
-    while i < len(lines) {
+    while i < lines.len() {
         let line = match trim(lines[i]) {
             Result::Ok(t) => t,
             Result::Err(_) => lines[i],
         };
         i = i + 1;
-        if len(line) == 0 {
+        if line.len() == 0 {
             continue;
         }
         let pair = split_sha_ref(line)?;
@@ -108,7 +108,7 @@ fn parse_ls_remote(string body) -> Result<Vec<string>, string> {
 fn ls_remote_tag_names(Vec<string> rows) -> Vec<string> {
     let out: Vec<string> = Vec::new();
     let i = 0;
-    while i < len(rows) {
+    while i < rows.len() {
         out.push(ls_field(rows[i], 0));
         i = i + 1;
     }
@@ -117,7 +117,7 @@ fn ls_remote_tag_names(Vec<string> rows) -> Vec<string> {
 
 fn ls_remote_sha(Vec<string> rows, string tag) -> Result<string, string> {
     let i = 0;
-    while i < len(rows) {
+    while i < rows.len() {
         if ls_field(rows[i], 0) == tag {
             return ls_field(rows[i], 1);
         }

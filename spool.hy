@@ -103,7 +103,7 @@ fn current_dir() -> Result<string, string> {
 /// SPOOL_PROJECT, else the nearest directory upward holding coil.toml.
 fn find_project() -> Result<string, string> {
     let forced = env_or("SPOOL_PROJECT", "");
-    if len(forced) > 0 {
+    if forced.len() > 0 {
         return forced;
     }
     let dir = current_dir()?;
@@ -113,7 +113,7 @@ fn find_project() -> Result<string, string> {
             return d;
         }
         let up = path_dirname(d);
-        if up == d || len(up) == 0 || up == "." {
+        if up == d || up.len() == 0 || up == "." {
             break;
         }
         d = up;
@@ -138,7 +138,7 @@ fn hook_flags() -> Vec<string> {
 fn with_hook_flags(Vec<string> extra) -> Vec<string> {
     let out = hook_flags();
     let i = 0;
-    while i < len(extra) {
+    while i < extra.len() {
         out.push(extra[i]);
         i = i + 1;
     }
@@ -149,7 +149,7 @@ fn with_hook_flags(Vec<string> extra) -> Vec<string> {
 
 fn project_name(string root) -> string {
     let n = package_name_read(join2(root, "coil.toml"));
-    if len(n) == 0 {
+    if n.len() == 0 {
         return "app";
     }
     return n;
@@ -158,7 +158,7 @@ fn project_name(string root) -> string {
 fn entry_of(string root) -> Result<string, string> {
     let body = manifest_body(join2(root, "coil.toml"))?;
     let e = section_string(body, "entry", "file")?;
-    if len(e) > 0 {
+    if e.len() > 0 {
         return e;
     }
     if path_exists(join2(root, "src/main.hy")) {
@@ -169,7 +169,7 @@ fn entry_of(string root) -> Result<string, string> {
 
 fn has_deps(string root) -> Result<bool, string> {
     let deps = deps_read(join2(root, "coil.toml"))?;
-    return len(deps) > 0;
+    return deps.len() > 0;
 }
 
 /// Install first when dependencies are declared but never linked.
@@ -196,7 +196,7 @@ fn coil_in(string root, Vec<string> argv) -> Result<int, string> {
 
 fn push_all(Vec<string> dst, Vec<string> src) -> Vec<string> {
     let i = 0;
-    while i < len(src) {
+    while i < src.len() {
         dst.push(src[i]);
         i = i + 1;
     }
@@ -210,7 +210,7 @@ fn build_to(string root, string output, string opt_level) -> Result<int, string>
     let argv = strs("package");
     argv = push_all(argv, compile_flags(root)?);
     argv = push_all(argv, ffi_native_flags(root)?);
-    if len(opt_level) > 0 {
+    if opt_level.len() > 0 {
         argv.push("-O");
         argv.push(opt_level);
     }
@@ -233,14 +233,14 @@ fn cmd_build(Vec<string> rest) -> Result<int, string> {
     at_most(positionals(p), 0, "spool build [-o PATH] [-O LEVEL]")?;
     let root = find_project()?;
     let o = opt(p, "-o");
-    if len(o) == 0 {
+    if o.len() == 0 {
         o = opt(p, "--output");
     }
-    if len(o) == 0 {
+    if o.len() == 0 {
         o = default_output(root);
     }
     let lvl = opt(p, "-O");
-    if len(lvl) == 0 {
+    if lvl.len() == 0 {
         lvl = opt(p, "--opt-level");
     }
     build_to(root, o, lvl)?;
@@ -253,7 +253,7 @@ fn cmd_run(Vec<string> rest) -> Result<int, string> {
     let root = find_project()?;
     let o = default_output(root);
     let lvl = opt(p, "-O");
-    if len(lvl) == 0 {
+    if lvl.len() == 0 {
         lvl = opt(p, "--opt-level");
     }
     build_to(root, o, lvl)?;
@@ -291,7 +291,7 @@ fn cmd_check(Vec<string> rest) -> Result<int, string> {
 fn tool_args(Vec<string> rest) -> Vec<string> {
     let out: Vec<string> = Vec::new();
     let i = 0;
-    while i < len(rest) {
+    while i < rest.len() {
         if rest[i] != "--enable-scripts" && rest[i] != "--ignore-scripts" {
             out.push(rest[i]);
         }
@@ -304,11 +304,11 @@ fn tool_args(Vec<string> rest) -> Vec<string> {
 /// flags in `valued`.
 fn has_target(Vec<string> args, Vec<string> valued) -> bool {
     let i = 0;
-    while i < len(args) {
+    while i < args.len() {
         let a = args[i];
         i = i + 1;
         if a == "--" {
-            return i < len(args);
+            return i < args.len();
         }
         if a == "--entry" || starts_with(a, "--entry=") {
             return true;
@@ -370,7 +370,7 @@ fn report_flags(Vec<string> args) -> Result<(Vec<string>, bool, string), string>
     let plain = false;
     let color = "auto";
     let i = 0;
-    while i < len(args) {
+    while i < args.len() {
         let a = args[i];
         i = i + 1;
         if a == "--plain" {
@@ -378,7 +378,7 @@ fn report_flags(Vec<string> args) -> Result<(Vec<string>, bool, string), string>
             continue;
         }
         if a == "--color" {
-            if i >= len(args) {
+            if i >= args.len() {
                 raise "--color needs a value (auto, always or never)";
             }
             color = args[i];
@@ -410,7 +410,7 @@ fn want_color(string mode) -> bool {
     if mode == "never" {
         return false;
     }
-    if len(env_or("NO_COLOR", "")) > 0 || env_or("TERM", "") == "dumb" {
+    if env_or("NO_COLOR", "").len() > 0 || env_or("TERM", "") == "dumb" {
         return false;
     }
     return match sh_run("[ -t 1 ]", no_strs()) {
@@ -425,7 +425,7 @@ fn self_exe() -> string {
         Result::Ok(v) => v,
         Result::Err(_) => no_strs(),
     };
-    if len(argv) == 0 {
+    if argv.len() == 0 {
         return "";
     }
     let a = argv[0];
@@ -434,7 +434,7 @@ fn self_exe() -> string {
         Result::Err(_) => strs(a),
     };
     // Run in memory (`coil spool.hy`), argv[0] is coil itself.
-    if parts[len(parts) - 1] == "coil" {
+    if parts[parts.len() - 1] == "coil" {
         return "";
     }
     if contains(a, "/") == false {
@@ -482,7 +482,7 @@ fn coil_rendered(string sub, string view, Vec<string> rest) -> Result<int, strin
     let parsed = report_flags(tool_args(rest))?;
     let (coil_args, plain, color_mode) = parsed;
     let me = self_exe();
-    if plain || len(me) == 0 {
+    if plain || me.len() == 0 {
         return coil_tool(sub, coil_args, true)?;
     }
     let coil = require_coil()?;
@@ -530,7 +530,7 @@ fn cmd_infect(Vec<string> rest) -> Result<int, string> {
 }
 
 fn cmd_render(Vec<string> rest) -> Result<int, string> {
-    if len(rest) != 2 {
+    if rest.len() != 2 {
         raise "usage: spool __render <test|infect> <color|plain>";
     }
     return render_events(rest[0], rest[1] == "color")?;
@@ -559,14 +559,14 @@ fn cmd_fmt(Vec<string> rest) -> Result<int, string> {
     let argv = strs("fmt");
     argv = push_all(argv, args);
     if has_target(args, no_strs()) == false {
-        let n = len(argv);
+        let n = argv.len();
         if path_exists(join2(root, "src")) {
             argv.push("src");
         }
         if path_exists(join2(root, "tests")) {
             argv.push("tests");
         }
-        if len(argv) == n {
+        if argv.len() == n {
             raise "nothing to format";
         }
     }
@@ -654,18 +654,18 @@ fn cmd_new(Vec<string> rest, bool here) -> Result<int, string> {
     if here {
         at_most(pos, 0, "spool init [--name N] [--lib] [--no-git]")?;
         dir = current_dir()?;
-        if len(name) == 0 {
+        if name.len() == 0 {
             let parts = match split(dir, "/") {
                 Result::Ok(v) => v,
                 Result::Err(_) => strs("app"),
             };
-            name = parts[len(parts) - 1];
+            name = parts[parts.len() - 1];
         }
     } else {
-        if len(pos) != 1 {
+        if pos.len() != 1 {
             raise "usage: spool new <name> [--lib] [--no-git]";
         }
-        if len(name) == 0 {
+        if name.len() == 0 {
             name = pos[0];
         }
         dir = join2(current_dir()?, pos[0]);
@@ -679,7 +679,7 @@ fn cmd_new(Vec<string> rest, bool here) -> Result<int, string> {
         kind = "library";
     }
     say(format("created %s package `%s` in %s", kind, name, dir));
-    if len(find_stdlib()) == 0 {
+    if find_stdlib().len() == 0 {
         say("note: coil-stdlib not found; set COIL_STDLIB_DIR or run ./bootstrap.sh --install");
     }
     return 0;
@@ -711,7 +711,7 @@ fn cmd_add(Vec<string> rest) -> Result<int, string> {
     let p = parse_args(rest, strs4("--git", "--path", "--version", "--rev"), hook_flags())?;
     let pos = positionals(p);
     let usage = "spool add <name> --git URL [--version REQ | --rev REV]\n       spool add <name> --path DIR";
-    if len(pos) != 1 {
+    if pos.len() != 1 {
         raise "usage: " + usage;
     }
     let name = pos[0];
@@ -721,26 +721,26 @@ fn cmd_add(Vec<string> rest) -> Result<int, string> {
     let version = opt(p, "--version");
     let rev = opt(p, "--rev");
     let dep = "";
-    if len(git) > 0 {
-        if len(path) > 0 {
+    if git.len() > 0 {
+        if path.len() > 0 {
             raise "--git and --path are mutually exclusive";
         }
         check_git_url(git)?;
         check_toml_value("--git", git)?;
         check_toml_value("--version", version)?;
         check_toml_value("--rev", rev)?;
-        if len(version) > 0 && len(rev) > 0 {
+        if version.len() > 0 && rev.len() > 0 {
             raise "--version and --rev are mutually exclusive";
         }
-        if len(version) == 0 && len(rev) == 0 {
+        if version.len() == 0 && rev.len() == 0 {
             version = "*";
         }
         dep = make_git_rev_dep(name, git, version, rev);
     } else {
-        if len(path) == 0 {
+        if path.len() == 0 {
             raise "need --git or --path\nusage: " + usage;
         }
-        if len(version) > 0 || len(rev) > 0 {
+        if version.len() > 0 || rev.len() > 0 {
             raise "--version / --rev only apply to --git";
         }
         check_toml_value("--path", path)?;
@@ -764,7 +764,7 @@ fn cmd_add(Vec<string> rest) -> Result<int, string> {
 fn cmd_remove(Vec<string> rest) -> Result<int, string> {
     let p = parse_args(rest, no_strs(), hook_flags())?;
     let pos = positionals(p);
-    if len(pos) != 1 {
+    if pos.len() != 1 {
         raise "usage: spool remove <name>";
     }
     let root = find_project()?;
@@ -791,26 +791,26 @@ fn cmd_update(Vec<string> rest) -> Result<int, string> {
     let force: Vec<string> = Vec::new();
     let deps = deps_read(join2(root, "coil.toml"))?;
     let i = 0;
-    while i < len(deps) {
+    while i < deps.len() {
         if dep_kind(deps[i]) == "g" {
             force.push(dep_name(deps[i]));
         }
         i = i + 1;
     }
     i = 0;
-    while i < len(packages) {
+    while i < packages.len() {
         if vec_has(force, lock_pkg_name(packages[i])) == false {
             force.push(lock_pkg_name(packages[i]));
         }
         i = i + 1;
     }
-    if len(pos) == 1 {
+    if pos.len() == 1 {
         if vec_has(force, pos[0]) == false {
             raise format("`%s` is not a git dependency", pos[0]);
         }
         force = strs(pos[0]);
     }
-    if len(force) == 0 {
+    if force.len() == 0 {
         raise "no git dependencies";
     }
     sync(root, false, force, hooks_off_from(p), "pre_update", "post_update")?;
@@ -837,7 +837,7 @@ fn cmd_download(Vec<string> rest) -> Result<int, string> {
     let pos = positionals(p);
     at_most(pos, 1, "spool download [EXE]")?;
     let coil = require_coil()?;
-    if len(pos) == 1 {
+    if pos.len() == 1 {
         // URLs still come from the enclosing project's [[ffi.native]], if any.
         let dir = match find_project() {
             Result::Ok(r) => r,
@@ -855,7 +855,7 @@ fn cmd_download(Vec<string> rest) -> Result<int, string> {
 fn cmd_allow_include(Vec<string> rest) -> Result<int, string> {
     let p = parse_args(rest, no_strs(), no_strs())?;
     let pos = positionals(p);
-    if len(pos) != 1 {
+    if pos.len() != 1 {
         raise "usage: spool allow-include <name>";
     }
     check_pkg_name(pos[0])?;
@@ -881,7 +881,7 @@ fn cmd_doctor(Vec<string> rest) -> Result<int, string> {
     out("spool " + spool_version());
     let good = true;
     let coil = find_coil();
-    if len(coil) > 0 {
+    if coil.len() > 0 {
         good = doctor_line("coil", coil + " (" + coil_version_output(coil) + ")", true) && good;
         doctor_line("coil mutate", "(spool infect)", coil_has_command(coil, "mutate"));
         doctor_line("coil test --json", "(rendered spool test / coverage)", coil_streams_json(coil, "test"));
@@ -889,16 +889,16 @@ fn cmd_doctor(Vec<string> rest) -> Result<int, string> {
         good = doctor_line("coil", "(set COIL or run ./bootstrap.sh --install)", false) && good;
     }
     let stdlib = find_stdlib();
-    if len(stdlib) > 0 {
+    if stdlib.len() > 0 {
         doctor_line("coil-stdlib", stdlib, true);
     } else {
         good = doctor_line("coil-stdlib", "(set COIL_STDLIB_DIR or ~/.coil/stdlib)", false) && good;
     }
     let tools = strs4("git", "sh", "curl", "tar");
     let i = 0;
-    while i < len(tools) {
+    while i < tools.len() {
         let w = which(tools[i]);
-        let ok = len(w) > 0;
+        let ok = w.len() > 0;
         if tools[i] == "git" || tools[i] == "sh" {
             good = doctor_line(tools[i], w, ok) && good;
         } else {
@@ -934,7 +934,7 @@ fn cmd_cache(Vec<string> rest) -> Result<int, string> {
     let p = parse_args(rest, no_strs(), no_strs())?;
     let pos = positionals(p);
     let sub = "dir";
-    if len(pos) > 0 {
+    if pos.len() > 0 {
         sub = pos[0];
     }
     at_most(pos, 1, "spool cache dir | spool cache clean")?;
@@ -1055,7 +1055,7 @@ fn main() {
     let leading: Vec<string> = Vec::new();
     let found = false;
     let i = 1;
-    while i < len(argv) {
+    while i < argv.len() {
         let a = argv[i];
         i = i + 1;
         if found {

@@ -7,10 +7,10 @@ use string::{format};
 use text::{starts_with, ends_with, slice, split, trim, contains};
 
 fn join2(string a, string b) -> string {
-    if len(a) == 0 {
+    if a.len() == 0 {
         return b;
     }
-    if len(b) == 0 {
+    if b.len() == 0 {
         return a;
     }
     if starts_with(b, "/") {
@@ -35,15 +35,15 @@ fn path_is_absolute(string p) -> bool {
 }
 
 fn path_dirname(string p) -> string {
-    if len(p) == 0 {
+    if p.len() == 0 {
         return ".";
     }
     let s = p;
-    while len(s) > 1 {
+    while s.len() > 1 {
         if ends_with(s, "/") == false {
             break;
         }
-        let chopped = match slice(s, 0, len(s) - 1) {
+        let chopped = match slice(s, 0, s.len() - 1) {
             Result::Ok(x) => x,
             Result::Err(_) => s,
         };
@@ -58,10 +58,10 @@ fn path_dirname(string p) -> string {
             return ".";
         },
     };
-    if len(parts) <= 1 {
+    if parts.len() <= 1 {
         return ".";
     }
-    let last = len(parts) - 1;
+    let last = parts.len() - 1;
     if last == 1 {
         if parts[0] == "" {
             return "/";
@@ -71,14 +71,14 @@ fn path_dirname(string p) -> string {
     let out = parts[0];
     let i = 1;
     while i < last {
-        if len(out) == 0 {
+        if out.len() == 0 {
             out = "/" + parts[i];
         } else {
             out = out + "/" + parts[i];
         }
         i = i + 1;
     }
-    if len(out) == 0 {
+    if out.len() == 0 {
         return "/";
     }
     return out;
@@ -131,7 +131,7 @@ fn trim_or(string s) -> string {
 
 fn lines_of(string body) -> Vec<string> {
     let out: Vec<string> = Vec::new();
-    if len(body) == 0 {
+    if body.len() == 0 {
         return out;
     }
     let parts = match split(body, "\n") {
@@ -141,10 +141,10 @@ fn lines_of(string body) -> Vec<string> {
         },
     };
     let i = 0;
-    while i < len(parts) {
+    while i < parts.len() {
         let line = trim_or(parts[i]);
         i = i + 1;
-        if len(line) > 0 {
+        if line.len() > 0 {
             out.push(line);
         }
     }
@@ -159,7 +159,7 @@ fn tsv_field(string row, int idx) -> string {
             empty
         },
     };
-    if idx < len(parts) {
+    if idx < parts.len() {
         return parts[idx];
     }
     return "";
@@ -167,7 +167,7 @@ fn tsv_field(string row, int idx) -> string {
 
 fn vec_has(Vec<string> xs, string x) -> bool {
     let i = 0;
-    while i < len(xs) {
+    while i < xs.len() {
         if xs[i] == x {
             return true;
         }
@@ -183,7 +183,7 @@ fn char_in(string c, string set) -> bool {
 /// Package names become paths under `.spool/deps` and cache keys, so they
 /// are restricted to `[A-Za-z0-9_-]`, starting with a letter or `_`.
 fn valid_pkg_name(string name) -> bool {
-    let n = len(name);
+    let n = name.len();
     if n == 0 {
         return false;
     }
@@ -223,7 +223,7 @@ fn check_pkg_name(string name) -> Result<int, string> {
 /// Git remotes spool will hand to `git`. Rejects option-looking values and
 /// transports that run commands (`ext::`), whitespace and control bytes.
 fn valid_git_url(string url) -> bool {
-    if len(url) == 0 {
+    if url.len() == 0 {
         return false;
     }
     if starts_with(url, "-") {

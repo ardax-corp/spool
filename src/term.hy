@@ -13,7 +13,7 @@ fn write_text(Stream s, string text) -> int {
     let buf = to_bytes(text);
     let off = 0;
     let fails = 0;
-    while off < len(buf) {
+    while off < buf.len() {
         let n = match write_from(s, buf, off) {
             Result::Ok(k) => k,
             Result::Err(_) => 0,

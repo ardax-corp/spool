@@ -36,7 +36,7 @@ test("parse_args splits options, flags, positionals and raw args") {
     assert!(opt(p, "--git") == "https://x/a/b");
     assert!(opt(p, "--version") == "^1");
     assert!(has(p, "--enable-scripts"));
-    assert!(len(positionals(p)) == 1);
+    assert!(positionals(p).len() == 1);
     assert!(raw_args(p)[0] == "--not-a-flag");
 }
 

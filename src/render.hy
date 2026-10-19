@@ -59,7 +59,7 @@ fn next_line(Stream s) -> Option<string> {
         }
         acc.push(one[0]);
     }
-    if len(acc) == 0 {
+    if acc.len() == 0 {
         return Option::None;
     }
     return Option::Some(match io_from_bytes(acc) {
@@ -71,7 +71,7 @@ fn next_line(Stream s) -> Option<string> {
 // ---- styling ----------------------------------------------------------------
 
 fn paint(bool color, string code, string s) -> string {
-    if color == false || len(s) == 0 {
+    if color == false || s.len() == 0 {
         return s;
     }
     return "\x1b[" + code + "m" + s + "\x1b[0m";
@@ -154,7 +154,7 @@ fn graded(bool c, int hit, int total) -> string {
 
 fn pad_left(string s, int width) -> string {
     let out = s;
-    while len(out) < width {
+    while out.len() < width {
         out = " " + out;
     }
     return out;
@@ -169,7 +169,7 @@ fn print_block(bool c, string prefix, string text) {
             return;
         },
     };
-    let n = len(lines);
+    let n = lines.len();
     if n > 0 && lines[n - 1] == "" {
         n = n - 1;
     }
@@ -268,7 +268,7 @@ fn on_error(bool c, Vec<int> st, JsonValue v) {
 fn on_test_start(bool c, JsonValue v) {
     let seed = str_at(v, "seed");
     let order = "sorted order";
-    if len(seed) > 0 {
+    if seed.len() > 0 {
         order = "seed " + seed;
     }
     emit(dim(c, format("running %s · %s · %s", plural(int_at(v, "files"), "file"), order,
@@ -278,7 +278,7 @@ fn on_test_start(bool c, JsonValue v) {
 fn on_test_case(bool c, JsonValue k) {
     let ok = bool_at(k, "ok");
     let output = str_at(k, "output");
-    if ok && len(output) == 0 {
+    if ok && output.len() == 0 {
         return;
     }
     let line = "      " + mark(c, ok) + " " + str_at(k, "name");
@@ -287,10 +287,10 @@ fn on_test_case(bool c, JsonValue k) {
     }
     emit(line);
     let reason = str_at(k, "reason");
-    if len(reason) > 0 {
+    if reason.len() > 0 {
         print_block(c, "        ", red(c, reason));
     }
-    if len(output) > 0 {
+    if output.len() > 0 {
         print_block(c, "        │ ", output);
     }
 }
@@ -307,11 +307,11 @@ fn on_test_file(bool c, JsonValue v) {
             + red(c, format(" (%i of %i failed)", failed, passed + failed)));
     }
     let message = str_at(v, "message");
-    if len(message) > 0 {
+    if message.len() > 0 {
         print_block(c, "      ", message);
     }
     let diagnostics = str_at(v, "diagnostics");
-    if len(diagnostics) > 0 {
+    if diagnostics.len() > 0 {
         print_block(c, "      ", diagnostics);
     }
     let cases = match v.get("cases") {
@@ -340,7 +340,7 @@ fn on_test_coverage(bool c, JsonValue cov) {
     let total = int_at(cov, "total");
     let lcov = str_at(cov, "lcov");
     let line = "coverage " + graded(c, hit, total) + dim(c, format(" (%i/%i lines)", hit, total));
-    if len(lcov) > 0 {
+    if lcov.len() > 0 {
         line = line + dim(c, " → " + lcov);
     }
     emit("");
@@ -359,7 +359,7 @@ fn on_test_coverage(bool c, JsonValue cov) {
                 let h = int_at(f, "hit");
                 let t = int_at(f, "total");
                 let pct = graded(c, h, t);
-                let pad = pad_left("", 7 - len(percent(h, t)));
+                let pad = pad_left("", 7 - percent(h, t).len());
                 emit("  " + pad + pct + "  " + str_at(f, "file") + dim(c, format("  %i/%i", h, t)));
             },
             Option::None => {
@@ -378,14 +378,14 @@ fn on_test_summary(bool c, Vec<int> st, JsonValue v) {
     emit("");
     if bool_at(v, "ok") {
         let line = green(c, sym(c, true) + " " + plural(total, "test") + " passed");
-        if len(seed) > 0 {
+        if seed.len() > 0 {
             line = line + dim(c, " · seed " + seed);
         }
         emit(line);
     } else {
         emit(red(c, sym(c, false) + format(" %i of %s failed", failed, plural(total, "test")))
             + dim(c, format(" · %i passed", passed)));
-        if len(seed) > 0 {
+        if seed.len() > 0 {
             emit(dim(c, "  rerun in this order: spool test --seed " + seed));
         }
         st[st_exit()] = 1;
@@ -440,7 +440,7 @@ fn on_mutant(bool c, Vec<int> st, JsonValue v) {
     if status == "no_coverage" {
         label = yellow(c, "untested ");
     }
-    if len(label) == 0 {
+    if label.len() == 0 {
         show_progress(c, st);
         return;
     }
@@ -536,7 +536,7 @@ fn render_events(string kind, bool color) -> Result<int, string> {
                     Result::Err(_) => {
                         // Not an event (stray stdout from coil): show as is.
                         clear_progress(st);
-                        if len(line) > 0 {
+                        if line.len() > 0 {
                             emit(line);
                         }
                     },

@@ -46,7 +46,7 @@ fn field_at(string p, int idx) -> string {
             empty
         },
     };
-    if idx < len(parts) {
+    if idx < parts.len() {
         return parts[idx];
     }
     return "";
@@ -127,7 +127,7 @@ fn lock_script_hash(string p) -> string {
 
 fn lock_find_script(Vec<string> scripts, string slot) -> string {
     let i = 0;
-    while i < len(scripts) {
+    while i < scripts.len() {
         if lock_script_slot(scripts[i]) == slot {
             return scripts[i];
         }
@@ -140,7 +140,7 @@ fn lock_upsert_script(Vec<string> scripts, string rec) -> Vec<string> {
     let slot = lock_script_slot(rec);
     let out: Vec<string> = Vec::new();
     let i = 0;
-    while i < len(scripts) {
+    while i < scripts.len() {
         if lock_script_slot(scripts[i]) != slot {
             out.push(scripts[i]);
         }
@@ -200,10 +200,10 @@ fn strip_quotes(string s) -> string {
         Result::Ok(x) => x,
         Result::Err(_) => s,
     };
-    if len(t) >= 2 {
+    if t.len() >= 2 {
         if starts_with(t, "'") {
             if ends_with(t, "'") {
-                return match slice(t, 1, len(t) - 1) {
+                return match slice(t, 1, t.len() - 1) {
                     Result::Ok(inner) => inner,
                     Result::Err(_) => t,
                 };
@@ -211,7 +211,7 @@ fn strip_quotes(string s) -> string {
         }
         if starts_with(t, "\"") {
             if ends_with(t, "\"") {
-                return match slice(t, 1, len(t) - 1) {
+                return match slice(t, 1, t.len() - 1) {
                     Result::Ok(inner) => inner,
                     Result::Err(_) => t,
                 };
@@ -229,7 +229,7 @@ fn parse_kv_line(string line) -> Result<(string, string), string> {
         Result::Ok(p) => p,
         Result::Err(_) => raise "split failed",
     };
-    if len(parts) < 2 {
+    if parts.len() < 2 {
         raise "expected key = value";
     }
     let key = match trim(parts[0]) {
@@ -238,7 +238,7 @@ fn parse_kv_line(string line) -> Result<(string, string), string> {
     };
     let rhs = parts[1];
     let i = 2;
-    while i < len(parts) {
+    while i < parts.len() {
         rhs = rhs + "=" + parts[i];
         i = i + 1;
     }
@@ -252,9 +252,9 @@ fn cmp_str(string a, string b) -> int {
     let ab = to_bytes(a);
     let bb = to_bytes(b);
     let i = 0;
-    let lim = len(ab);
-    if len(bb) < lim {
-        lim = len(bb);
+    let lim = ab.len();
+    if bb.len() < lim {
+        lim = bb.len();
     }
     while i < lim {
         if ab[i] < bb[i] {
@@ -265,10 +265,10 @@ fn cmp_str(string a, string b) -> int {
         }
         i = i + 1;
     }
-    if len(ab) < len(bb) {
+    if ab.len() < bb.len() {
         return 0 - 1;
     }
-    if len(ab) > len(bb) {
+    if ab.len() > bb.len() {
         return 1;
     }
     return 0;
@@ -277,11 +277,11 @@ fn cmp_str(string a, string b) -> int {
 fn sort_packages(Vec<string> packages) -> Vec<string> {
     let out: Vec<string> = Vec::new();
     let i = 0;
-    while i < len(packages) {
+    while i < packages.len() {
         out.push(packages[i]);
         i = i + 1;
     }
-    let n = len(out);
+    let n = out.len();
     let a = 1;
     while a < n {
         let j = a;
@@ -302,11 +302,11 @@ fn sort_packages(Vec<string> packages) -> Vec<string> {
 fn sort_names(Vec<string> names) -> Vec<string> {
     let out: Vec<string> = Vec::new();
     let i = 0;
-    while i < len(names) {
+    while i < names.len() {
         out.push(names[i]);
         i = i + 1;
     }
-    let n = len(out);
+    let n = out.len();
     let a = 1;
     while a < n {
         let j = a;
@@ -326,12 +326,12 @@ fn sort_names(Vec<string> names) -> Vec<string> {
 
 fn format_allow_include(Vec<string> names) -> string {
     let sorted = sort_names(names);
-    if len(sorted) == 0 {
+    if sorted.len() == 0 {
         return "[]";
     }
     let out = "[";
     let i = 0;
-    while i < len(sorted) {
+    while i < sorted.len() {
         if i > 0 {
             out = out + ", ";
         }
@@ -352,29 +352,29 @@ fn parse_string_array(string value) -> Result<Vec<string>, string> {
     if ends_with(t, "]") == false {
         raise "corrupt coil.lock: expected allow_include array";
     }
-    let inner = slice(t, 1, len(t) - 1)?;
+    let inner = slice(t, 1, t.len() - 1)?;
     let pieces = match split(inner, ",") {
         Result::Ok(p) => p,
         Result::Err(_) => raise "split allow_include failed",
     };
     let out: Vec<string> = Vec::new();
     let i = 0;
-    while i < len(pieces) {
+    while i < pieces.len() {
         let piece = match trim(pieces[i]) {
             Result::Ok(x) => x,
             Result::Err(_) => pieces[i],
         };
         i = i + 1;
-        if len(piece) == 0 {
+        if piece.len() == 0 {
             continue;
         }
         let name = strip_quotes(piece);
-        if len(name) == 0 {
+        if name.len() == 0 {
             continue;
         }
         let seen = false;
         let j = 0;
-        while j < len(out) {
+        while j < out.len() {
             if out[j] == name {
                 seen = true;
             }
@@ -390,7 +390,7 @@ fn parse_string_array(string value) -> Result<Vec<string>, string> {
 fn lock_set_script_path(Vec<string> scripts, string slot, string path) -> Vec<string> {
     let old = lock_find_script(scripts, slot);
     let h = "";
-    if len(old) > 0 {
+    if old.len() > 0 {
         h = lock_script_hash(old);
     }
     return lock_upsert_script(scripts, make_lock_script(slot, path, h));
@@ -399,7 +399,7 @@ fn lock_set_script_path(Vec<string> scripts, string slot, string path) -> Vec<st
 fn lock_set_script_hash(Vec<string> scripts, string slot, string hash) -> Vec<string> {
     let old = lock_find_script(scripts, slot);
     let p = "";
-    if len(old) > 0 {
+    if old.len() > 0 {
         p = lock_script_path(old);
     }
     return lock_upsert_script(scripts, make_lock_script(slot, p, hash));
@@ -407,11 +407,11 @@ fn lock_set_script_hash(Vec<string> scripts, string slot, string hash) -> Vec<st
 
 fn scripts_have_any(Vec<string> scripts) -> bool {
     let i = 0;
-    while i < len(scripts) {
-        if len(lock_script_path(scripts[i])) > 0 {
+    while i < scripts.len() {
+        if lock_script_path(scripts[i]).len() > 0 {
             return true;
         }
-        if len(lock_script_hash(scripts[i])) > 0 {
+        if lock_script_hash(scripts[i]).len() > 0 {
             return true;
         }
         i = i + 1;
@@ -443,7 +443,7 @@ fn lock_serialize_natives(
 # [scripts] stores current-project lifecycle path/hash (not a [[package]] row).
 
 ";
-    if len(allow_include) > 0 {
+    if allow_include.len() > 0 {
         out = out + "[hooks]
 ";
         out = out + "allow_include = " + format_allow_include(allow_include) + "
@@ -455,20 +455,20 @@ fn lock_serialize_natives(
 ";
         let slots = script_slot_list();
         let si = 0;
-        while si < len(slots) {
+        while si < slots.len() {
             let slot = slots[si];
             si = si + 1;
             let rec = lock_find_script(scripts, slot);
-            if len(rec) == 0 {
+            if rec.len() == 0 {
                 continue;
             }
             let p = lock_script_path(rec);
             let h = lock_script_hash(rec);
-            if len(p) > 0 {
+            if p.len() > 0 {
                 out = out + slot + " = " + quote(p) + "
 ";
             }
-            if len(h) > 0 {
+            if h.len() > 0 {
                 out = out + slot + "_hash = " + quote(h) + "
 ";
             }
@@ -477,7 +477,7 @@ fn lock_serialize_natives(
 ";
     }
     let i = 0;
-    while i < len(sorted) {
+    while i < sorted.len() {
         let p = sorted[i];
         i = i + 1;
         out = out + "[[package]]
@@ -488,7 +488,7 @@ fn lock_serialize_natives(
 ";
         out = out + "tag = " + quote(lock_pkg_tag(p)) + "
 ";
-        if len(lock_pkg_ref(p)) > 0 {
+        if lock_pkg_ref(p).len() > 0 {
             out = out + "ref = " + quote(lock_pkg_ref(p)) + "
 ";
         }
@@ -498,18 +498,18 @@ fn lock_serialize_natives(
 ";
         let hp = lock_pkg_hook_path(p);
         let hh = lock_pkg_hook_hash(p);
-        if len(hp) > 0 {
+        if hp.len() > 0 {
             out = out + "hook_path = " + quote(hp) + "
 ";
         }
-        if len(hh) > 0 {
+        if hh.len() > 0 {
             out = out + "hook_hash = " + quote(hh) + "
 ";
         }
         out = out + "
 ";
         let ni = 0;
-        while ni < len(natives) {
+        while ni < natives.len() {
             let (npkg, block) = natives[ni];
             ni = ni + 1;
             if npkg == lock_pkg_name(p) {
@@ -541,16 +541,16 @@ fn finish_pkg(
     string hook_hash,
     string src_ref,
 ) -> Result<string, string> {
-    if len(name) == 0 {
+    if name.len() == 0 {
         raise "corrupt coil.lock: package missing name";
     }
-    if len(git) == 0 {
+    if git.len() == 0 {
         raise "corrupt coil.lock: package missing git";
     }
-    if len(rev) == 0 {
+    if rev.len() == 0 {
         raise "corrupt coil.lock: package missing rev";
     }
-    if len(hash) == 0 {
+    if hash.len() == 0 {
         raise "corrupt coil.lock: package missing content_hash";
     }
     return make_git_pkg_ref(name, git, tag, rev, hash, hook_path, hook_hash, src_ref);
@@ -579,13 +579,13 @@ fn lock_parse_all(string source) -> Result<(Vec<string>, Vec<string>, Vec<string
     let src_ref = "";
     let i = 0;
 
-    while i < len(lines) {
+    while i < lines.len() {
         let line = match trim(lines[i]) {
             Result::Ok(t) => t,
             Result::Err(_) => lines[i],
         };
         i = i + 1;
-        if len(line) == 0 {
+        if line.len() == 0 {
             continue;
         }
         if starts_with(line, "#") {
@@ -659,7 +659,7 @@ fn lock_parse_all(string source) -> Result<(Vec<string>, Vec<string>, Vec<string
                 scripts = lock_set_script_path(scripts, k, v);
             } else {
                 let slot = script_hash_key_slot(k);
-                if len(slot) == 0 {
+                if slot.len() == 0 {
                     raise format("corrupt coil.lock: unknown key %s", k);
                 }
                 scripts = lock_set_script_hash(scripts, slot, v);
@@ -730,7 +730,7 @@ fn lock_native_sha(string r) -> string {
 }
 
 fn push_native(Vec<string> out, string pkg, bool open, string stem, string sha) -> Vec<string> {
-    if open && len(pkg) > 0 && (len(stem) > 0 || len(sha) > 0) {
+    if open && pkg.len() > 0 && (stem.len() > 0 || sha.len() > 0) {
         out.push(pkg + "\t" + stem + "\t" + sha);
     }
     return out;
@@ -752,13 +752,13 @@ fn lock_native_parse(string source) -> Result<Vec<string>, string> {
     let stem = "";
     let sha = "";
     let i = 0;
-    while i < len(lines) {
+    while i < lines.len() {
         let line = match trim(lines[i]) {
             Result::Ok(t) => t,
             Result::Err(_) => lines[i],
         };
         i = i + 1;
-        if len(line) == 0 || starts_with(line, "#") {
+        if line.len() == 0 || starts_with(line, "#") {
             continue;
         }
         if starts_with(line, "[") {
@@ -813,17 +813,17 @@ fn lock_native_blocks(string source) -> Vec<(string, string)> {
     let in_pkg = false;
     let block = "";
     let i = 0;
-    while i < len(lines) {
+    while i < lines.len() {
         let line = match trim(lines[i]) {
             Result::Ok(t) => t,
             Result::Err(_) => lines[i],
         };
         i = i + 1;
-        if len(line) == 0 || starts_with(line, "#") {
+        if line.len() == 0 || starts_with(line, "#") {
             continue;
         }
         if starts_with(line, "[") {
-            if len(block) > 0 {
+            if block.len() > 0 {
                 out.push((pkg, block));
             }
             block = "";
@@ -839,7 +839,7 @@ fn lock_native_blocks(string source) -> Vec<(string, string)> {
             in_pkg = false;
             continue;
         }
-        if len(block) > 0 {
+        if block.len() > 0 {
             block = block + line + "\n";
             continue;
         }
@@ -854,7 +854,7 @@ fn lock_native_blocks(string source) -> Vec<(string, string)> {
             }
         }
     }
-    if len(block) > 0 {
+    if block.len() > 0 {
         out.push((pkg, block));
     }
     return out;
@@ -863,8 +863,8 @@ fn lock_native_blocks(string source) -> Vec<(string, string)> {
 fn lock_parse(string source) -> Result<Vec<string>, string> {
     let parsed = lock_parse_all(source)?;
     let (packages, allow, scripts) = parsed;
-    if len(allow) == 0 {
-        if len(scripts) == 0 {
+    if allow.len() == 0 {
+        if scripts.len() == 0 {
             return packages;
         }
         return packages;
@@ -875,8 +875,8 @@ fn lock_parse(string source) -> Result<Vec<string>, string> {
 fn lock_parse_allow(string source) -> Result<Vec<string>, string> {
     let parsed = lock_parse_all(source)?;
     let (packages, allow, scripts) = parsed;
-    if len(packages) == 0 {
-        if len(scripts) == 0 {
+    if packages.len() == 0 {
+        if scripts.len() == 0 {
             return allow;
         }
         return allow;
@@ -887,8 +887,8 @@ fn lock_parse_allow(string source) -> Result<Vec<string>, string> {
 fn lock_parse_scripts(string source) -> Result<Vec<string>, string> {
     let parsed = lock_parse_all(source)?;
     let (packages, allow, scripts) = parsed;
-    if len(packages) == 0 {
-        if len(allow) == 0 {
+    if packages.len() == 0 {
+        if allow.len() == 0 {
             return scripts;
         }
         return scripts;
@@ -972,7 +972,7 @@ fn lock_read(string path) -> Result<Vec<string>, string> {
 
 fn lock_find(Vec<string> packages, string name) -> string {
     let i = 0;
-    while i < len(packages) {
+    while i < packages.len() {
         if lock_pkg_name(packages[i]) == name {
             return packages[i];
         }
@@ -1000,14 +1000,14 @@ fn lock_write_scripts(string path, Vec<string> scripts) -> Result<int, string> {
 }
 
 fn lock_add_allow_include(string path, string pkg) -> Result<int, string> {
-    if len(pkg) == 0 {
+    if pkg.len() == 0 {
         raise "missing package name";
     }
     let packages = lock_read_or_empty(path)?;
     let allow = lock_read_allow_or_empty(path)?;
     let seen = false;
     let i = 0;
-    while i < len(allow) {
+    while i < allow.len() {
         if allow[i] == pkg {
             seen = true;
         }
@@ -1022,13 +1022,13 @@ fn lock_add_allow_include(string path, string pkg) -> Result<int, string> {
 fn lock_upsert(Vec<string> packages, string pkg) -> Vec<string> {
     let name = lock_pkg_name(pkg);
     let old = lock_find(packages, name);
-    if len(old) > 0 {
+    if old.len() > 0 {
         let old_hash = lock_pkg_hook_hash(old);
-        if len(old_hash) > 0 {
+        if old_hash.len() > 0 {
             pkg = lock_pkg_with_hook(pkg, lock_pkg_hook_path(old), old_hash);
         } else {
-            if len(lock_pkg_hook_path(pkg)) == 0 {
-                if len(lock_pkg_hook_hash(pkg)) == 0 {
+            if lock_pkg_hook_path(pkg).len() == 0 {
+                if lock_pkg_hook_hash(pkg).len() == 0 {
                     pkg = lock_pkg_with_hook(pkg, lock_pkg_hook_path(old), lock_pkg_hook_hash(old));
                 }
             }
@@ -1036,7 +1036,7 @@ fn lock_upsert(Vec<string> packages, string pkg) -> Vec<string> {
     }
     let out: Vec<string> = Vec::new();
     let i = 0;
-    while i < len(packages) {
+    while i < packages.len() {
         if lock_pkg_name(packages[i]) != name {
             out.push(packages[i]);
         }
@@ -1048,14 +1048,14 @@ fn lock_upsert(Vec<string> packages, string pkg) -> Vec<string> {
 
 fn lock_hashes_match(Vec<string> packages, Vec<(string, string)> expected) -> bool {
     let i = 0;
-    while i < len(packages) {
+    while i < packages.len() {
         let p = packages[i];
         i = i + 1;
         let n = lock_pkg_name(p);
         let h = lock_pkg_hash(p);
         let found = false;
         let j = 0;
-        while j < len(expected) {
+        while j < expected.len() {
             let (en, eh) = expected[j];
             if en == n {
                 found = true;

@@ -16,7 +16,7 @@ use manifest::{
 
 fn natives_root() -> Result<string, string> {
     let r = env_or("COIL_NATIVES_DIR", "");
-    if len(r) > 0 {
+    if r.len() > 0 {
         return r;
     }
     let h = home_dir()?;
@@ -84,7 +84,7 @@ fn size_of(string file) -> string {
 }
 
 fn after_prefix(string s, string prefix) -> string {
-    return match slice(s, len(prefix), len(s)) {
+    return match slice(s, prefix.len(), s.len()) {
         Result::Ok(x) => trim_or(x),
         Result::Err(_) => "",
     };
@@ -99,7 +99,7 @@ fn drop_file(string p) {
 
 /// Lock fields become path segments; keep them to one plain segment.
 fn safe_segment(string what, string s) -> Result<int, string> {
-    if len(s) == 0 || s == "." || s == ".." || contains(s, "/") || contains(s, "\\") {
+    if s.len() == 0 || s == "." || s == ".." || contains(s, "/") || contains(s, "\\") {
         raise format("native lock has an unsafe %s: %s", what, s);
     }
     return 0;
@@ -112,7 +112,7 @@ fn fetch_one(string root, string package, string version, string filename, strin
     safe_segment("package", package)?;
     safe_segment("version", version)?;
     safe_segment("filename", filename)?;
-    if len(sha) < 16 {
+    if sha.len() < 16 {
         raise format("%s: native lock has no sha256", package);
     }
     let hash16 = match slice(sha, 0, 16) {
@@ -145,7 +145,7 @@ fn fetch_one(string root, string package, string version, string filename, strin
         drop_file(part);
         raise format("sha256 mismatch for %s: expected %s, got %s", package, sha, got);
     }
-    if len(size) > 0 && size != "0" {
+    if size.len() > 0 && size != "0" {
         let got_size = size_of(part);
         if got_size != size {
             drop_file(part);
@@ -174,7 +174,7 @@ fn manifest_natives(string root) -> Result<Vec<string>, string> {
 fn lib_file_of(string filename, string name) -> bool {
     let exts = [".so", ".dylib", ".dll"];
     let i = 0;
-    while i < len(exts) {
+    while i < exts.len() {
         let ext = exts[i];
         if filename == "lib" + name + ext {
             return true;
@@ -193,7 +193,7 @@ fn url_for(Vec<string> rows, string package, string version, string filename) ->
     let found = "";
     let hits = 0;
     let i = 0;
-    while i < len(rows) {
+    while i < rows.len() {
         let r = rows[i];
         i = i + 1;
         if native_package(r) != package || native_version(r) != version {
@@ -222,12 +222,12 @@ fn download_natives(string coil, string project_root, string exe) -> Result<int,
     a.push("natives");
     a.push("dump");
     a.push("--tsv");
-    if len(exe) > 0 {
+    if exe.len() > 0 {
         a.push(exe);
     } else {
         let flags = ffi_native_flags(project_root)?;
         let f = 0;
-        while f < len(flags) {
+        while f < flags.len() {
             a.push(flags[f]);
             f = f + 1;
         }
@@ -235,7 +235,7 @@ fn download_natives(string coil, string project_root, string exe) -> Result<int,
     let res = sh_capture("cd \"$1\" || exit 125; shift; \"$@\"", a)?;
     let (code, tsv) = res;
     if code != 0 {
-        if len(exe) > 0 {
+        if exe.len() > 0 {
             raise format("coil natives dump failed for %s", exe);
         }
         raise "coil natives dump failed (project mode)";
@@ -250,7 +250,7 @@ fn download_natives(string coil, string project_root, string exe) -> Result<int,
     let no_url = 0;
     let lines = lines_of(tsv);
     let i = 0;
-    while i < len(lines) {
+    while i < lines.len() {
         let line = lines[i];
         i = i + 1;
         if starts_with(line, "# os=") {
@@ -264,20 +264,20 @@ fn download_natives(string coil, string project_root, string exe) -> Result<int,
         if starts_with(line, "#") {
             continue;
         }
-        if len(lock_os) > 0 && lock_os != os {
+        if lock_os.len() > 0 && lock_os != os {
             raise format("native lock os=%s but host is %s", lock_os, os);
         }
-        if len(lock_arch) > 0 && lock_arch != arch {
+        if lock_arch.len() > 0 && lock_arch != arch {
             raise format("native lock arch=%s but host is %s", lock_arch, arch);
         }
         let package = tsv_field(line, 0);
-        if len(package) == 0 {
+        if package.len() == 0 {
             continue;
         }
         let version = tsv_field(line, 1);
         let filename = tsv_field(line, 2);
         let url = url_for(rows, package, version, filename);
-        if len(url) == 0 {
+        if url.len() == 0 {
             println(format("spool download: no [[ffi.native]] url for %s %s (%s); skipped", package, version, filename));
             no_url = no_url + 1;
             continue;

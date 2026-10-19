@@ -69,7 +69,7 @@ fn include_from_lock(
     let allow = lock_parse_allow(lock_text)?;
     let p = lock_find(pkgs, pkg);
     let decided = include_gate_lock(
-        len(p) > 0,
+        p.len() > 0,
         lock_pkg_hook_path(p),
         lock_pkg_hook_hash(p),
         path,
@@ -77,7 +77,7 @@ fn include_from_lock(
     );
     let (lp, lh, first_pin) = decided;
     if first_pin {
-        if len(p) > 0 {
+        if p.len() > 0 {
             p = lock_pkg_with_hook(p, lp, lh);
             pkgs = lock_upsert(pkgs, p);
         }
@@ -207,11 +207,11 @@ test("no lock row / missing hash: deny, no sh") {
     let lock = lock_serialize_full(pkgs, allow);
     assert!(contains(lock, "allow_include"));
     let parsed = lock_parse(lock)?;
-    assert!(len(parsed) == 0);
+    assert!(parsed.len() == 0);
     let rec = lock_find(parsed, "http");
-    assert!(len(rec) == 0);
+    assert!(rec.len() == 0);
     let decided = include_gate_lock(
-        len(rec) > 0,
+        rec.len() > 0,
         lock_pkg_hook_path(rec),
         lock_pkg_hook_hash(rec),
         "./hooks/include.sh",

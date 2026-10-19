@@ -10,7 +10,7 @@ fn parse_coil_version_output(string raw) -> Result<string, string> {
     if starts_with(s, "coil") == false {
         raise "unrecognized coil --version output";
     }
-    let rest = match slice(s, 4, len(s)) {
+    let rest = match slice(s, 4, s.len()) {
         Result::Ok(r) => r,
         Result::Err(_) => raise "unrecognized coil --version output",
     };
@@ -18,17 +18,17 @@ fn parse_coil_version_output(string raw) -> Result<string, string> {
         Result::Ok(t) => t,
         Result::Err(_) => rest,
     };
-    if len(rest) == 0 {
+    if rest.len() == 0 {
         raise "unrecognized coil --version output";
     }
     let parts = match split(rest, " ") {
         Result::Ok(p) => p,
         Result::Err(_) => raise "unrecognized coil --version output",
     };
-    if len(parts) < 1 {
+    if parts.len() < 1 {
         raise "unrecognized coil --version output";
     }
-    if len(parts[0]) == 0 {
+    if parts[0].len() == 0 {
         raise "unrecognized coil --version output";
     }
     return parts[0];
@@ -39,15 +39,15 @@ fn enforce_engine(string pkg, string range, string running) -> Result<int, strin
         Result::Ok(t) => t,
         Result::Err(_) => range,
     };
-    if len(req) == 0 {
+    if req.len() == 0 {
         return 0;
     }
     let label = running;
-    if len(label) == 0 {
+    if label.len() == 0 {
         label = "unknown";
     }
     let msg = "package " + pkg + " requires coil " + req + ", running " + label;
-    if len(running) == 0 {
+    if running.len() == 0 {
         raise msg;
     }
     let ver_res = parse_semver(running);
