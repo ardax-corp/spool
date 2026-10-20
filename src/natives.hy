@@ -5,7 +5,9 @@
 // carries no URLs, so each one comes from the project's `[[ffi.native]] url`.
 // In project mode a row whose local file is not there yet is dumped as
 // `missing` (no sha256); spool fetches it to that row's `path`, where
-// `coil package` reads it and pins its hash.
+// `coil package` reads it and pins its hash, only when the row has its own
+// `[[ffi.native]] sha256` and the download matches it. Without one it is
+// skipped: spool never fetches an unhashed file.
 use term::{println, eprintln};
 use io::fs::{rename, remove_file};
 use text::{starts_with, slice, contains, to_lower};
@@ -15,7 +17,7 @@ use proc::{sh_capture, sh_run, first_line};
 use toolchain::{env_or, ffi_native_flags, abs_under};
 use manifest::{
     manifest_body, ffi_natives_parse, native_name, native_package, native_version, native_url,
-    native_path,
+    native_path, native_sha256,
 };
 
 fn natives_root() -> Result<string, string> {
@@ -128,10 +130,12 @@ fn curl_to(string part, string url) -> Result<int, string> {
 }
 
 /// A project row `coil natives dump` marks `missing`: its local file is not
-/// there yet, so there is no sha256 to check. Fetch it to `dest_dir` (the
-/// row's resolved `path`), where `coil package` hashes and pins it. Until
-/// then only https vouches for it.
-fn fetch_missing(string dest_dir, string package, string version, string filename, string url) -> Result<bool, string> {
+/// there yet, so coil has no pin for it. It is fetched (https only) to
+/// `dest_dir` (the row's resolved `path`), where `coil package` hashes and
+/// pins it, only when the row carries its own `sha256` and the download
+/// matches it; a row without one is skipped, never fetched unhashed. A file
+/// already at `dest_dir` is left alone.
+fn fetch_missing(string dest_dir, string name, string package, string version, string filename, string url, string sha) -> Result<bool, string> {
     if starts_with(url, "https://") == false {
         raise format("%s: native url must be https://, got %s", package, url);
     }
@@ -141,20 +145,30 @@ fn fetch_missing(string dest_dir, string package, string version, string filenam
         println(format("spool download: skip %s %s (%s is there now)", package, version, dest));
         return false;
     }
+    if sha.len() == 0 {
+        println(format(
+            "spool download: not fetching %s %s (%s): [[ffi.native]] %s has no sha256; add sha256 = \"<hex>\" to it, or build or fetch %s yourself; skipped",
+            package,
+            version,
+            filename,
+            name,
+            dest,
+        ));
+        return false;
+    }
     ensure_dir(dest_dir)?;
     let part = dest + ".part";
     curl_to(part, url)?;
+    let got = sha256_of(part)?;
+    if got != sha {
+        drop_file(part);
+        raise format("sha256 mismatch for %s: expected %s, got %s", package, sha, got);
+    }
     match rename(part, dest) {
         Result::Ok(_) => 0,
         Result::Err(_) => raise format("cannot move %s into place", dest),
     };
-    println(format(
-        "spool download: fetched %s %s -> %s (sha256 %s, not pinned until packaged)",
-        package,
-        version,
-        dest,
-        sha256_of(dest)?,
-    ));
+    println(format("spool download: fetched %s %s -> %s (sha256 %s verified)", package, version, dest, sha));
     return true;
 }
 
@@ -343,7 +357,15 @@ fn download_natives(string coil, string project_root, string exe) -> Result<int,
                 raise format("native lock in %s has no sha256 for %s", exe, package);
             }
             let r = manifest_row_for(rows, package, version, filename);
-            fetched = fetch_missing(abs_under(project_root, native_path(r)), package, version, filename, url)?;
+            fetched = fetch_missing(
+                abs_under(project_root, native_path(r)),
+                native_name(r),
+                package,
+                version,
+                filename,
+                url,
+                native_sha256(r),
+            )?;
         } else {
             fetched = fetch_one(
                 root,
