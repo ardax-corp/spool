@@ -126,10 +126,11 @@ fn ls_remote_sha(Vec<string> rows, string tag) -> Result<string, string> {
     raise format("no sha for tag %s", tag);
 }
 
-/// Sha of the `HEAD` line in `git ls-remote URL HEAD` output: the tip of the
-/// remote's default branch. Pattern matching also returns refs that merely end
-/// in `/HEAD`, so only the exact refname counts.
-fn ls_remote_head_sha(string body) -> Result<string, string> {
+/// Sha of the line whose refname is exactly `want` in `git ls-remote` output.
+/// `git ls-remote URL PATTERN` matches by suffix, so it also returns longer
+/// refs ending in `/PATTERN` (`refs/remotes/origin/HEAD`,
+/// `refs/heads/feature/main`); those never count.
+fn ls_remote_exact_sha(string body, string want) -> Result<string, string> {
     let lines = match split(body, "\n") {
         Result::Ok(ls) => ls,
         Result::Err(_) => raise "split ls-remote failed",
@@ -150,9 +151,38 @@ fn ls_remote_head_sha(string body) -> Result<string, string> {
             Result::Ok(t) => t,
             Result::Err(_) => refname,
         };
-        if r == "HEAD" {
+        if r == want {
             return sha;
         }
     }
-    raise "no HEAD in ls-remote output";
+    raise format("no %s in ls-remote output", want);
+}
+
+/// Sha of the `HEAD` line in `git ls-remote URL HEAD` output: the tip of the
+/// remote's default branch.
+fn ls_remote_head_sha(string body) -> Result<string, string> {
+    return ls_remote_exact_sha(body, "HEAD");
+}
+
+/// Commit sha for `rev` (a branch, tag or full refname) in the output of
+/// `git ls-remote URL REV refs/tags/REV^{} refs/heads/REV refs/tags/REV`.
+/// The peeled commit of an annotated tag wins, then the exact ref `REV`, then
+/// the branch, then the tag (#41).
+fn ls_remote_ref_sha(string body, string rev) -> Result<string, string> {
+    let wants: Vec<string> = Vec::new();
+    wants.push("refs/tags/" + rev + "^{}");
+    wants.push(rev);
+    wants.push("refs/heads/" + rev);
+    wants.push("refs/tags/" + rev);
+    let i = 0;
+    while i < wants.len() {
+        match ls_remote_exact_sha(body, wants[i]) {
+            Result::Ok(sha) => {
+                return sha;
+            },
+            Result::Err(_) => {},
+        };
+        i = i + 1;
+    }
+    raise format("no ref %s in ls-remote output", rev);
 }
