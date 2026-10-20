@@ -69,11 +69,16 @@ out="$("$SPOOL" download 2>&1 || true)"
 echo "$out" | grep -q "nothing to download\|ok (0 installed"
 
 # coil-lang#1657: project mode, a row whose local file is not there yet. coil
-# dumps it as `missing` (no sha256); spool fetches it to the row's `path`.
-# A fake curl stands in for the network.
+# dumps it as `missing` (no sha256). spool fetches it to the row's `path`
+# only when the row has its own `sha256` and the download matches it; a row
+# without one is skipped, never fetched unhashed. A fake curl stands in for
+# the network.
 PROJ="$TMP/proj"
 mkdir -p "$PROJ/src"
-cat > "$PROJ/coil.toml" <<'EOF'
+GOOD_SHA="$(printf 'fake library' | { sha256sum 2>/dev/null || shasum -a 256; } | awk '{print $1}')"
+BAD_SHA="$(printf 'something else' | { sha256sum 2>/dev/null || shasum -a 256; } | awk '{print $1}')"
+write_proj() { # $1: sha256 line for the row ("" for none)
+  cat > "$PROJ/coil.toml" <<EOF
 [module]
 roots = ["./src"]
 
@@ -82,7 +87,9 @@ name = "gone"
 version = "1.0.0"
 path = "./native"
 url = "https://example.invalid/libgone.so"
+$1
 EOF
+}
 cat > "$TMP/bin/coil" <<EOF
 #!/usr/bin/env bash
 if [[ "\${1:-}" == "natives" && "\${2:-}" == "dump" ]]; then
@@ -94,23 +101,48 @@ fi
 exit 1
 EOF
 chmod +x "$TMP/bin/coil"
-cat > "$TMP/bin/curl" <<'EOF'
+cat > "$TMP/bin/curl" <<EOF
 #!/usr/bin/env bash
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    -o) out="$2"; shift 2 ;;
-    *) url="$1"; shift ;;
+while [[ \$# -gt 0 ]]; do
+  case "\$1" in
+    -o) out="\$2"; shift 2 ;;
+    *) url="\$1"; shift ;;
   esac
 done
-[[ "$url" == "https://example.invalid/libgone.so" ]] || exit 22
-printf 'fake library' > "$out"
+echo "\$url" >> "$TMP/curl.log"
+[[ "\$url" == "https://example.invalid/libgone.so" ]] || exit 22
+printf 'fake library' > "\$out"
 EOF
 chmod +x "$TMP/bin/curl"
+
+# Missing, no sha256: skipped (exit 0), curl never runs, nothing is written.
+write_proj ""
 out="$(cd "$PROJ" && "$SPOOL" download 2>&1)" || { echo "$out"; exit 1; }
-echo "$out" | grep -q "fetched gone 1.0.0" || { echo "$out"; exit 1; }
+echo "$out" | grep -q "not fetching gone 1.0.0 (libgone.so): \[\[ffi.native\]\] gone has no sha256" || { echo "$out"; exit 1; }
+echo "$out" | grep -q "ok (0 installed, 1 skipped" || { echo "$out"; exit 1; }
+[[ ! -e "$TMP/curl.log" ]] || { echo "curl ran for an unhashed row"; exit 1; }
+[[ ! -e "$PROJ/native/libgone.so" && ! -e "$PROJ/native/libgone.so.part" ]]
+
+# Missing, wrong sha256: rejected (non-zero), the partial file removed.
+write_proj "sha256 = \"$BAD_SHA\""
+if out="$(cd "$PROJ" && "$SPOOL" download 2>&1)"; then echo "$out"; exit 1; fi
+echo "$out" | grep -q "sha256 mismatch for gone: expected $BAD_SHA, got $GOOD_SHA" || { echo "$out"; exit 1; }
+[[ ! -e "$PROJ/native/libgone.so" && ! -e "$PROJ/native/libgone.so.part" ]]
+
+# A sha256 that is not 64 hex digits is a manifest error.
+write_proj 'sha256 = "abc"'
+if out="$(cd "$PROJ" && "$SPOOL" download 2>&1)"; then echo "$out"; exit 1; fi
+echo "$out" | grep -q "sha256 must be 64 hex digits" || { echo "$out"; exit 1; }
+
+# Missing, right sha256 (any case): fetched, verified, placed at `path`.
+write_proj "sha256 = \"$(echo "$GOOD_SHA" | tr '[:lower:]' '[:upper:]')\""
+out="$(cd "$PROJ" && "$SPOOL" download 2>&1)" || { echo "$out"; exit 1; }
+echo "$out" | grep -q "fetched gone 1.0.0 -> .*native/libgone.so (sha256 $GOOD_SHA verified)" || { echo "$out"; exit 1; }
 [[ "$(cat "$PROJ/native/libgone.so")" == "fake library" ]]
 [[ ! -e "$PROJ/native/libgone.so.part" ]]
 # If the file is there by the time spool looks, it is left alone.
+rm -f "$TMP/curl.log"
 out="$(cd "$PROJ" && "$SPOOL" download 2>&1)" || { echo "$out"; exit 1; }
 echo "$out" | grep -q "skip gone 1.0.0" || { echo "$out"; exit 1; }
+[[ ! -e "$TMP/curl.log" ]]
 echo "smoke_natives_download: ok"
