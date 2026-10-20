@@ -5,9 +5,9 @@
 // carries no URLs, so each one comes from the project's `[[ffi.native]] url`.
 // In project mode a row whose local file is not there yet is dumped as
 // `missing` (no sha256); spool fetches it to that row's `path`, where
-// `coil package` reads it and pins its hash, only when the row has its own
-// `[[ffi.native]] sha256` and the download matches it. Without one it is
-// skipped: spool never fetches an unhashed file.
+// `coil package` reads it and pins its hash. With a `[[ffi.native]] sha256`
+// the download must match it; without one only https vouches for it until
+// then, and spool says so with a warning.
 use term::{println, eprintln};
 use io::fs::{rename, remove_file};
 use text::{starts_with, slice, contains, to_lower};
@@ -132,9 +132,9 @@ fn curl_to(string part, string url) -> Result<int, string> {
 /// A project row `coil natives dump` marks `missing`: its local file is not
 /// there yet, so coil has no pin for it. It is fetched (https only) to
 /// `dest_dir` (the row's resolved `path`), where `coil package` hashes and
-/// pins it, only when the row carries its own `sha256` and the download
-/// matches it; a row without one is skipped, never fetched unhashed. A file
-/// already at `dest_dir` is left alone.
+/// pins it. With the row's own `sha256` the download must match it (else it
+/// is removed and this fails); without one it is placed unchecked, with a
+/// warning. A file already at `dest_dir` is left alone.
 fn fetch_missing(string dest_dir, string name, string package, string version, string filename, string url, string sha) -> Result<bool, string> {
     if starts_with(url, "https://") == false {
         raise format("%s: native url must be https://, got %s", package, url);
@@ -145,20 +145,24 @@ fn fetch_missing(string dest_dir, string name, string package, string version, s
         println(format("spool download: skip %s %s (%s is there now)", package, version, dest));
         return false;
     }
-    if sha.len() == 0 {
-        println(format(
-            "spool download: not fetching %s %s (%s): [[ffi.native]] %s has no sha256; add sha256 = \"<hex>\" to it, or build or fetch %s yourself; skipped",
-            package,
-            version,
-            filename,
-            name,
-            dest,
-        ));
-        return false;
-    }
     ensure_dir(dest_dir)?;
     let part = dest + ".part";
     curl_to(part, url)?;
+    if sha.len() == 0 {
+        match rename(part, dest) {
+            Result::Ok(_) => 0,
+            Result::Err(_) => raise format("cannot move %s into place", dest),
+        };
+        eprintln(format(
+            "spool download: WARNING: fetched %s %s -> %s over https without a hash check (sha256 %s); coil package pins it when it hashes it. Add sha256 = \"<hex>\" to [[ffi.native]] %s to check it",
+            package,
+            version,
+            dest,
+            sha256_of(dest)?,
+            name,
+        ));
+        return true;
+    }
     let got = sha256_of(part)?;
     if got != sha {
         drop_file(part);
