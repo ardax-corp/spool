@@ -1,5 +1,5 @@
 use tests::assert;
-use semver::{parse_semver, satisfies_caret, satisfies_range, select_tag, select_tag_all, cmp_semver, SemVer};
+use semver::{parse_semver, satisfies_caret, satisfies_range, select_tag, select_tag_all, cmp_semver, SemVer, has_version_tag};
 
 test("parse_semver accepts v prefix") {
     let a = parse_semver("v1.2.3")?;
@@ -114,4 +114,20 @@ test("prerelease tags are not picked by ranges") {
 test("prerelease toolchain versions parse") {
     let v = parse_semver("0.2.0-dev")?;
     assert!(satisfies_range(">=0.2.0", v)?);
+}
+
+test("has_version_tag: only tags that parse as versions count (#32)") {
+    let none: Vec<string> = Vec::new();
+    assert!(has_version_tag(none) == false);
+    let other: Vec<string> = Vec::new();
+    other.push("nightly");
+    other.push("release-candidate");
+    assert!(has_version_tag(other) == false);
+    let pre: Vec<string> = Vec::new();
+    pre.push("nightly");
+    pre.push("v0.1.0-alpha.1");
+    assert!(has_version_tag(pre));
+    let rel: Vec<string> = Vec::new();
+    rel.push("v0.1.0");
+    assert!(has_version_tag(rel));
 }

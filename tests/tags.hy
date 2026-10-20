@@ -1,5 +1,5 @@
 use tests::assert;
-use tags::{parse_ls_remote, ls_remote_tag_names, ls_remote_sha};
+use tags::{parse_ls_remote, ls_remote_tag_names, ls_remote_sha, ls_remote_head_sha};
 
 test("parse_ls_remote prefers peeled annotated tag") {
     let body = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa	refs/tags/v1.0.0
@@ -20,4 +20,23 @@ test("parse_ls_remote accepts space-separated lines") {
     let rows = parse_ls_remote(body)?;
     assert!(rows.len() == 1);
     assert!(ls_remote_sha(rows, "v0.1.0")? == "dddddddddddddddddddddddddddddddddddddddd");
+}
+
+test("ls_remote_head_sha reads the HEAD line only (#32)") {
+    let body = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee	HEAD
+ffffffffffffffffffffffffffffffffffffffff	refs/heads/feature/HEAD
+";
+    assert!(ls_remote_head_sha(body)? == "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
+    let only_other = "ffffffffffffffffffffffffffffffffffffffff	refs/heads/feature/HEAD
+";
+    let missing = match ls_remote_head_sha(only_other) {
+        Result::Ok(_) => false,
+        Result::Err(_) => true,
+    };
+    assert!(missing);
+    let empty = match ls_remote_head_sha("") {
+        Result::Ok(_) => false,
+        Result::Err(_) => true,
+    };
+    assert!(empty);
 }

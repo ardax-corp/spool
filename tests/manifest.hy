@@ -275,3 +275,35 @@ path = \".\"
 url2 = \"x\"
 "), "unknown key ffi.native.url2"));
 }
+
+test("version = latest parses as a latest requirement (#32)") {
+    let body = "[dependencies]
+msgpack = { git = \"https://x/msgpack.git\", version = \"latest\" }
+";
+    let deps = deps_parse(body)?;
+    assert!(deps.len() == 1);
+    assert!(dep_version(deps[0]) == "latest");
+    assert!(dep_rev(deps[0]) == "");
+    assert!(dep_req(deps[0]) == "latest");
+}
+
+test("version = latest cannot be combined with rev (#32)") {
+    let body = "[dependencies]
+msgpack = { git = \"https://x/msgpack.git\", version = \"latest\", rev = \"main\" }
+";
+    match deps_parse(body) {
+        Result::Ok(_) => {
+            assert!(false);
+        },
+        Result::Err(e) => {
+            assert!(contains(e, "msgpack"));
+            assert!(contains(e, "latest"));
+            assert!(contains(e, "rev"));
+        },
+    };
+}
+
+test("format_dep_line writes version = latest (#32)") {
+    let line = format_dep_line(make_git_dep("msgpack", "https://x/msgpack.git", "latest"))?;
+    assert!(line == "msgpack = { git = \"https://x/msgpack.git\", version = \"latest\" }");
+}
