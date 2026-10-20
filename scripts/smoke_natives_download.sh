@@ -69,10 +69,9 @@ out="$("$SPOOL" download 2>&1 || true)"
 echo "$out" | grep -q "nothing to download\|ok (0 installed"
 
 # coil-lang#1657: project mode, a row whose local file is not there yet. coil
-# dumps it as `missing` (no sha256). spool fetches it to the row's `path`
-# only when the row has its own `sha256` and the download matches it; a row
-# without one is skipped, never fetched unhashed. A fake curl stands in for
-# the network.
+# dumps it as `missing` (no sha256). spool fetches it to the row's `path`;
+# with the row's own `sha256` the download must match it, without one it is
+# placed unchecked with a warning. A fake curl stands in for the network.
 PROJ="$TMP/proj"
 mkdir -p "$PROJ/src"
 GOOD_SHA="$(printf 'fake library' | { sha256sum 2>/dev/null || shasum -a 256; } | awk '{print $1}')"
@@ -115,13 +114,17 @@ printf 'fake library' > "\$out"
 EOF
 chmod +x "$TMP/bin/curl"
 
-# Missing, no sha256: skipped (exit 0), curl never runs, nothing is written.
+# Missing, no sha256: fetched once over https, placed unchecked, with a
+# warning that says so and suggests adding sha256.
 write_proj ""
 out="$(cd "$PROJ" && "$SPOOL" download 2>&1)" || { echo "$out"; exit 1; }
-echo "$out" | grep -q "not fetching gone 1.0.0 (libgone.so): \[\[ffi.native\]\] gone has no sha256" || { echo "$out"; exit 1; }
-echo "$out" | grep -q "ok (0 installed, 1 skipped" || { echo "$out"; exit 1; }
-[[ ! -e "$TMP/curl.log" ]] || { echo "curl ran for an unhashed row"; exit 1; }
-[[ ! -e "$PROJ/native/libgone.so" && ! -e "$PROJ/native/libgone.so.part" ]]
+echo "$out" | grep -q "WARNING: fetched gone 1.0.0 -> .*native/libgone.so over https without a hash check (sha256 $GOOD_SHA); coil package pins it" || { echo "$out"; exit 1; }
+echo "$out" | grep -q 'Add sha256 = "<hex>" to \[\[ffi.native\]\] gone' || { echo "$out"; exit 1; }
+echo "$out" | grep -q "ok (1 installed, 0 skipped" || { echo "$out"; exit 1; }
+[[ "$(wc -l < "$TMP/curl.log" | tr -d ' ')" == 1 ]] || { cat "$TMP/curl.log"; exit 1; }
+[[ "$(cat "$PROJ/native/libgone.so")" == "fake library" ]]
+[[ ! -e "$PROJ/native/libgone.so.part" ]]
+rm -rf "$PROJ/native" "$TMP/curl.log"
 
 # Missing, wrong sha256: rejected (non-zero), the partial file removed.
 write_proj "sha256 = \"$BAD_SHA\""
