@@ -369,3 +369,20 @@ fn select_tag_all(Vec<string> reqs, Vec<string> tags) -> Result<string, string> 
     }
     return best_tag;
 }
+
+/// Does any tag parse as a version (pre-releases included)? A bare
+/// `spool add` falls back to `latest` only when none does (#32).
+fn has_version_tag(Vec<string> tags) -> bool {
+    let i = 0;
+    while i < tags.len() {
+        let ok = match parse_semver(tags[i]) {
+            Result::Ok(_) => true,
+            Result::Err(_) => false,
+        };
+        if ok {
+            return true;
+        }
+        i = i + 1;
+    }
+    return false;
+}

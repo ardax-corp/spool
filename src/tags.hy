@@ -125,3 +125,34 @@ fn ls_remote_sha(Vec<string> rows, string tag) -> Result<string, string> {
     }
     raise format("no sha for tag %s", tag);
 }
+
+/// Sha of the `HEAD` line in `git ls-remote URL HEAD` output: the tip of the
+/// remote's default branch. Pattern matching also returns refs that merely end
+/// in `/HEAD`, so only the exact refname counts.
+fn ls_remote_head_sha(string body) -> Result<string, string> {
+    let lines = match split(body, "\n") {
+        Result::Ok(ls) => ls,
+        Result::Err(_) => raise "split ls-remote failed",
+    };
+    let i = 0;
+    while i < lines.len() {
+        let line = match trim(lines[i]) {
+            Result::Ok(t) => t,
+            Result::Err(_) => lines[i],
+        };
+        i = i + 1;
+        if line.len() == 0 {
+            continue;
+        }
+        let pair = split_sha_ref(line)?;
+        let (sha, refname) = pair;
+        let r = match trim(refname) {
+            Result::Ok(t) => t,
+            Result::Err(_) => refname,
+        };
+        if r == "HEAD" {
+            return sha;
+        }
+    }
+    raise "no HEAD in ls-remote output";
+}

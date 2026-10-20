@@ -7,6 +7,7 @@ use util::{join2, join3, join4, ensure_dir, path_dirname, path_exists, trim_or, 
 use proc::{sh_run, sh_capture, first_line};
 use config::{cache_root};
 use cache_url::{url_cache_key};
+use tags::{ls_remote_head_sha};
 
 fn git_auth_hint() -> string {
     return "private remotes use ssh-agent, GIT_ASKPASS, git credential helpers, or url.insteadOf in ~/.gitconfig; spool does not store credentials";
@@ -82,6 +83,23 @@ fn ls_remote_ref(string url, string rev) -> Result<string, string> {
         raise format("rev `%s` not found in %s", rev, url);
     }
     return sha;
+}
+
+/// Tip of the remote's default branch (`git ls-remote URL HEAD`), whatever
+/// that branch is called (#32).
+fn ls_remote_head(string url) -> Result<string, string> {
+    check_git_url(url)?;
+    let a: Vec<string> = Vec::new();
+    a.push(url);
+    let res = sh_capture(git_env_prefix() + "git ls-remote \"$1\" HEAD", a)?;
+    let (code, body) = res;
+    if code != 0 {
+        raise git_failed("ls-remote", url);
+    }
+    return match ls_remote_head_sha(body) {
+        Result::Ok(sha) => sha,
+        Result::Err(_) => raise format("%s has no default branch (HEAD); `latest` needs one", url),
+    };
 }
 
 fn bare_dir(string url) -> Result<string, string> {

@@ -27,6 +27,9 @@ use natives::{download_natives};
 use scaffold::{scaffold};
 use render::{render_events};
 use config::{cache_root};
+use git::{ls_remote_tags};
+use tags::{parse_ls_remote, ls_remote_tag_names};
+use semver::{has_version_tag};
 
 fn usage() -> string {
     return "spool " + spool_version() + " — Coil project and dependency manager
@@ -707,6 +710,17 @@ fn check_toml_value(string what, string v) -> Result<int, string> {
     return 0;
 }
 
+/// Requirement for `spool add NAME --git URL` with no --version / --rev:
+/// `*` (newest tag), or `latest` when the repo has no version tags (#32).
+fn bare_git_version(string name, string git) -> Result<string, string> {
+    let rows = parse_ls_remote(ls_remote_tags(git)?)?;
+    if has_version_tag(ls_remote_tag_names(rows)) {
+        return "*";
+    }
+    say(format("note: %s has no version tags; using version = \"latest\" (the default branch tip)", name));
+    return "latest";
+}
+
 fn cmd_add(Vec<string> rest) -> Result<int, string> {
     let p = parse_args(rest, strs4("--git", "--path", "--version", "--rev"), hook_flags())?;
     let pos = positionals(p);
@@ -733,7 +747,7 @@ fn cmd_add(Vec<string> rest) -> Result<int, string> {
             raise "--version and --rev are mutually exclusive";
         }
         if version.len() == 0 && rev.len() == 0 {
-            version = "*";
+            version = bare_git_version(name, git)?;
         }
         dep = make_git_rev_dep(name, git, version, rev);
     } else {

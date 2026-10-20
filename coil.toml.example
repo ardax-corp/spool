@@ -64,7 +64,16 @@ roots = ["./src"]
 # [dependencies]
 # http = { git = "https://github.com/coil-lang/http.git", version = "^0.2" }
 # toml = { git = "https://github.com/ardax-corp/coil-toml.git", rev = "3e0da9d…" }
+# msgpack = { git = "https://github.com/ardax-corp/coil-msgpack.git", version = "latest" }
 # local_http = { path = "../local-http" }
+#
+# `version` is a semver range over release tags, or "latest": the tip of the
+# default branch (`git ls-remote URL HEAD`), for repos without release tags.
+# coil.lock records the resolved sha with ref = 'HEAD'; `spool install` keeps
+# it, `spool update` moves it. "latest" cannot be combined with `rev`, and
+# mixing it with a range for the same package is a diamond conflict.
+# `spool add NAME --git URL` without --version/--rev uses "*", or "latest"
+# (with a note) when the repo has no version tags.
 #
 # `trusted` is a bool on that git/path row (default false); any other type
 # is an error. A trusted dep's `dload` stems skip the sha256 check, and
@@ -160,7 +169,7 @@ roots = ["./src"]
 #   [ffi]           search_paths, allow, allow_attach
 #   [[ffi.native]]  name, version, path, package, url, requires, requires_hint
 #   [scripts]       pre_install, post_install, pre_update, post_update
-#   [dependencies]  name = { git = "…", version = "…", rev = "…" } | { path = "…" },
+#   [dependencies]  name = { git = "…", version = "…" | "latest", rev = "…" } | { path = "…" },
 #                   each with an optional `trusted = true`
 #
 # Unknown `[scripts]`, `[[ffi.native]]` and dependency keys are errors.

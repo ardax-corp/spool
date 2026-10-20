@@ -112,12 +112,12 @@ way the library resolves them itself.
 | `lsp` | `coil lsp` on stdio, started from the project root |
 | `coil [ARGS]` | plain `coil ARGS` from the project root (no flags added) |
 | `install [--locked] [--with-natives]` | fetch, resolve, prune and link dependencies |
-| `add <name> --git URL [--version REQ \| --rev REV]` | declare a git dependency, then install |
+| `add <name> --git URL [--version REQ \| --rev REV]` | declare a git dependency, then install (`REQ` may be `latest`) |
 | `add <name> --path DIR` | declare a path dependency, then install |
 | `remove <name>` | drop the dependency, prune `coil.lock` and stale links |
-| `update [name]` | re-resolve to the newest allowed versions (moves `rev` branches) |
+| `update [name]` | re-resolve to the newest allowed versions (moves `rev` branches and `latest`) |
 | `tree` | print the dependency graph |
-| `outdated` | locked vs newest compatible vs newest tag |
+| `outdated` | locked vs newest compatible vs newest tag (`latest`: locked sha vs the current tip) |
 | `download [EXE]` | fetch FFI natives for the project or a packaged EXE |
 | `allow-include <name>` | allow a dependency's include-hook |
 | `doctor` | check coil, stdlib, git, sh, curl, cache and project roots |
@@ -216,6 +216,7 @@ The coil binary is `$COIL`, then `coil` on `PATH`, then `~/.coil/bin/coil`.
 [dependencies]
 greet = { git = "https://github.com/ardax-corp/coil-greet.git", version = "^0.1" }
 toml  = { git = "https://github.com/ardax-corp/coil-toml.git", rev = "3e0da9d…" }
+msgpack = { git = "https://github.com/ardax-corp/coil-msgpack.git", version = "latest" }
 local = { path = "../local" }
 ```
 
@@ -224,6 +225,18 @@ local = { path = "../local" }
   (`">=1.2, <2"`). Prerelease tags are never picked by a range.
 - `rev` pins a branch, tag or commit. The lock stores the resolved sha plus the
   `ref`. `install` keeps the pin, and `update` moves a branch pin.
+- `version = "latest"` tracks the tip of the default branch, whatever it is
+  called (`git ls-remote URL HEAD`), for libraries without release tags. It
+  is locked like a branch pin, with `ref = 'HEAD'` and the resolved sha:
+  `install` keeps the sha, and `update` moves it to the new tip. It works in
+  transitive manifests too, and cannot be combined with `rev`.
+- `spool add NAME --git URL` with neither `--version` nor `--rev` writes
+  `version = "*"` (the newest release tag). When the repo has no version tags
+  at all, it writes `version = "latest"` instead and prints a note:
+
+  ```text
+  spool: note: msgpack has no version tags; using version = "latest" (the default branch tip)
+  ```
 - `trusted = true` lets that dependency's `dload` stems skip the sha256 pin
   (`--dload-trusted`, see [Compile flags](#compile-flags)). The stem still
   needs `[ffi] allow`.
@@ -235,6 +248,10 @@ ones fail with the requesters named:
 ```text
 diamond conflict for base: hello requires @dev, mid requires ^1
 ```
+
+`latest` counts as a pin here: two `latest` requirements unify, but `latest`
+together with a range or a different `rev` is a conflict
+(`diamond conflict for l: a requires latest, d requires ^1.0`).
 
 Lock rows nothing reaches any more are pruned. `install --locked` fails
 instead of changing the lock (CI):
