@@ -7,11 +7,14 @@
 //                             from src/<name>/sub.hy and sibling modules)
 //   .spool/deps/<name>.hy  -> <checkout>/src/<name>.hy when present
 //                             (`use name::{Item}` for single-file libraries)
+//
+// dep_checkouts maps the links back to each checkout, whose own coil.toml
+// `[ffi]` paths resolve against it (spool#38).
 use io::fs::{is_dir, is_symlink, remove_file, symlink, list_dir, realpath};
 use lock::{sort_names};
 use text::{ends_with, slice};
 use string::{format};
-use util::{join2, ensure_dir, path_exists, tsv_field, vec_has, check_pkg_name};
+use util::{join2, ensure_dir, path_exists, path_dirname, tsv_field, vec_has, check_pkg_name};
 
 fn spool_deps_dir(string project_root) -> string {
     return join2(project_root, ".spool/deps");
@@ -124,6 +127,57 @@ fn dep_module_roots(string project_root) -> Vec<string> {
         match realpath(p) {
             Result::Ok(r) => {
                 out.push(r);
+            },
+            Result::Err(_) => {},
+        };
+    }
+    return out;
+}
+
+/// The checkout behind a link target: `<checkout>/src` maps back to
+/// `<checkout>` (link_dep links a checkout's src/ when it has one), anything
+/// else is the checkout itself.
+fn checkout_of_target(string target) -> string {
+    if ends_with(target, "/src") && path_exists(join2(target, "coil.toml")) == false {
+        let parent = path_dirname(target);
+        if path_exists(join2(parent, "coil.toml")) {
+            return parent;
+        }
+    }
+    return target;
+}
+
+/// `name \t checkout` for every `.spool/deps/<name>` directory link, sorted
+/// by name: where each linked package's own coil.toml and native/ live
+/// (spool#38). Same links as dep_module_roots.
+fn dep_checkouts(string project_root) -> Vec<string> {
+    let out: Vec<string> = Vec::new();
+    let deps = spool_deps_dir(project_root);
+    if path_exists(deps) == false {
+        return out;
+    }
+    let entries = match list_dir(deps) {
+        Result::Ok(v) => sort_names(v),
+        Result::Err(_) => out,
+    };
+    let i = 0;
+    while i < entries.len() {
+        let name = entries[i];
+        let p = join2(deps, name);
+        i = i + 1;
+        if ends_with(p, ".hy") || is_link(p) == false {
+            continue;
+        }
+        let dir = match is_dir(p) {
+            Result::Ok(d) => d,
+            Result::Err(_) => false,
+        };
+        if dir == false {
+            continue;
+        }
+        match realpath(p) {
+            Result::Ok(r) => {
+                out.push(name + "\t" + checkout_of_target(r));
             },
             Result::Err(_) => {},
         };

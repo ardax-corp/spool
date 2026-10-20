@@ -99,7 +99,7 @@ way the library resolves them itself.
 | Command | What it does |
 |---|---|
 | `new <name> [--lib] [--no-git]` / `init` | scaffold `coil.toml`, `src/`, `tests/`, `.gitignore` (and `git init`) |
-| `build [-o PATH] [-O LEVEL]` | `coil package` of `[entry].file` (default `src/main.hy`) into `target/<name>` |
+| `build [-o PATH] [-O LEVEL]` | `coil package` of `[entry].file` (default `src/main.hy`) into `target/<name>`; the natives it pins go into the natives cache |
 | `run [-O LEVEL] [-- ARGS]` | build, then exec `target/<name>` with ARGS and its exit code |
 | `check` | `coil compile` without packaging |
 | `clean [--all]` | remove `target/` (`--all`: also `.spool/`) |
@@ -183,6 +183,8 @@ spool runs `coil` from the project root with:
   `all = true` gives `--allow-all`), the older `[env]
   allow_exec/allow_exit/allow_ffi_exec` and `[ffi] allow_attach`, `[ffi]
   allow` (`--allow-dload`), and `[ffi] search_paths` (`--ffi-search-path`)
+- `--ffi-search-path` for each linked dependency's own `[ffi] search_paths`,
+  after the project's (see [Dependency natives](#dependency-natives))
 - `dload` integrity, which coil no longer reads from `coil.toml` /
   `coil.lock` itself:
   - `--dload-pin STEM=SHA256` for each `coil.lock` `[[package.native]]`
@@ -194,7 +196,9 @@ spool runs `coil` from the project root with:
 - `coil package` (`spool build` / `run`) and `coil natives dump` also get
   one `--ffi-native name=…,version=…,path=…[,package=…][,requires=a;b][,requires-hint=…]`
   per `[[ffi.native]]` row (`path` made absolute, `,` in a value escaped as
-  `\,`)
+  `\,`). `coil package` also gets each linked dependency's rows (see
+  [Dependency natives](#dependency-natives)); `coil natives dump` gets the
+  project's only
 
 `coil.toml.example` lists every key spool reads.
 
@@ -292,6 +296,51 @@ shadows a stdlib module. A package without `src/` is linked, and used as a
 root, at its checkout root. `coil.toml` is never edited, and consumers do not
 add `.spool/deps/<name>` to `[module].roots` (an existing entry like that is
 harmless).
+
+### Dependency natives
+
+A package that ships a native library names it in its own `coil.toml`,
+relative to its own checkout. coil-tls:
+
+```toml
+[ffi]
+search_paths = ["./native"]
+
+[[ffi.native]]
+name = "tls"
+version = "0.1.0"
+path = "./native"
+```
+
+spool resolves those paths against the dependency's checkout (the directory
+behind `.spool/deps/<name>`), never against the consumer:
+
+- each dependency's `[ffi] search_paths` becomes `--ffi-search-path`, after
+  the project's own and in dependency-name order. Only directories that exist
+  inside the checkout are passed: an absolute or `..` path is dropped, and so
+  is a consumer-layout path such as coil-http's `./.spool/deps/tls/native`,
+  which no checkout has.
+- `spool build` / `run` pass each dependency's `[[ffi.native]]` rows to
+  `coil package` as `--ffi-native`, for every stem the project does not
+  declare itself (the project's own row wins; between dependencies, the first
+  by name). The library is taken from the first search directory that holds
+  it, the file `spool test` loads (so a sibling build named in the project's
+  own `[ffi] search_paths` still wins), else from the row's own `path`, where
+  coil names the missing file.
+- after packaging, `spool build` copies each library the exe pins into the
+  natives cache (see [Native libraries](#native-libraries-spool-download)),
+  where a packaged exe looks first. `target/<name>` then runs from any
+  directory with no `spool download` and no URL. An entry already there with
+  the right sha256 is left alone.
+
+These paths only locate files. Loading one still needs the consumer's
+`[ffi] allow` and a pin or `trusted = true`.
+
+spool does not build natives. Build one in the dependency's checkout, whose
+tree id ignores untracked files (`make -C "$(dirname "$(readlink -f
+.spool/deps/tls)")/native" artifact` for coil-tls), or point the project's own
+`[ffi] search_paths` at a sibling build. Until then, `spool build` fails with
+coil's `expected library at <checkout>/native/libtls.so`.
 
 ## Engine range
 
@@ -488,8 +537,10 @@ Override the root with `COIL_NATIVES_DIR`. The sha256 and size come from
 carries no URLs, so each one is the `url` of the project's `[[ffi.native]]`
 row with that package and version (for a packaged exe too: run it from the
 project). Rows without a `url` are skipped: a packaged app also finds a
-library beside the executable or in `lib/` there, and putting it there is up
-to you. Only https URLs are fetched. Each file is checked against the sha256
+library beside the executable or in `lib/` there. `spool build` already puts
+the libraries it packaged from local files into this cache (see
+[Dependency natives](#dependency-natives)); for another machine, putting them
+in place is up to you. Only https URLs are fetched. Each file is checked against the sha256
 and size before it is moved into place. Transitive sonames (`requires`) must
 come from the OS.
 

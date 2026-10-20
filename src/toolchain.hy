@@ -1,8 +1,8 @@
 // Locate the coil toolchain and turn a project manifest into coil flags.
 use env::{var};
 use string::{format};
-use util::{join2, join3, path_exists, path_is_absolute, home_dir, trim_or, vec_has};
-use roots::{dep_module_roots};
+use util::{join2, join3, path_exists, path_is_absolute, home_dir, trim_or, vec_has, tsv_field};
+use roots::{dep_module_roots, dep_checkouts};
 use proc::{which, sh_capture, first_line};
 use manifest::{
     manifest_body, manifest_validate, module_roots_parse, section_string, section_bool, section_strings,
@@ -12,7 +12,8 @@ use manifest::{
 use lock::{lock_native_parse, lock_native_pkg, lock_native_stem, lock_native_sha};
 use config::{config_path};
 use io::file::{read_text};
-use text::{starts_with, slice, contains, replace, to_lower};
+use text::{starts_with, slice, contains, replace, to_lower, split};
+use io::fs::{is_dir};
 
 fn env_or(string key, string fallback) -> string {
     return match var(key) {
@@ -297,6 +298,24 @@ fn spec_escape(string v) -> string {
     };
 }
 
+/// The `--ffi-native` value for one `[[ffi.native]]` row (relative `path`
+/// is resolved against `root`).
+fn native_spec(string root, string r) -> string {
+    let spec = "name=" + spec_escape(native_name(r));
+    spec = spec + ",version=" + spec_escape(native_version(r));
+    spec = spec + ",path=" + spec_escape(abs_under(root, native_path(r)));
+    if native_package(r) != native_name(r) {
+        spec = spec + ",package=" + spec_escape(native_package(r));
+    }
+    if native_requires(r).len() > 0 {
+        spec = spec + ",requires=" + spec_escape(native_requires(r));
+    }
+    if native_requires_hint(r).len() > 0 {
+        spec = spec + ",requires-hint=" + spec_escape(native_requires_hint(r));
+    }
+    return spec;
+}
+
 /// One `--ffi-native` value per `[[ffi.native]]` row (relative `path` is
 /// resolved against `root`).
 fn ffi_native_specs(string root, string manifest) -> Result<Vec<string>, string> {
@@ -304,36 +323,222 @@ fn ffi_native_specs(string root, string manifest) -> Result<Vec<string>, string>
     let out: Vec<string> = Vec::new();
     let i = 0;
     while i < rows.len() {
-        let r = rows[i];
+        out.push(native_spec(root, rows[i]));
         i = i + 1;
-        let spec = "name=" + spec_escape(native_name(r));
-        spec = spec + ",version=" + spec_escape(native_version(r));
-        spec = spec + ",path=" + spec_escape(abs_under(root, native_path(r)));
-        if native_package(r) != native_name(r) {
-            spec = spec + ",package=" + spec_escape(native_package(r));
-        }
-        if native_requires(r).len() > 0 {
-            spec = spec + ",requires=" + spec_escape(native_requires(r));
-        }
-        if native_requires_hint(r).len() > 0 {
-            spec = spec + ",requires-hint=" + spec_escape(native_requires_hint(r));
-        }
-        out.push(spec);
     }
     return out;
 }
 
-/// `--ffi-native SPEC` pairs for `coil package` / `coil natives dump`.
-fn ffi_native_flags(string root) -> Result<Vec<string>, string> {
-    let specs = ffi_native_specs(root, manifest_body(join2(root, "coil.toml"))?)?;
+fn flag_pairs(string flag, Vec<string> values) -> Vec<string> {
     let out: Vec<string> = Vec::new();
     let i = 0;
-    while i < specs.len() {
-        out.push("--ffi-native");
-        out.push(specs[i]);
+    while i < values.len() {
+        out.push(flag);
+        out.push(values[i]);
         i = i + 1;
     }
     return out;
+}
+
+/// `--ffi-native SPEC` pairs for the project's own `[[ffi.native]]` rows
+/// (`coil natives dump`, so `spool download`).
+fn ffi_native_flags(string root) -> Result<Vec<string>, string> {
+    return flag_pairs("--ffi-native", ffi_native_specs(root, manifest_body(join2(root, "coil.toml"))?)?);
+}
+
+// ---- dependency natives (spool#38, coil-tls#17) ----------------------------
+// A dependency's coil.toml names its native library relative to its own
+// checkout (coil-tls: `[ffi] search_paths = ["./native"]`). Those paths are
+// resolved against that checkout (dep_checkouts), never the consumer. They
+// locate files only: loading one still needs the consumer's `[ffi] allow` and
+// a pin or `trusted = true`.
+
+/// Relative and free of `..` segments, so it stays inside the checkout.
+fn inside_checkout(string p) -> bool {
+    if p.len() == 0 || path_is_absolute(p) {
+        return false;
+    }
+    let parts = match split(p, "/") {
+        Result::Ok(v) => v,
+        Result::Err(_) => {
+            return false;
+        },
+    };
+    let i = 0;
+    while i < parts.len() {
+        if parts[i] == ".." {
+            return false;
+        }
+        i = i + 1;
+    }
+    return true;
+}
+
+fn is_directory(string p) -> bool {
+    if path_exists(p) == false {
+        return false;
+    }
+    return match is_dir(p) {
+        Result::Ok(d) => d,
+        Result::Err(_) => false,
+    };
+}
+
+/// A checkout's coil.toml text, or "" without a readable one.
+fn checkout_manifest(string checkout) -> string {
+    let path = join2(checkout, "coil.toml");
+    if path_exists(path) == false {
+        return "";
+    }
+    return match read_text(path) {
+        Result::Ok(s) => s,
+        Result::Err(_) => "",
+    };
+}
+
+/// Each linked dependency's `[ffi] search_paths`, resolved against its own
+/// checkout, in dependency-name order. Only existing directories inside the
+/// checkout: an absolute or `..` path is dropped, and so is a consumer-layout
+/// path such as coil-http's `./.spool/deps/tls/native`, which a checkout
+/// never has.
+fn dep_ffi_search_paths(string root) -> Vec<string> {
+    let out: Vec<string> = Vec::new();
+    let deps = dep_checkouts(root);
+    let i = 0;
+    while i < deps.len() {
+        let checkout = tsv_field(deps[i], 1);
+        i = i + 1;
+        let body = checkout_manifest(checkout);
+        if body.len() == 0 {
+            continue;
+        }
+        let none: Vec<string> = Vec::new();
+        let paths = match section_strings(body, "ffi", "search_paths") {
+            Result::Ok(v) => v,
+            Result::Err(_) => none,
+        };
+        let j = 0;
+        while j < paths.len() {
+            let p = paths[j];
+            j = j + 1;
+            if inside_checkout(p) == false {
+                continue;
+            }
+            let abs = abs_under(checkout, p);
+            if is_directory(abs) {
+                out = push_unique(out, abs);
+            }
+        }
+    }
+    return out;
+}
+
+/// The project's own `[ffi] search_paths`, absolute.
+fn own_ffi_search_paths(string root, string body) -> Result<Vec<string>, string> {
+    let search = section_strings(body, "ffi", "search_paths")?;
+    let out: Vec<string> = Vec::new();
+    let i = 0;
+    while i < search.len() {
+        out = push_unique(out, abs_under(root, search[i]));
+        i = i + 1;
+    }
+    return out;
+}
+
+/// The `--ffi-search-path` dirs, in coil's lookup order: the project's own,
+/// then each dependency's (dep_ffi_search_paths).
+fn ffi_search_dirs(string root, string body) -> Result<Vec<string>, string> {
+    let out = own_ffi_search_paths(root, body)?;
+    let deps = dep_ffi_search_paths(root);
+    let i = 0;
+    while i < deps.len() {
+        out = push_unique(out, deps[i]);
+        i = i + 1;
+    }
+    return out;
+}
+
+/// Whether `dir` holds the shared library for stem `name`
+/// (`lib<name>.so`, `lib<name>.dylib` or `<name>.dll`).
+fn dir_has_lib(string dir, string name) -> bool {
+    return path_exists(join2(dir, "lib" + name + ".so"))
+        || path_exists(join2(dir, "lib" + name + ".dylib"))
+        || path_exists(join2(dir, name + ".dll"));
+}
+
+/// `r` with its path field replaced (record layout in manifest.hy).
+fn with_native_path(string r, string path) -> string {
+    return native_name(r) + "\t" + native_package(r) + "\t" + native_version(r) + "\t" + path
+        + "\t" + tsv_field(r, 4) + "\t" + native_requires(r) + "\t" + native_requires_hint(r);
+}
+
+/// The `[[ffi.native]]` rows `coil package` gets, every path absolute: the
+/// project's own, then each linked dependency's for a stem the project does
+/// not declare itself (first dependency by name wins). A dependency row
+/// whose path leaves its checkout is dropped. Its library is taken from the
+/// first search dir that holds it (the file `spool test` loads, so a
+/// consumer's sibling build in its own search_paths still wins), else from
+/// the row's own path, where coil reports it missing.
+fn package_native_rows(string root) -> Result<Vec<string>, string> {
+    let body = manifest_body(join2(root, "coil.toml"))?;
+    let own = ffi_natives_parse(body)?;
+    let out: Vec<string> = Vec::new();
+    let names: Vec<string> = Vec::new();
+    let i = 0;
+    while i < own.len() {
+        out.push(with_native_path(own[i], abs_under(root, native_path(own[i]))));
+        names = push_unique(names, native_name(own[i]));
+        i = i + 1;
+    }
+    let search = ffi_search_dirs(root, body)?;
+    let deps = dep_checkouts(root);
+    i = 0;
+    while i < deps.len() {
+        let dep = tsv_field(deps[i], 0);
+        let checkout = tsv_field(deps[i], 1);
+        i = i + 1;
+        let dep_body = checkout_manifest(checkout);
+        if dep_body.len() == 0 {
+            continue;
+        }
+        let rows = match ffi_natives_parse(dep_body) {
+            Result::Ok(v) => v,
+            Result::Err(e) => raise format("dependency %s: %s", dep, e),
+        };
+        let j = 0;
+        while j < rows.len() {
+            let r = rows[j];
+            j = j + 1;
+            if vec_has(names, native_name(r)) || inside_checkout(native_path(r)) == false {
+                continue;
+            }
+            names.push(native_name(r));
+            let dir = abs_under(checkout, native_path(r));
+            let k = 0;
+            while k < search.len() {
+                if dir_has_lib(search[k], native_name(r)) {
+                    dir = search[k];
+                    break;
+                }
+                k = k + 1;
+            }
+            out.push(with_native_path(r, dir));
+        }
+    }
+    return out;
+}
+
+/// `--ffi-native SPEC` pairs for `coil package` (`spool build` / `run`): the
+/// project's rows and its dependencies' (package_native_rows).
+fn package_native_flags(string root) -> Result<Vec<string>, string> {
+    let rows = package_native_rows(root)?;
+    let specs: Vec<string> = Vec::new();
+    let i = 0;
+    while i < rows.len() {
+        specs.push(native_spec(root, rows[i]));
+        i = i + 1;
+    }
+    return flag_pairs("--ffi-native", specs);
 }
 
 /// coil.lock text, or "" when the project has none.
@@ -385,11 +590,12 @@ fn grant_flags(string root) -> Result<Vec<string>, string> {
         out.push(stems[i]);
         i = i + 1;
     }
-    let search = section_strings(body, "ffi", "search_paths")?;
+    // The project's own search paths, then each dependency's (spool#38).
+    let search = ffi_search_dirs(root, body)?;
     i = 0;
     while i < search.len() {
         out.push("--ffi-search-path");
-        out.push(abs_under(root, search[i]));
+        out.push(search[i]);
         i = i + 1;
     }
     let dload = dload_flags(body, lock_text(root))?;

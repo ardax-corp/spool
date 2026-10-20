@@ -3,7 +3,7 @@
 // (root overridable with COIL_NATIVES_DIR). The pins come from
 // `coil natives dump --tsv` (package, version, filename, sha256, size); coil
 // carries no URLs, so each one comes from the project's `[[ffi.native]] url`.
-use term::{println};
+use term::{println, eprintln};
 use io::fs::{rename, remove_file};
 use text::{starts_with, slice, contains, to_lower};
 use string::{format};
@@ -12,6 +12,7 @@ use proc::{sh_capture, sh_run, first_line};
 use toolchain::{env_or, ffi_native_flags};
 use manifest::{
     manifest_body, ffi_natives_parse, native_name, native_package, native_version, native_url,
+    native_path,
 };
 
 fn natives_root() -> Result<string, string> {
@@ -105,6 +106,10 @@ fn safe_segment(string what, string s) -> Result<int, string> {
     return 0;
 }
 
+fn cache_dir_for(string root, string package, string version, string hash16) -> string {
+    return join2(join2(join2(join2(root, "cache"), package), version), hash16);
+}
+
 fn fetch_one(string root, string package, string version, string filename, string url, string sha, string size) -> Result<bool, string> {
     if starts_with(url, "https://") == false {
         raise format("%s: native url must be https://, got %s", package, url);
@@ -119,7 +124,7 @@ fn fetch_one(string root, string package, string version, string filename, strin
         Result::Ok(x) => x,
         Result::Err(_) => sha,
     };
-    let dest_dir = join2(join2(join2(join2(root, "cache"), package), version), hash16);
+    let dest_dir = cache_dir_for(root, package, version, hash16);
     let dest = join2(dest_dir, filename);
     if path_exists(dest) {
         if sha256_of(dest)? == sha {
@@ -301,6 +306,99 @@ fn download_natives(string coil, string project_root, string exe) -> Result<int,
         println("spool download: nothing to download");
     } else {
         println(format("spool download: ok (%i installed, %i skipped, %i without url)", installed, skipped, no_url));
+    }
+    return 0;
+}
+
+/// The row (package_native_rows: absolute paths) a dump line came from.
+fn row_for(Vec<string> rows, string package, string version, string filename) -> string {
+    let i = 0;
+    while i < rows.len() {
+        let r = rows[i];
+        i = i + 1;
+        if native_package(r) == package && native_version(r) == version && lib_file_of(filename, native_name(r)) {
+            return r;
+        }
+    }
+    return "";
+}
+
+/// After `spool build`: copy each native the packaged `exe` pins from the
+/// local file it was packaged from (`rows`, the `--ffi-native` rows) into the
+/// natives cache, where the exe looks first, so it runs on this machine with
+/// no `spool download` and no URL. A cache entry with the right sha256 is
+/// left alone; a local file that no longer matches the pin is an error.
+fn cache_packaged_natives(string coil, string project_root, string exe, Vec<string> rows) -> Result<int, string> {
+    if rows.len() == 0 {
+        return 0;
+    }
+    let a: Vec<string> = Vec::new();
+    a.push(project_root);
+    a.push(coil);
+    a.push(exe);
+    let res = sh_capture("cd \"$1\" || exit 125; \"$2\" natives dump --tsv \"$3\" 2>&1", a)?;
+    let (code, tsv) = res;
+    if code != 0 {
+        // No library the program loads needed a row: nothing to cache.
+        if contains(tsv, "no embedded native lock") {
+            return 0;
+        }
+        raise format("coil natives dump failed for %s: %s", exe, first_line(tsv));
+    }
+    let root = natives_root()?;
+    let lines = lines_of(tsv);
+    let i = 0;
+    while i < lines.len() {
+        let line = lines[i];
+        i = i + 1;
+        if starts_with(line, "#") {
+            continue;
+        }
+        let package = tsv_field(line, 0);
+        let version = tsv_field(line, 1);
+        let filename = tsv_field(line, 2);
+        let sha = tsv_field(line, 3);
+        if package.len() == 0 || sha.len() < 16 {
+            continue;
+        }
+        let r = row_for(rows, package, version, filename);
+        if r.len() == 0 {
+            continue;
+        }
+        safe_segment("package", package)?;
+        safe_segment("version", version)?;
+        safe_segment("filename", filename)?;
+        let hash16 = match slice(sha, 0, 16) {
+            Result::Ok(x) => x,
+            Result::Err(_) => sha,
+        };
+        let dest_dir = cache_dir_for(root, package, version, hash16);
+        let dest = join2(dest_dir, filename);
+        if path_exists(dest) {
+            if sha256_of(dest)? == sha {
+                continue;
+            }
+            drop_file(dest);
+        }
+        let src = join2(native_path(r), filename);
+        if sha256_of(src)? != sha {
+            raise format("%s changed while packaging %s; build again", src, exe);
+        }
+        ensure_dir(dest_dir)?;
+        let part = dest + ".part";
+        drop_file(part);
+        let c: Vec<string> = Vec::new();
+        c.push(src);
+        c.push(part);
+        if sh_run("cp -- \"$1\" \"$2\"", c)? != 0 {
+            drop_file(part);
+            raise format("cannot copy %s into the natives cache", src);
+        }
+        match rename(part, dest) {
+            Result::Ok(_) => 0,
+            Result::Err(_) => raise format("cannot move %s into place", dest),
+        };
+        eprintln(format("spool: cached native %s %s (%s) -> %s", package, version, filename, dest));
     }
     return 0;
 }
