@@ -13,7 +13,7 @@ use version::{spool_version};
 use proc::{run_in, spawn, sh_run, sh_capture, which};
 use toolchain::{
     find_coil, require_coil, coil_version_output, find_stdlib, compile_flags, project_roots, env_or,
-    package_native_flags,
+    package_native_flags, package_native_rows,
 };
 use manifest::{
     deps_read, dep_kind, dep_name, make_git_rev_dep, make_path_dep, deps_append, deps_remove,
@@ -23,7 +23,7 @@ use lock::{lock_read_or_empty, lock_pkg_name, lock_add_allow_include};
 use hooks::{hooks_are_off};
 use sync::{sync, snapshot, restore};
 use report::{print_tree, print_outdated};
-use natives::{download_natives};
+use natives::{download_natives, cache_packaged_natives};
 use scaffold::{scaffold};
 use render::{render_events};
 use config::{cache_root};
@@ -224,6 +224,9 @@ fn build_to(string root, string output, string opt_level) -> Result<int, string>
     if code != 0 {
         raise format("build failed (coil exit %i)", code);
     }
+    // The exe finds its natives in the natives cache (or beside it); put the
+    // ones it was packaged with there (spool#38).
+    cache_packaged_natives(require_coil()?, root, output, package_native_rows(root)?)?;
     return 0;
 }
 
