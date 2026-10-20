@@ -1,7 +1,8 @@
 // Locate the coil toolchain and turn a project manifest into coil flags.
 use env::{var};
 use string::{format};
-use util::{join2, join3, path_exists, path_is_absolute, home_dir, trim_or};
+use util::{join2, join3, path_exists, path_is_absolute, home_dir, trim_or, vec_has};
+use roots::{dep_module_roots};
 use proc::{which, sh_capture, first_line};
 use manifest::{
     manifest_body, manifest_validate, module_roots_parse, section_string, section_bool, section_strings,
@@ -147,7 +148,8 @@ fn abs_under(string root, string p) -> string {
 }
 
 /// Absolute `--root` dirs for a project: [module].roots, `.spool/deps`,
-/// then the stdlib unless the manifest already lists a stdlib root.
+/// the stdlib unless the manifest already lists a stdlib root, then each
+/// linked package's module root (<checkout>/src, spool#30).
 fn project_roots(string root) -> Result<Vec<string>, string> {
     let body = manifest_body(join2(root, "coil.toml"))?;
     let rel = module_roots_parse(body)?;
@@ -171,6 +173,16 @@ fn project_roots(string root) -> Result<Vec<string>, string> {
         if stdlib.len() > 0 {
             out.push(stdlib);
         }
+    }
+    // After the stdlib, so a dependency's top-level modules never shadow a
+    // stdlib module (for the consumer or for the stdlib's own imports).
+    let pkg_roots = dep_module_roots(root);
+    i = 0;
+    while i < pkg_roots.len() {
+        if vec_has(out, pkg_roots[i]) == false {
+            out.push(pkg_roots[i]);
+        }
+        i = i + 1;
     }
     return out;
 }

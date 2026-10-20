@@ -1,10 +1,14 @@
 // Project `.spool/deps` symlink farm. `spool build/run/test/check` pass it to
-// coil as a `--root`; coil.toml is never edited (coil ignores [module].roots).
+// coil as a `--root`, plus each package's module root (dep_module_roots);
+// coil.toml is never edited (coil reads no coil.toml).
 //
-//   .spool/deps/<name>     -> <checkout>/src   (`use name::module`)
+//   .spool/deps/<name>     -> <checkout>/src   (`use name::module`; its
+//                             real path is a root too, for `use name::sub`
+//                             from src/<name>/sub.hy and sibling modules)
 //   .spool/deps/<name>.hy  -> <checkout>/src/<name>.hy when present
 //                             (`use name::{Item}` for single-file libraries)
-use io::fs::{is_dir, is_symlink, remove_file, symlink, list_dir};
+use io::fs::{is_dir, is_symlink, remove_file, symlink, list_dir, realpath};
+use lock::{sort_names};
 use text::{ends_with, slice};
 use string::{format};
 use util::{join2, ensure_dir, path_exists, tsv_field, vec_has, check_pkg_name};
@@ -82,6 +86,49 @@ fn strip_hy(string entry) -> string {
         };
     }
     return entry;
+}
+
+/// The real path of every `.spool/deps/<name>` directory link, sorted: each
+/// package's own module root (<checkout>/src), so it resolves its modules for
+/// the consumer the way it does in its own repo (`use tls::client` ->
+/// src/tls/client.hy, coil-sdl's `use simd` -> src/simd.hy).
+///
+/// The real path, not the link: coil names a module after the innermost root
+/// holding its path, so `.spool/deps/greet` as a root would rename
+/// `.spool/deps/greet/hello.hy` from `greet::hello` to `hello`. The `<name>.hy`
+/// file links are modules, not roots.
+fn dep_module_roots(string project_root) -> Vec<string> {
+    let out: Vec<string> = Vec::new();
+    let deps = spool_deps_dir(project_root);
+    if path_exists(deps) == false {
+        return out;
+    }
+    let entries = match list_dir(deps) {
+        Result::Ok(v) => sort_names(v),
+        Result::Err(_) => out,
+    };
+    let i = 0;
+    while i < entries.len() {
+        let p = join2(deps, entries[i]);
+        i = i + 1;
+        if ends_with(p, ".hy") || is_link(p) == false {
+            continue;
+        }
+        let dir = match is_dir(p) {
+            Result::Ok(d) => d,
+            Result::Err(_) => false,
+        };
+        if dir == false {
+            continue;
+        }
+        match realpath(p) {
+            Result::Ok(r) => {
+                out.push(r);
+            },
+            Result::Err(_) => {},
+        };
+    }
+    return out;
 }
 
 /// Link every `name \t dir` row and drop links for names no longer present.

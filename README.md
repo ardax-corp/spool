@@ -89,7 +89,10 @@ spool tree
 ```
 
 `spool new <name> --lib` creates a library. Its entry module is
-`src/<name>.hy`, so consumers write `use <name>::{item}`.
+`src/<name>.hy`, so consumers write `use <name>::{item}`. More modules can
+go in `src/<name>/` (`use <name>::client`) or next to it in `src/`; spool
+passes each dependency's `src/` as a root, so consumers resolve them the
+way the library resolves them itself.
 
 ## Commands
 
@@ -157,7 +160,7 @@ Editors: point the Coil LSP client at `spool lsp`; it is the only thing to
 start. From any folder inside the project it links missing dependencies
 (scripts off), then starts `coil lsp` with the project directory
 (`--workspace`) and the same roots (`[module].roots`, `.spool/deps`, the
-stdlib) and grants as every other command, so imports resolve and granted
+stdlib, each dependency's `src/`) and grants as every other command, so imports resolve and granted
 calls such as `env::exec` are not flagged, whatever folder the editor sent.
 That needs a coil whose `coil lsp` accepts `--root` (ardax-corp/coil-lang#589)
 and `--workspace`; with an older one spool passes what it accepts.
@@ -173,6 +176,8 @@ spool runs `coil` from the project root with:
 - `--root <stdlib>` unless a manifest root already is a stdlib. The stdlib is
   found through `COIL_STDLIB_DIR`, `COIL_STDLIB`, `[stdlib] dir` in
   `~/.config/coil/config.toml`, or `~/.coil/stdlib`
+- `--root <checkout>/src` for each linked dependency, after the stdlib (see
+  [Linking](#linking))
 - grants the manifest records: `[permissions]` (`read`, `write`, `net`,
   `env`, `exec`, `exit`, `attach` set to `true` give `--allow-<name>`, and
   `all = true` gives `--allow-all`), the older `[env]
@@ -253,9 +258,22 @@ Values reach `git`/`sh` only as positional arguments, never inside a script.
 .spool/deps/<name>.hy  -> <checkout>/src/<name>.hy   (when it exists)
 ```
 
-`use greet::hello` resolves through the directory link. `use toml::{Toml}`
-resolves through the file link, which covers single-file libraries named after
-their package. `coil.toml` is never edited.
+spool passes `.spool/deps` as a root, and then each `<checkout>/src` (the
+real path behind `.spool/deps/<name>`), so a dependency resolves its modules
+for you the same way it does in its own repo:
+
+| Import | Resolves to |
+|---|---|
+| `use toml::{Toml}` | `src/toml.hy`, through the file link (single-file libraries) |
+| `use greet::hello` | `src/hello.hy`, through the directory link |
+| `use tls::client::{enable}` | `src/tls/client.hy`, through the package's `src/` root |
+| `use simd::{features}` (coil-sdl) | `src/simd.hy`, a second top-level module of the package |
+
+Dependency roots come after the stdlib, so a package's top-level module never
+shadows a stdlib module. A package without `src/` is linked, and used as a
+root, at its checkout root. `coil.toml` is never edited, and consumers do not
+add `.spool/deps/<name>` to `[module].roots` (an existing entry like that is
+harmless).
 
 ## Engine range
 
@@ -503,7 +521,7 @@ export COIL_STDLIB_DIR=$PWD/.bootstrap/coil-stdlib
 | `resolve` | constraints, tag/rev picking, pruning, engine checks |
 | `sync` | the install/add/update/remove pipeline |
 | `lock`, `manifest` | `coil.lock` and `coil.toml` |
-| `roots` | `.spool/deps` links |
+| `roots` | `.spool/deps` links and each dependency's module root |
 | `lifecycle`, `hooks` | `[scripts]`, include-hooks, trust gate |
 | `toolchain` | coil/stdlib discovery, compile flags |
 | `natives`, `report`, `scaffold` | `download`, `tree`/`outdated`, `new`/`init` |
