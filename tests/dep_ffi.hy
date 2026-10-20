@@ -107,7 +107,8 @@ test("coil package gets each dependency's [[ffi.native]] rows") {
     // A row whose path leaves the checkout is dropped.
     assert!(contains(f, "outside") == false);
     // `spool download` / `coil natives dump` keep only the project's rows.
-    assert!(ffi_native_flags(proj)?.len() == 0);
+    let own = ffi_native_flags(proj)?;
+    assert!(own.len() == 0);
 }
 
 test("the project's own [[ffi.native]] row wins over a dependency's") {

@@ -13,7 +13,7 @@ use version::{spool_version};
 use proc::{run_in, spawn, sh_run, sh_capture, which};
 use toolchain::{
     find_coil, require_coil, coil_version_output, find_stdlib, compile_flags, project_roots, env_or,
-    ffi_native_flags,
+    package_native_flags,
 };
 use manifest::{
     deps_read, dep_kind, dep_name, make_git_rev_dep, make_path_dep, deps_append, deps_remove,
@@ -212,7 +212,7 @@ fn build_to(string root, string output, string opt_level) -> Result<int, string>
     ensure_dir(path_dirname(output))?;
     let argv = strs("package");
     argv = push_all(argv, compile_flags(root)?);
-    argv = push_all(argv, ffi_native_flags(root)?);
+    argv = push_all(argv, package_native_flags(root)?);
     if opt_level.len() > 0 {
         argv.push("-O");
         argv.push(opt_level);
