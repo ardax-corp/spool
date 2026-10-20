@@ -3,13 +3,16 @@
 // (root overridable with COIL_NATIVES_DIR). The pins come from
 // `coil natives dump --tsv` (package, version, filename, sha256, size); coil
 // carries no URLs, so each one comes from the project's `[[ffi.native]] url`.
+// In project mode a row whose local file is not there yet is dumped as
+// `missing` (no sha256); spool fetches it to that row's `path`, where
+// `coil package` reads it and pins its hash.
 use term::{println, eprintln};
 use io::fs::{rename, remove_file};
 use text::{starts_with, slice, contains, to_lower};
 use string::{format};
 use util::{join2, ensure_dir, path_exists, home_dir, lines_of, trim_or, tsv_field};
 use proc::{sh_capture, sh_run, first_line};
-use toolchain::{env_or, ffi_native_flags};
+use toolchain::{env_or, ffi_native_flags, abs_under};
 use manifest::{
     manifest_body, ffi_natives_parse, native_name, native_package, native_version, native_url,
     native_path,
@@ -110,6 +113,51 @@ fn cache_dir_for(string root, string package, string version, string hash16) -> 
     return join2(join2(join2(join2(root, "cache"), package), version), hash16);
 }
 
+/// Fetch `url` (https only) to `part`; on failure `part` is removed.
+fn curl_to(string part, string url) -> Result<int, string> {
+    drop_file(part);
+    let a: Vec<string> = Vec::new();
+    a.push(part);
+    a.push(url);
+    let code = sh_run("curl -fsSL --proto '=https' --proto-redir '=https' -o \"$1\" \"$2\"", a)?;
+    if code != 0 {
+        drop_file(part);
+        raise format("failed to fetch %s", url);
+    }
+    return 0;
+}
+
+/// A project row `coil natives dump` marks `missing`: its local file is not
+/// there yet, so there is no sha256 to check. Fetch it to `dest_dir` (the
+/// row's resolved `path`), where `coil package` hashes and pins it. Until
+/// then only https vouches for it.
+fn fetch_missing(string dest_dir, string package, string version, string filename, string url) -> Result<bool, string> {
+    if starts_with(url, "https://") == false {
+        raise format("%s: native url must be https://, got %s", package, url);
+    }
+    safe_segment("filename", filename)?;
+    let dest = join2(dest_dir, filename);
+    if path_exists(dest) {
+        println(format("spool download: skip %s %s (%s is there now)", package, version, dest));
+        return false;
+    }
+    ensure_dir(dest_dir)?;
+    let part = dest + ".part";
+    curl_to(part, url)?;
+    match rename(part, dest) {
+        Result::Ok(_) => 0,
+        Result::Err(_) => raise format("cannot move %s into place", dest),
+    };
+    println(format(
+        "spool download: fetched %s %s -> %s (sha256 %s, not pinned until packaged)",
+        package,
+        version,
+        dest,
+        sha256_of(dest)?,
+    ));
+    return true;
+}
+
 fn fetch_one(string root, string package, string version, string filename, string url, string sha, string size) -> Result<bool, string> {
     if starts_with(url, "https://") == false {
         raise format("%s: native url must be https://, got %s", package, url);
@@ -136,15 +184,7 @@ fn fetch_one(string root, string package, string version, string filename, strin
     }
     ensure_dir(dest_dir)?;
     let part = dest + ".part";
-    drop_file(part);
-    let a: Vec<string> = Vec::new();
-    a.push(part);
-    a.push(url);
-    let code = sh_run("curl -fsSL --proto '=https' --proto-redir '=https' -o \"$1\" \"$2\"", a)?;
-    if code != 0 {
-        drop_file(part);
-        raise format("failed to fetch %s", url);
-    }
+    curl_to(part, url)?;
     let got = sha256_of(part)?;
     if got != sha {
         drop_file(part);
@@ -192,9 +232,10 @@ fn lib_file_of(string filename, string name) -> bool {
     return false;
 }
 
-/// The `[[ffi.native]] url` for a dump row: same package and version, and
+/// The `[[ffi.native]]` row for a dump row: same package and version, and
 /// (when several rows share those) the row whose stem names `filename`.
-fn url_for(Vec<string> rows, string package, string version, string filename) -> string {
+/// Empty when none matches.
+fn manifest_row_for(Vec<string> rows, string package, string version, string filename) -> string {
     let found = "";
     let hits = 0;
     let i = 0;
@@ -205,15 +246,24 @@ fn url_for(Vec<string> rows, string package, string version, string filename) ->
             continue;
         }
         if lib_file_of(filename, native_name(r)) {
-            return native_url(r);
+            return r;
         }
-        found = native_url(r);
+        found = r;
         hits = hits + 1;
     }
     if hits == 1 {
         return found;
     }
     return "";
+}
+
+/// The `[[ffi.native]] url` for a dump row (see `manifest_row_for`).
+fn url_for(Vec<string> rows, string package, string version, string filename) -> string {
+    let r = manifest_row_for(rows, package, version, filename);
+    if r.len() == 0 {
+        return "";
+    }
+    return native_url(r);
 }
 
 /// Download natives for a packaged exe (`exe` non-empty) or the project.
@@ -287,15 +337,24 @@ fn download_natives(string coil, string project_root, string exe) -> Result<int,
             no_url = no_url + 1;
             continue;
         }
-        let fetched = fetch_one(
-            root,
-            package,
-            version,
-            filename,
-            url,
-            tsv_field(line, 3),
-            tsv_field(line, 4),
-        )?;
+        let fetched = false;
+        if tsv_field(line, 5) == "missing" {
+            if exe.len() > 0 {
+                raise format("native lock in %s has no sha256 for %s", exe, package);
+            }
+            let r = manifest_row_for(rows, package, version, filename);
+            fetched = fetch_missing(abs_under(project_root, native_path(r)), package, version, filename, url)?;
+        } else {
+            fetched = fetch_one(
+                root,
+                package,
+                version,
+                filename,
+                url,
+                tsv_field(line, 3),
+                tsv_field(line, 4),
+            )?;
+        }
         if fetched {
             installed = installed + 1;
         } else {
