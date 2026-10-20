@@ -1,6 +1,7 @@
 // Resolve git deps in memory: collect constraints over the reachable graph,
 // pick tags (or `rev` pins) against ls-remote, fetch, and prune the lock.
-// Constraint rows: name \t git \t req \t who  (req is a range or `@<rev>`).
+// Constraint rows: name \t git \t req \t who  (req is a range, `latest` or `@<rev>`).
+// `latest` is a pin on the remote's HEAD (its default branch), locked like a branch.
 use io::file::{read_text};
 use text::{trim, split, starts_with, slice};
 use string::{format};
@@ -16,7 +17,7 @@ use manifest::{
 use tags::{parse_ls_remote, ls_remote_tag_names, ls_remote_sha};
 use semver::{select_tag, select_tag_all, tag_satisfies_all};
 use engine::{enforce_engine};
-use git::{ls_remote_tags, ls_remote_ref, fetch_rev, checkout_path, is_hex_sha};
+use git::{ls_remote_tags, ls_remote_ref, ls_remote_head, fetch_rev, checkout_path, is_hex_sha};
 
 fn resolve_dep_path(string root, string p) -> string {
     if path_is_absolute(p) {
@@ -170,7 +171,13 @@ fn strip_at(string req) -> string {
     };
 }
 
-/// The single `@rev` pin among reqs, "" when none; mixed / different pins raise.
+/// The pin (and lock `ref`) that `version = "latest"` stands for (#32).
+fn latest_ref() -> string {
+    return "HEAD";
+}
+
+/// The single pin among reqs, "" when none; mixed / different pins raise.
+/// `@<rev>` pins `rev`; `latest` pins `HEAD` (see latest_ref).
 fn pin_of(string name, Vec<string> reqs, Vec<string> cons) -> Result<string, string> {
     let pin = "";
     let ranges = 0;
@@ -178,8 +185,11 @@ fn pin_of(string name, Vec<string> reqs, Vec<string> cons) -> Result<string, str
     while i < reqs.len() {
         let r = reqs[i];
         i = i + 1;
-        if starts_with(r, "@") {
-            let p = strip_at(r);
+        if starts_with(r, "@") || r == "latest" {
+            let p = latest_ref();
+            if r != "latest" {
+                p = strip_at(r);
+            }
             if pin.len() > 0 && pin != p {
                 raise format_diamond(name, cons);
             }
@@ -281,24 +291,28 @@ fn resolve_one(string name, string url, Vec<string> cons) -> Result<string, stri
     let pin = pin_of(name, reqs, cons)?;
     let tag = "";
     let sha = "";
-    if pin.len() > 0 {
-        sha = ls_remote_ref(url, pin)?;
+    if pin == latest_ref() {
+        sha = ls_remote_head(url)?;
     } else {
-        let body = ls_remote_tags(url)?;
-        let rows = parse_ls_remote(body)?;
-        let tag_names = ls_remote_tag_names(rows);
-        if reqs.len() == 1 {
-            tag = match select_tag(reqs[0], tag_names) {
-                Result::Ok(t) => t,
-                Result::Err(e) => raise format("%s: %s", name, e),
-            };
+        if pin.len() > 0 {
+            sha = ls_remote_ref(url, pin)?;
         } else {
-            tag = match select_tag_all(reqs, tag_names) {
-                Result::Ok(t) => t,
-                Result::Err(_) => raise format_diamond(name, cons),
-            };
+            let body = ls_remote_tags(url)?;
+            let rows = parse_ls_remote(body)?;
+            let tag_names = ls_remote_tag_names(rows);
+            if reqs.len() == 1 {
+                tag = match select_tag(reqs[0], tag_names) {
+                    Result::Ok(t) => t,
+                    Result::Err(e) => raise format("%s: %s", name, e),
+                };
+            } else {
+                tag = match select_tag_all(reqs, tag_names) {
+                    Result::Ok(t) => t,
+                    Result::Err(_) => raise format_diamond(name, cons),
+                };
+            }
+            sha = ls_remote_sha(rows, tag)?;
         }
-        sha = ls_remote_sha(rows, tag)?;
     }
     let tree = fetch_rev(url, sha)?;
     return make_git_pkg_ref(name, url, tag, sha, tree, "", "", pin);

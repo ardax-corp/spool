@@ -111,7 +111,7 @@ export SPOOL_PROJECT="$P1"
 grep -q "l = { git = \"$L_URL\", version = \"latest\" }" "$P1/coil.toml" || fail "manifest lacks version = latest"
 grep -q "rev = '$L1'" "$P1/coil.lock" || fail "lock is not at the master tip"
 grep -q "ref = 'HEAD'" "$P1/coil.lock" || fail "lock lacks ref = HEAD"
-if grep -q "tag = " "$P1/coil.lock"; then fail "latest lock row has a tag"; fi
+grep -q "tag = ''" "$P1/coil.lock" || fail "latest lock row has a tag"
 if grep -q "$TOPIC_SHA" "$P1/coil.lock"; then fail "picked the topic branch"; fi
 test -L "$P1/.spool/deps/l" || fail "l not linked"
 (cd "$P1" && "$SPOOL" tree) | grep -q "l latest @ ${L1:0:10}" || fail "tree does not show latest"

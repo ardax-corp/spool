@@ -69,7 +69,8 @@ fn dep_rev(string d) -> string {
     return dep_field(d, 4);
 }
 
-/// Constraint string for a git dep: `@<rev>` when pinned, else the range.
+/// Constraint string for a git dep: `@<rev>` when pinned, else the range
+/// (or `latest`, the default-branch tip).
 fn dep_req(string d) -> string {
     let r = dep_rev(d);
     if r.len() > 0 {
@@ -180,6 +181,9 @@ fn parse_dep_spec_value(string name, TomlValue value) -> Result<string, string> 
         }
         if version.len() == 0 && rev.len() == 0 {
             raise format("git dependency %s needs version or rev", name);
+        }
+        if version == "latest" && rev.len() > 0 {
+            raise format("git dependency %s: version = \"latest\" cannot be combined with rev", name);
         }
         return make_git_rev_dep(name, git, version, rev);
     }
