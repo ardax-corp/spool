@@ -182,8 +182,8 @@ fn parse_dep_spec_value(string name, TomlValue value) -> Result<string, string> 
         if version.len() == 0 && rev.len() == 0 {
             raise format("git dependency %s needs version or rev", name);
         }
-        if version == "latest" && rev.len() > 0 {
-            raise format("git dependency %s: version = \"latest\" cannot be combined with rev", name);
+        if version.len() > 0 && rev.len() > 0 {
+            raise format("git dependency %s: version = \"%s\" cannot be combined with rev", name, version);
         }
         return make_git_rev_dep(name, git, version, rev);
     }

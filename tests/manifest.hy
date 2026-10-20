@@ -303,6 +303,22 @@ msgpack = { git = \"https://x/msgpack.git\", version = \"latest\", rev = \"main\
     };
 }
 
+test("version other than latest cannot be combined with rev (#40)") {
+    let body = "[dependencies]
+foo = { git = \"https://example/foo.git\", version = \"^1.0\", rev = \"main\" }
+";
+    match deps_parse(body) {
+        Result::Ok(_) => {
+            assert!(false);
+        },
+        Result::Err(e) => {
+            assert!(contains(e, "foo"));
+            assert!(contains(e, "version"));
+            assert!(contains(e, "rev"));
+        },
+    };
+}
+
 test("format_dep_line writes version = latest (#32)") {
     let line = format_dep_line(make_git_dep("msgpack", "https://x/msgpack.git", "latest"))?;
     assert!(line == "msgpack = { git = \"https://x/msgpack.git\", version = \"latest\" }");

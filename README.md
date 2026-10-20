@@ -224,7 +224,8 @@ local = { path = "../local" }
   `>=`, `>`, `<=`, `<`, `=`, exact, `*`, and comma-joined ranges
   (`">=1.2, <2"`). Prerelease tags are never picked by a range.
 - `rev` pins a branch, tag or commit. The lock stores the resolved sha plus the
-  `ref`. `install` keeps the pin, and `update` moves a branch pin.
+  `ref`. `install` keeps the pin, and `update` moves a branch pin. A
+  dependency sets `version` or `rev`, not both.
 - `version = "latest"` tracks the tip of the default branch, whatever it is
   called (`git ls-remote URL HEAD`), for libraries without release tags. It
   is locked like a branch pin, with `ref = 'HEAD'` and the resolved sha:
