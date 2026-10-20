@@ -3,7 +3,7 @@ use manifest::{
     deps_parse, dep_kind, dep_name, dep_git, dep_version, dep_path, deps_insert_line,
     make_git_dep, format_dep_line, deps_has_name, package_name_parse, package_coil_parse,
     package_include_parse, scripts_parse, scripts_path_of, script_rel_ok, dep_rev, dep_req,
-    deps_remove_line, manifest_validate,
+    deps_remove_line, manifest_validate, ffi_natives_parse, native_sha256, native_url,
 };
 use text::{contains};
 
@@ -274,6 +274,24 @@ version = \"1\"
 path = \".\"
 url2 = \"x\"
 "), "unknown key ffi.native.url2"));
+}
+
+test("[[ffi.native]] sha256 is optional, checked and stored lowercase (coil-lang#1657)") {
+    let row = "[[ffi.native]]
+name = \"r\"
+version = \"1\"
+path = \".\"
+url = \"https://x/libr.so\"
+";
+    let rows = ffi_natives_parse(row)?;
+    assert!(native_sha256(rows[0]) == "");
+    assert!(native_url(rows[0]) == "https://x/libr.so");
+    let hex = "4FF52DF5D95227DB32FDE1C372FC45EC07F2D939937B8E8F5971223037023A67";
+    rows = ffi_natives_parse(row + "sha256 = \"" + hex + "\"\n")?;
+    assert!(native_sha256(rows[0]) == "4ff52df5d95227db32fde1c372fc45ec07f2d939937b8e8f5971223037023a67");
+    assert!(validate_err(row + "sha256 = \"" + hex + "\"\n") == "");
+    assert!(contains(validate_err(row + "sha256 = \"abc\"\n"), "sha256 must be 64 hex digits"));
+    assert!(contains(validate_err(row + "sha256 = \"" + "0g" + "2df5d95227db32fde1c372fc45ec07f2d939937b8e8f5971223037023a67" + "\"\n"), "sha256 must be 64 hex digits"));
 }
 
 test("version = latest parses as a latest requirement (#32)") {
