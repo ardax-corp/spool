@@ -67,4 +67,50 @@ fi
 cd "$ROOT"
 out="$("$SPOOL" download 2>&1 || true)"
 echo "$out" | grep -q "nothing to download\|ok (0 installed"
+
+# coil-lang#1657: project mode, a row whose local file is not there yet. coil
+# dumps it as `missing` (no sha256); spool fetches it to the row's `path`.
+# A fake curl stands in for the network.
+PROJ="$TMP/proj"
+mkdir -p "$PROJ/src"
+cat > "$PROJ/coil.toml" <<'EOF'
+[module]
+roots = ["./src"]
+
+[[ffi.native]]
+name = "gone"
+version = "1.0.0"
+path = "./native"
+url = "https://example.invalid/libgone.so"
+EOF
+cat > "$TMP/bin/coil" <<EOF
+#!/usr/bin/env bash
+if [[ "\${1:-}" == "natives" && "\${2:-}" == "dump" ]]; then
+  echo "# os=$HOST_OS"
+  echo "# arch=$HOST_ARCH"
+  printf 'gone\t1.0.0\tlibgone.so\t\t\tmissing\n'
+  exit 0
+fi
+exit 1
+EOF
+chmod +x "$TMP/bin/coil"
+cat > "$TMP/bin/curl" <<'EOF'
+#!/usr/bin/env bash
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -o) out="$2"; shift 2 ;;
+    *) url="$1"; shift ;;
+  esac
+done
+[[ "$url" == "https://example.invalid/libgone.so" ]] || exit 22
+printf 'fake library' > "$out"
+EOF
+chmod +x "$TMP/bin/curl"
+out="$(cd "$PROJ" && "$SPOOL" download 2>&1)" || { echo "$out"; exit 1; }
+echo "$out" | grep -q "fetched gone 1.0.0" || { echo "$out"; exit 1; }
+[[ "$(cat "$PROJ/native/libgone.so")" == "fake library" ]]
+[[ ! -e "$PROJ/native/libgone.so.part" ]]
+# If the file is there by the time spool looks, it is left alone.
+out="$(cd "$PROJ" && "$SPOOL" download 2>&1)" || { echo "$out"; exit 1; }
+echo "$out" | grep -q "skip gone 1.0.0" || { echo "$out"; exit 1; }
 echo "smoke_natives_download: ok"
