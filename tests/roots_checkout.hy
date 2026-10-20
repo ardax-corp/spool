@@ -51,9 +51,11 @@ test("project_roots adds each linked package's module root") {
     // The link farm itself stays a root: `use one::{one}` (single-file) and
     // `use greet::hello` (modules directly in src/) resolve through it.
     assert!(vec_has(roots, join2(proj, ".spool/deps")));
-    // `use nest::inner` needs <nest>/src as a root.
-    assert!(vec_has(roots, join2(proj, ".spool/deps/nest")));
-    assert!(vec_has(roots, join2(proj, ".spool/deps/one")));
+    // `use nest::inner` needs <nest>/src as a root: its real path, so files
+    // reached through the link farm keep their `<name>::module` names.
+    assert!(vec_has(roots, join2(base, "nest/src")));
+    assert!(vec_has(roots, join2(base, "one/src")));
+    assert!(vec_has(roots, join2(proj, ".spool/deps/nest")) == false);
     // `.hy` file links are modules, not roots.
     assert!(vec_has(roots, join2(proj, ".spool/deps/one.hy")) == false);
 }

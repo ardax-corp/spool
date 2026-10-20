@@ -10,6 +10,7 @@ FIX="$ROOT/scratch/nest_repo"
 CACHE="$ROOT/scratch/cache_nested"
 GIT_PROJ="$ROOT/scratch/proj_nested_git"
 PATH_PROJ="$ROOT/scratch/proj_nested_path"
+OLD_PROJ="$ROOT/scratch/proj_nested_workaround"
 
 if [[ ! -x "$COIL_BIN" ]]; then
   if ! command -v "$COIL_BIN" >/dev/null 2>&1; then
@@ -18,8 +19,8 @@ if [[ ! -x "$COIL_BIN" ]]; then
   fi
 fi
 
-rm -rf "$FIX" "$CACHE" "$GIT_PROJ" "$PATH_PROJ"
-mkdir -p "$FIX/src/nest" "$GIT_PROJ/src" "$PATH_PROJ/src"
+rm -rf "$FIX" "$CACHE" "$GIT_PROJ" "$PATH_PROJ" "$OLD_PROJ"
+mkdir -p "$FIX/src/nest" "$GIT_PROJ/src" "$PATH_PROJ/src" "$OLD_PROJ/src"
 
 # Layout of coil-tls / coil-sdl: src/<name>.hy, src/<name>/*.hy and a second
 # top-level module, all resolved through the package's own ./src root.
@@ -60,13 +61,14 @@ URL="file://$FIX"
 
 write_consumer() {
   local dest="$1"
+  local roots="${2:-\"./src\"}"
   cat > "$dest/coil.toml" <<EOF
 [package]
 name = "consume_nested"
 version = "0.0.1"
 
 [module]
-roots = ["./src"]
+roots = [$roots]
 
 [entry]
 file = "src/main.hy"
@@ -105,6 +107,13 @@ write_consumer "$PATH_PROJ"
 export SPOOL_PROJECT="$PATH_PROJ"
 "$SPOOL" add nest --path "$FIX"
 GOT="$(cd "$PATH_PROJ" && "$SPOOL" run)"
+test "$GOT" = "$WANT"
+
+# The old workaround (the link as an extra [module] root) keeps working.
+write_consumer "$OLD_PROJ" '"./src", ".spool/deps/nest"'
+export SPOOL_PROJECT="$OLD_PROJ"
+"$SPOOL" add nest --path "$FIX"
+GOT="$(cd "$OLD_PROJ" && "$SPOOL" run)"
 test "$GOT" = "$WANT"
 
 echo "smoke_nested: ok"
