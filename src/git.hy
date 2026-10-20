@@ -7,7 +7,7 @@ use util::{join2, join3, join4, ensure_dir, path_dirname, path_exists, trim_or, 
 use proc::{sh_run, sh_capture, first_line};
 use config::{cache_root};
 use cache_url::{url_cache_key};
-use tags::{ls_remote_head_sha};
+use tags::{ls_remote_head_sha, ls_remote_ref_sha};
 
 fn git_auth_hint() -> string {
     return "private remotes use ssh-agent, GIT_ASKPASS, git credential helpers, or url.insteadOf in ~/.gitconfig; spool does not store credentials";
@@ -67,22 +67,19 @@ fn ls_remote_ref(string url, string rev) -> Result<string, string> {
     let a: Vec<string> = Vec::new();
     a.push(url);
     a.push(rev);
-    // Prefer the peeled commit of an annotated tag, then an exact ref.
+    // `ls-remote` matches patterns by suffix; ls_remote_ref_sha keeps only
+    // exact refnames, preferring an annotated tag's peeled commit (#41).
     let script = git_env_prefix()
-        + "out=$(git ls-remote \"$1\" \"$2\" \"refs/tags/$2^{}\" \"refs/heads/$2\" \"refs/tags/$2\") || exit 2; "
-        + "p=$(printf '%s\\n' \"$out\" | awk '$2 ~ /\\^\\{\\}$/ {print $1; exit}'); "
-        + "if [ -n \"$p\" ]; then echo \"$p\"; exit 0; fi; "
-        + "printf '%s\\n' \"$out\" | awk 'NF {print $1; exit}'";
+        + "git ls-remote \"$1\" \"$2\" \"refs/tags/$2^{}\" \"refs/heads/$2\" \"refs/tags/$2\"";
     let res = sh_capture(script, a)?;
     let (code, body) = res;
     if code != 0 {
         raise git_failed("ls-remote", url);
     }
-    let sha = first_line(body);
-    if sha.len() == 0 {
-        raise format("rev `%s` not found in %s", rev, url);
-    }
-    return sha;
+    return match ls_remote_ref_sha(body, rev) {
+        Result::Ok(sha) => sha,
+        Result::Err(_) => raise format("rev `%s` not found in %s", rev, url),
+    };
 }
 
 /// Tip of the remote's default branch (`git ls-remote URL HEAD`), whatever
