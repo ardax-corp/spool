@@ -1,6 +1,6 @@
 // Parse and update coil.toml [dependencies] (git / path inline tables).
 // Manifest decode uses coil-toml; deps_insert_line still edits text to preserve comments.
-use text::{trim, starts_with, ends_with, split, contains, slice, join as text_join};
+use text::{trim, starts_with, ends_with, split, contains, slice, to_lower, join as text_join};
 use io::file::{read_text, write_text};
 use io::fs::{exists};
 use string::{format};
@@ -806,8 +806,9 @@ fn trusted_deps_parse(string body) -> Result<Vec<string>, string> {
 }
 
 // `[[ffi.native]]` rows as tab-separated records:
-//   name \t package \t version \t path \t url \t requires (`;`-joined) \t requires_hint
-// `package` defaults to `name`. `url` is optional and only used by `spool download`.
+//   name \t package \t version \t path \t url \t requires (`;`-joined) \t requires_hint \t sha256
+// `package` defaults to `name`. `url` and `sha256` (64 hex digits, stored
+// lowercase) are optional and only used by `spool download`.
 
 fn native_name(string r) -> string {
     return dep_field(r, 0);
@@ -837,6 +838,28 @@ fn native_requires_hint(string r) -> string {
     return dep_field(r, 6);
 }
 
+fn native_sha256(string r) -> string {
+    return dep_field(r, 7);
+}
+
+/// `s` lowercased when it is 64 hex digits, else an error naming row `name`.
+fn native_sha256_value(string name, string s) -> Result<string, string> {
+    let low = to_lower(s)?;
+    let ok = low.len() == 64;
+    let i = 0;
+    while ok && i < 64 {
+        let c = slice(low, i, i + 1)?;
+        if contains("0123456789abcdef", c) == false {
+            ok = false;
+        }
+        i = i + 1;
+    }
+    if ok == false {
+        raise format("[[ffi.native]] %s sha256 must be 64 hex digits, got %s", name, s);
+    }
+    return low;
+}
+
 fn ffi_native_row(TomlValue row, int idx) -> Result<string, string> {
     if row.is_table() == false {
         raise format("[[ffi.native]] #%i must be a table", idx);
@@ -846,6 +869,7 @@ fn ffi_native_row(TomlValue row, int idx) -> Result<string, string> {
     let version = "";
     let path = "";
     let url = "";
+    let sha = "";
     let requires = "";
     let hint = "";
     let i = 0;
@@ -902,6 +926,10 @@ fn ffi_native_row(TomlValue row, int idx) -> Result<string, string> {
             hint = v.s;
             continue;
         }
+        if k == "sha256" {
+            sha = v.s;
+            continue;
+        }
         raise format("unknown key ffi.native.%s", k);
     }
     if name.len() == 0 {
@@ -916,7 +944,11 @@ fn ffi_native_row(TomlValue row, int idx) -> Result<string, string> {
     if package.len() == 0 {
         package = name;
     }
-    return name + "\t" + package + "\t" + version + "\t" + path + "\t" + url + "\t" + requires + "\t" + hint;
+    if sha.len() > 0 {
+        sha = native_sha256_value(name, sha)?;
+    }
+    return name + "\t" + package + "\t" + version + "\t" + path + "\t" + url + "\t" + requires + "\t" + hint
+        + "\t" + sha;
 }
 
 /// `[[ffi.native]]` rows (see the record layout above). Unknown keys hard-error.
