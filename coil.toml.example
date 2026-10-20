@@ -19,8 +19,9 @@
 [module]
 # Search roots for `use` resolution, relative to this file. Each one is
 # passed as `--root DIR`; coil searches them in order and the first file
-# that exists wins. spool adds `.spool/deps` (after `spool install`) and
-# the stdlib (unless a root here already is one).
+# that exists wins. spool adds `.spool/deps` (after `spool install`), the
+# stdlib (unless a root here already is one) and each dependency's `src/`;
+# do not list `.spool/deps/<name>` here.
 roots = ["./src"]
 
 [entry]
@@ -57,7 +58,8 @@ roots = ["./src"]
 # --------------------------------------------------------------------------
 #
 # `spool install` links them under `.spool/deps`, which spool passes as a
-# root, so `use` resolves a package by its short name here (never its URL).
+# root together with each package's `src/`, so `use` resolves a package by
+# its short name here (never its URL), including modules in `src/<name>/`.
 #
 # [dependencies]
 # http = { git = "https://github.com/coil-lang/http.git", version = "^0.2" }
