@@ -5,10 +5,10 @@ use text::{slice};
 use util::{join2, path_exists, tsv_field, vec_has};
 use lock::{lock_find, lock_pkg_name, lock_pkg_tag, lock_pkg_rev, lock_pkg_ref, lock_pkg_hash};
 use manifest::{deps_read, dep_kind, dep_name, dep_path, package_name_read, package_version_parse, manifest_body};
-use resolve::{collect, resolve_dep_path, reqs_for};
+use resolve::{collect, resolve_dep_path, reqs_for, latest_ref};
 use tags::{parse_ls_remote, ls_remote_tag_names};
 use semver::{select_tag, select_tag_all};
-use git::{checkout_path, ls_remote_tags, is_hex_sha};
+use git::{checkout_path, ls_remote_tags, ls_remote_head, is_hex_sha};
 
 fn short_sha(string s) -> string {
     if s.len() <= 10 {
@@ -23,6 +23,9 @@ fn short_sha(string s) -> string {
 fn describe_locked(string p) -> string {
     if is_hex_sha(lock_pkg_ref(p)) {
         return lock_pkg_name(p) + " @ " + short_sha(lock_pkg_rev(p));
+    }
+    if lock_pkg_ref(p) == latest_ref() {
+        return lock_pkg_name(p) + " latest @ " + short_sha(lock_pkg_rev(p));
     }
     if lock_pkg_ref(p).len() > 0 {
         return lock_pkg_name(p) + " " + lock_pkg_ref(p) + " @ " + short_sha(lock_pkg_rev(p));
@@ -158,6 +161,16 @@ fn print_outdated(string root, Vec<string> packages) -> Result<int, string> {
         let p = packages[i];
         i = i + 1;
         let name = lock_pkg_name(p);
+        if lock_pkg_ref(p) == latest_ref() {
+            // latest: the locked sha against the current default-branch tip.
+            let tip = short_sha(ls_remote_head(tsv_field(p, 1))?);
+            let at = short_sha(lock_pkg_rev(p));
+            if at != tip {
+                behind = behind + 1;
+            }
+            println(pad(name, 16) + pad(at, 12) + pad(tip, 12) + tip);
+            continue;
+        }
         if lock_pkg_ref(p).len() > 0 {
             println(pad(name, 16) + pad("@" + lock_pkg_ref(p), 12) + pad("-", 12) + "-");
             continue;
