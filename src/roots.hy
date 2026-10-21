@@ -11,9 +11,9 @@
 // dep_checkouts maps the links back to each checkout, whose own coil.toml
 // `[ffi]` paths resolve against it (spool#38).
 use io::fs::{is_dir, is_symlink, remove_file, symlink, list_dir, realpath};
-use collections::{sort};
+use collections::sort;
 use text::{ends_with, slice};
-use string::{format};
+use string::format;
 use util::{join2, ensure_dir, path_exists, path_dirname, tsv_field, vec_has, check_pkg_name};
 
 fn spool_deps_dir(string project_root) -> string {
@@ -32,7 +32,7 @@ fn checkout_module_root(string checkout_path) -> string {
             }
         },
         Result::Err(_) => {},
-    };
+    }
     return checkout_path;
 }
 
@@ -129,7 +129,7 @@ fn dep_module_roots(string project_root) -> Vec<string> {
                 out.push(r);
             },
             Result::Err(_) => {},
-        };
+        }
     }
     return out;
 }
@@ -180,7 +180,7 @@ fn dep_checkouts(string project_root) -> Vec<string> {
                 out.push(name + "\t" + checkout_of_target(r));
             },
             Result::Err(_) => {},
-        };
+        }
     }
     return out;
 }

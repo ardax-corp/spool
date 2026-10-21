@@ -4,9 +4,10 @@
 // Optional [hooks] allow_include is a consumer allowlist (not a git identity).
 // Consumer [scripts] hashes live in a lock [scripts] table, not a [[package]] row.
 use text::{trim, starts_with, split, contains, ends_with, slice, join as text_join};
-use io::file::{read_text, write_text};
-use io::fs::{exists};
-use string::{format};
+use io::file::read_text;
+use io::file::write_text;
+use io::fs::exists;
+use string::format;
 use collections::{sort, sort_by};
 
 fn make_git_pkg_hook(
@@ -18,7 +19,8 @@ fn make_git_pkg_hook(
     string hook_path,
     string hook_hash,
 ) -> string {
-    return name + "\t" + git + "\t" + tag + "\t" + rev + "\t" + hash + "\t" + hook_path + "\t" + hook_hash;
+    return name + "\t" + git + "\t" + tag + "\t" + rev + "\t" + hash + "\t" + hook_path + "\t" +
+           hook_hash;
 }
 
 fn make_git_pkg(string name, string git, string tag, string rev, string hash) -> string {
@@ -341,11 +343,7 @@ fn scripts_have_any(Vec<string> scripts) -> bool {
     return false;
 }
 
-fn lock_serialize_all(
-    Vec<string> packages,
-    Vec<string> allow_include,
-    Vec<string> scripts,
-) -> string {
+fn lock_serialize_all(Vec<string> packages, Vec<string> allow_include, Vec<string> scripts) -> string {
     let none: Vec<(string, string)> = Vec::new();
     return lock_serialize_natives(packages, allow_include, scripts, none);
 }
@@ -818,12 +816,10 @@ fn lock_parse_scripts(string source) -> Result<Vec<string>, string> {
     return scripts;
 }
 
-fn lock_write_all(
-    string path,
-    Vec<string> packages,
-    Vec<string> allow_include,
-    Vec<string> scripts,
-) -> Result<int, string> {
+fn lock_write_all(string path, Vec<string> packages, Vec<string> allow_include, Vec<string> scripts) -> Result<
+    int,
+    string,
+> {
     let natives: Vec<(string, string)> = Vec::new();
     let present = match exists(path) {
         Result::Ok(v) => v,
@@ -858,7 +854,10 @@ fn lock_read_scripts_or_empty(string path) -> Result<Vec<string>, string> {
     return lock_parse_scripts(body)?;
 }
 
-fn lock_write_full(string path, Vec<string> packages, Vec<string> allow_include) -> Result<int, string> {
+fn lock_write_full(string path, Vec<string> packages, Vec<string> allow_include) -> Result<
+    int,
+    string,
+> {
     let scripts = lock_read_scripts_or_empty(path)?;
     return lock_write_all(path, packages, allow_include, scripts)?;
 }
