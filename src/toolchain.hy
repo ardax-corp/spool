@@ -2,18 +2,19 @@
 use env::{var};
 use string::{format};
 use util::{join2, join3, path_exists, path_is_absolute, home_dir, trim_or, vec_has, tsv_field};
-use roots::{dep_module_roots, dep_checkouts};
+use roots::{dep_module_roots, dep_checkouts, checkout_module_root};
 use proc::{which, sh_capture, first_line};
 use manifest::{
     manifest_body, manifest_validate, module_roots_parse, section_string, section_bool, section_strings,
     trusted_deps_parse, ffi_natives_parse, native_name, native_package, native_version,
     native_path, native_requires, native_requires_hint,
 };
-use lock::{lock_native_parse, lock_native_pkg, lock_native_stem, lock_native_sha};
+use lock::{lock_native_parse, lock_native_pkg, lock_native_stem, lock_native_sha, lock_allow_comptime};
 use config::{config_path};
 use io::file::{read_text};
-use text::{starts_with, slice, contains, replace, to_lower, split};
-use io::fs::{is_dir};
+use text::{starts_with, ends_with, slice, contains, replace, to_lower, split};
+use io::fs::{is_dir, list_dir};
+use term::{eprintln};
 
 fn env_or(string key, string fallback) -> string {
     return match var(key) {
@@ -604,6 +605,134 @@ fn grant_flags(string root) -> Result<Vec<string>, string> {
     while i < dload.len() {
         out.push(dload[i]);
         i = i + 1;
+    }
+    let ct = comptime_flags(root, body)?;
+    i = 0;
+    while i < ct.len() {
+        out.push(ct[i]);
+        i = i + 1;
+    }
+    return out;
+}
+
+/// The `[comptime]` grant keys, each a `--comptime-<key>` flag.
+fn comptime_kinds() -> Vec<string> {
+    return ["read", "write", "env", "exec", "net"];
+}
+
+/// `--comptime-<key> VALUE` for each `[comptime]` grant in `body`, each value
+/// prefixed with `scope` (`""`, or `module=`). Paths are made absolute under
+/// `base`, so a dependency's are its own.
+fn comptime_grants(string body, string base, string scope) -> Result<Vec<string>, string> {
+    let out: Vec<string> = Vec::new();
+    let kinds = comptime_kinds();
+    let k = 0;
+    while k < kinds.len() {
+        let kind = kinds[k];
+        k = k + 1;
+        let values = section_strings(body, "comptime", kind)?;
+        let i = 0;
+        while i < values.len() {
+            let v = values[i];
+            i = i + 1;
+            if kind == "read" || kind == "write" {
+                v = abs_under(base, v);
+            }
+            out.push("--comptime-" + kind);
+            out.push(scope + v);
+        }
+    }
+    return out;
+}
+
+/// The top-level modules a dependency provides: the `.hy` files and the
+/// directories in its module root (`json.hy` and `json/` are `json`).
+fn dep_top_modules(string checkout) -> Vec<string> {
+    let out: Vec<string> = Vec::new();
+    let dir = checkout_module_root(checkout);
+    let entries = match list_dir(dir) {
+        Result::Ok(v) => v,
+        Result::Err(_) => {
+            return out;
+        },
+    };
+    let i = 0;
+    while i < entries.len() {
+        let name = entries[i];
+        i = i + 1;
+        if starts_with(name, ".") {
+            continue;
+        }
+        if ends_with(name, ".hy") {
+            name = match slice(name, 0, name.len() - 3) {
+                Result::Ok(s) => s,
+                Result::Err(_) => name,
+            };
+        } else {
+            let sub = match is_dir(join2(dir, name)) {
+                Result::Ok(d) => d,
+                Result::Err(_) => false,
+            };
+            if sub == false {
+                continue;
+            }
+        }
+        if vec_has(out, name) == false {
+            out.push(name);
+        }
+    }
+    return out;
+}
+
+/// Compile-time grants and the result cache (comptime step 14): the
+/// project's `[comptime]` grants for every module, `--comptime-cache` at
+/// `[comptime] cache` (default `.comptime`, meant to be committed), and the
+/// `[comptime]` grants of each dependency that `spool allow-comptime`
+/// allowed, scoped to that dependency's modules. A dependency that asks for
+/// grants it was not given gets a note on stderr instead.
+fn comptime_flags(string root, string body) -> Result<Vec<string>, string> {
+    let out = comptime_grants(body, root, "")?;
+    let cache = section_string(body, "comptime", "cache")?;
+    if cache.len() == 0 {
+        cache = ".comptime";
+    }
+    out.push("--comptime-cache");
+    out.push(abs_under(root, cache));
+    let allowed = lock_allow_comptime(lock_text(root))?;
+    let deps = dep_checkouts(root);
+    let i = 0;
+    while i < deps.len() {
+        let name = tsv_field(deps[i], 0);
+        let checkout = tsv_field(deps[i], 1);
+        i = i + 1;
+        let manifest = join2(checkout, "coil.toml");
+        if path_exists(manifest) == false {
+            continue;
+        }
+        let dep_body = manifest_body(manifest)?;
+        let wanted = comptime_grants(dep_body, checkout, "")?;
+        if wanted.len() == 0 {
+            continue;
+        }
+        if vec_has(allowed, name) == false {
+            eprintln(format(
+                "spool: %s asks for compile-time grants ([comptime] in its coil.toml); `spool allow-comptime %s` gives them",
+                name,
+                name,
+            ));
+            continue;
+        }
+        let modules = dep_top_modules(checkout);
+        let m = 0;
+        while m < modules.len() {
+            let scoped = comptime_grants(dep_body, checkout, modules[m] + "=")?;
+            m = m + 1;
+            let j = 0;
+            while j < scoped.len() {
+                out.push(scoped[j]);
+                j = j + 1;
+            }
+        }
     }
     return out;
 }

@@ -655,6 +655,9 @@ fn manifest_section_keys(string section) -> string {
     if section == "ffi" {
         return ",search_paths,allow,allow_attach,native,";
     }
+    if section == "comptime" {
+        return ",read,write,env,exec,net,cache,";
+    }
     return "";
 }
 

@@ -19,7 +19,7 @@ use manifest::{
     deps_read, dep_kind, dep_name, make_git_rev_dep, make_path_dep, deps_append, deps_remove,
     manifest_body, section_string, package_name_read,
 };
-use lock::{lock_read_or_empty, lock_pkg_name, lock_add_allow_include};
+use lock::{lock_read_or_empty, lock_pkg_name, lock_add_allow_include, lock_add_allow_comptime};
 use hooks::{hooks_are_off};
 use sync::{sync, snapshot, restore};
 use report::{print_tree, print_outdated};
@@ -72,6 +72,7 @@ Dependencies:
   outdated                          compare locked tags with the remote
   download [EXE]                    fetch FFI natives (project or packaged EXE)
   allow-include <name>              allow a dependency's include-hook
+  allow-comptime <name>             give a dependency the compile-time grants it asks for
 
 Tooling:
   doctor                            check the toolchain and environment
@@ -882,6 +883,21 @@ fn cmd_allow_include(Vec<string> rest) -> Result<int, string> {
     return 0;
 }
 
+/// Record that dependency `name` gets the `[comptime]` grants in its own
+/// coil.toml, scoped to its modules (lock `[hooks] allow_comptime`).
+fn cmd_allow_comptime(Vec<string> rest) -> Result<int, string> {
+    let p = parse_args(rest, no_strs(), no_strs())?;
+    let pos = positionals(p);
+    if pos.len() != 1 {
+        raise "usage: spool allow-comptime <name>";
+    }
+    check_pkg_name(pos[0])?;
+    let root = find_project()?;
+    lock_add_allow_comptime(join2(root, "coil.lock"), pos[0])?;
+    say("allow-comptime: " + pos[0]);
+    return 0;
+}
+
 // ---- tooling ---------------------------------------------------------------
 
 fn doctor_line(string label, string value, bool ok) -> bool {
@@ -1048,6 +1064,9 @@ fn dispatch(string cmd, Vec<string> rest) -> Result<int, string> {
     }
     if cmd == "download" {
         return cmd_download(rest)?;
+    }
+    if cmd == "allow-comptime" {
+        return cmd_allow_comptime(rest)?;
     }
     if cmd == "allow-include" {
         return cmd_allow_include(rest)?;
