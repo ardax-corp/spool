@@ -469,7 +469,8 @@ fn dir_has_lib(string dir, string name) -> bool {
 /// `r` with its path field replaced (record layout in manifest.hy).
 fn with_native_path(string r, string path) -> string {
     return native_name(r) + "\t" + native_package(r) + "\t" + native_version(r) + "\t" + path
-        + "\t" + tsv_field(r, 4) + "\t" + native_requires(r) + "\t" + native_requires_hint(r);
+        + "\t" + tsv_field(r, 4) + "\t" + native_requires(r) + "\t" + native_requires_hint(r)
+        + "\t" + tsv_field(r, 7);
 }
 
 /// The `[[ffi.native]]` rows `coil package` gets, every path absolute: the

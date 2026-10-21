@@ -524,6 +524,7 @@ package = "coil-regex"      # optional, default: name
 version = "0.3.0"
 path = "./native"           # holds libregex.so; coil hashes it
 url = "https://example.com/coil-regex/0.3.0/libregex.so"
+sha256 = "<64 hex digits>"  # optional; checks a fetch of a file not in path yet
 requires = ["libpcre2-8.so.0"]
 requires_hint = "apt install libpcre2-8-0"
 ```
@@ -543,6 +544,18 @@ the libraries it packaged from local files into this cache (see
 in place is up to you. Only https URLs are fetched. Each file is checked against the sha256
 and size before it is moved into place. Transitive sonames (`requires`) must
 come from the OS.
+
+In project mode a row whose file is not in its `path` yet has nothing for
+coil to hash: `coil natives dump` lists it as `missing`, with no sha256.
+spool fetches it from `url` (https only) into the row's `path`, where
+`spool build` hashes and pins it. With a `sha256` on the row the download is
+checked against it first (on a mismatch the partial file is removed and
+`download` fails). Without one it is placed unchecked, with a warning
+(`WARNING: fetched … over https without a hash check …; coil package pins it
+when it hashes it. Add sha256 = "<hex>" to [[ffi.native]] …`): until then
+only https vouches for it. A file already in `path` is left alone. `sha256`
+is 64 hex digits (any case; anything else is a manifest error); rows that
+are present keep the pinned download above, whose sha256 comes from coil.
 
 ```bash
 spool download ./hello          # a packaged exe
