@@ -5,6 +5,7 @@ use lock::{
     lock_pkg_hook_path, lock_pkg_hook_hash, lock_hashes_match, lock_upsert,
     make_lock_script, lock_script_path, lock_script_hash, lock_find_script,
     lock_write, lock_read, lock_native_parse, lock_native_pkg, lock_native_stem, lock_native_sha,
+    lock_add_allow_comptime, lock_add_allow_include, lock_allow_comptime,
 };
 use io::file::{write_text, read_text};
 use io::fs::{create_dir_all};
@@ -212,4 +213,37 @@ test("lock rewrite keeps [[package.native]] rows under their package") {
     let left = lock_native_parse(after)?;
     assert!(left.len() == 1);
     assert!(lock_native_pkg(left[0]) == "coil-tls");
+}
+
+test("allow_comptime survives lock rewrites") {
+    match create_dir_all("scratch/lock_comptime") {
+        Result::Ok(_) => 0,
+        Result::Err(_) => raise "mkdir failed",
+    }
+    let path = "scratch/lock_comptime/coil.lock";
+    let pkgs = Vec::new();
+    pkgs.push(make_git_pkg("gen", "https://g", "v1", "r1", "h1"));
+    lock_write(path, pkgs)?;
+    lock_add_allow_comptime(path, "gen")?;
+    lock_add_allow_comptime(path, "gen")?;
+    lock_add_allow_include(path, "gen")?;
+    let text = match read_text(path) {
+        Result::Ok(t) => t,
+        Result::Err(_) => raise "lock read failed",
+    };
+    let names = lock_allow_comptime(text)?;
+    assert!(names.len() == 1 && names[0] == "gen");
+    let include = lock_parse_allow(text)?;
+    assert!(include.len() == 1, "allow_include kept");
+    // An install rewrites the lock: the allowlist stays.
+    let again = lock_read(path)?;
+    lock_write(path, again)?;
+    let after = match read_text(path) {
+        Result::Ok(t) => t,
+        Result::Err(_) => raise "lock read failed",
+    };
+    let kept = lock_allow_comptime(after)?;
+    assert!(kept.len() == 1);
+    let packages = lock_read(path)?;
+    assert!(packages.len() == 1);
 }

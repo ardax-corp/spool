@@ -54,6 +54,23 @@ roots = ["./src"]
 # allow_ffi_exec = true    # --allow-ffi-exec: FFI system/execve resolve.
 
 # --------------------------------------------------------------------------
+# Compile-time grants
+# --------------------------------------------------------------------------
+#
+# What code run while compiling (`comptime`, a `const`, a macro) may use.
+# Each key becomes `--comptime-<key>`; paths are relative to this file. A
+# dependency's own `[comptime]` applies, scoped to its modules, only after
+# `spool allow-comptime <name>`.
+#
+# [comptime]
+# read = ["./schemas"]
+# write = ["./gen"]
+# env = ["CI"]
+# exec = ["git"]
+# net = ["api.example.com:443"]
+# cache = ".comptime"      # result cache (the default)
+
+# --------------------------------------------------------------------------
 # Dependencies
 # --------------------------------------------------------------------------
 #

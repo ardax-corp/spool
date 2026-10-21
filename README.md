@@ -120,6 +120,7 @@ way the library resolves them itself.
 | `outdated` | locked vs newest compatible vs newest tag (`latest`: locked sha vs the current tip) |
 | `download [EXE]` | fetch FFI natives for the project or a packaged EXE |
 | `allow-include <name>` | allow a dependency's include-hook |
+| `allow-comptime <name>` | let a dependency's compile-time code use its own `[comptime]` grants |
 | `doctor` | check coil, stdlib, git, sh, curl, cache and project roots |
 | `cache dir` / `cache clean` | show or clear the shared git cache |
 
@@ -193,6 +194,11 @@ spool runs `coil` from the project root with:
   - `--dload-trusted STEM` for each `trusted = true` dependency: its name,
     the name without `coil-` (`coil-crypto` → `crypto`), and the lock's
     native stems for it
+- compile-time grants (see [Compile-time grants](#compile-time-grants)):
+  `--comptime-read/-write/-env/-exec/-net` for the project's `[comptime]`
+  keys, `--comptime-cache <project>/.comptime` (or `[comptime] cache`), and
+  each `allow-comptime` dependency's own `[comptime]` grants scoped to its
+  modules (`--comptime-env gen=TOKEN`)
 - `coil package` (`spool build` / `run`) and `coil natives dump` also get
   one `--ffi-native name=…,version=…,path=…[,package=…][,requires=a;b][,requires-hint=…]`
   per `[[ffi.native]]` row (`path` made absolute, `,` in a value escaped as
@@ -402,6 +408,44 @@ untrusted hook: missing lock hash for http
 hook path mismatch for http
 hook hash mismatch for http
 ```
+
+## Compile-time grants
+
+Code coil runs while compiling (`comptime`, a `const`, a macro) does IO only
+when the build grants it. `[comptime]` in `coil.toml` lists what the
+project's own compile-time code may use:
+
+```toml
+[comptime]
+read = ["schemas"]          # paths, relative to the project
+write = ["gen"]
+env = ["CI"]
+exec = ["git"]
+net = ["api.example.com:443"]
+cache = ".comptime"         # result cache (the default)
+```
+
+Each key becomes `--comptime-<key>` for every module of the project. Paths
+are made absolute under the project root.
+
+A dependency's `[comptime]` is ignored until the consumer allows it:
+
+```bash
+spool allow-comptime gen
+```
+
+That records the package in the lock `[hooks]` table, which install keeps:
+
+```toml
+[hooks]
+allow_comptime = ['gen']
+```
+
+An allowed dependency's grants are scoped to its own top-level modules (the
+`.hy` files and directories under its module root): `env = ["GEN_TOKEN"]`
+in `gen` gives `--comptime-env gen=GEN_TOKEN`, so the project's modules do
+not get them. Paths resolve under the dependency's checkout. A dependency
+with `[comptime]` that is not allowed gets a note on stderr.
 
 ## Project scripts
 
