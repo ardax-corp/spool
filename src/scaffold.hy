@@ -1,7 +1,7 @@
 // `spool new` / `spool init`: project skeletons.
 use io::file::{write_text, read_text};
 use string::{format};
-use text::{contains, ends_with};
+use text::{Searchable};
 use util::{join2, ensure_dir, path_exists, check_pkg_name};
 use proc::{run_in};
 
@@ -49,16 +49,16 @@ fn ensure_gitignore(string dir) -> Result<int, string> {
         };
     }
     let add = "";
-    if contains(body, "/target/") == false {
+    if body.contains("/target/") == false {
         add = add + "/target/\n";
     }
-    if contains(body, "/.spool/") == false {
+    if body.contains("/.spool/") == false {
         add = add + "/.spool/\n";
     }
     if add.len() == 0 {
         return 0;
     }
-    if body.len() > 0 && ends_with(body, "\n") == false {
+    if body.len() > 0 && body.ends_with("\n") == false {
         body = body + "\n";
     }
     return match write_text(path, body + add) {
@@ -70,7 +70,7 @@ fn ensure_gitignore(string dir) -> Result<int, string> {
 /// Module names are identifiers: letters, digits, `_`.
 fn check_module_name(string name) -> Result<int, string> {
     check_pkg_name(name)?;
-    if contains(name, "-") {
+    if name.contains("-") {
         raise format("`%s` is not usable in `use` paths; use `_` instead of `-`", name);
     }
     return 0;

@@ -1,7 +1,7 @@
 // Host git through proc: ls-remote, bare cache clones, detached worktrees.
 // GIT_TERMINAL_PROMPT=0 so a missing credential fails instead of hanging.
 use string::{format};
-use text::{slice, contains, starts_with};
+use text::{Searchable, slice};
 use clock::{wall_nanos};
 use util::{join2, join3, join4, ensure_dir, path_dirname, path_exists, trim_or, check_git_url};
 use proc::{sh_run, sh_capture, first_line};
@@ -47,7 +47,7 @@ fn is_hex_sha(string s) -> bool {
                 return false;
             },
         };
-        if contains(hex, c) == false {
+        if hex.contains(c) == false {
             return false;
         }
         i = i + 1;
@@ -61,7 +61,7 @@ fn ls_remote_ref(string url, string rev) -> Result<string, string> {
     if is_hex_sha(rev) {
         return rev;
     }
-    if starts_with(rev, "-") {
+    if rev.starts_with("-") {
         raise format("invalid rev `%s`", rev);
     }
     let a: Vec<string> = Vec::new();

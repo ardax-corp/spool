@@ -12,7 +12,7 @@
 // `[ffi]` paths resolve against it (spool#38).
 use io::fs::{is_dir, is_symlink, remove_file, symlink, list_dir, realpath};
 use collections::sort;
-use text::{ends_with, slice};
+use text::{Searchable, slice};
 use string::format;
 use util::{join2, ensure_dir, path_exists, path_dirname, tsv_field, vec_has, check_pkg_name};
 
@@ -82,7 +82,7 @@ fn link_dep(string project_root, string name, string checkout_path) -> Result<in
 }
 
 fn strip_hy(string entry) -> string {
-    if ends_with(entry, ".hy") && entry.len() > 3 {
+    if entry.ends_with(".hy") && entry.len() > 3 {
         return match slice(entry, 0, entry.len() - 3) {
             Result::Ok(x) => x,
             Result::Err(_) => entry,
@@ -114,7 +114,7 @@ fn dep_module_roots(string project_root) -> Vec<string> {
     while i < entries.len() {
         let p = join2(deps, entries[i]);
         i = i + 1;
-        if ends_with(p, ".hy") || is_link(p) == false {
+        if p.ends_with(".hy") || is_link(p) == false {
             continue;
         }
         let dir = match is_dir(p) {
@@ -138,7 +138,7 @@ fn dep_module_roots(string project_root) -> Vec<string> {
 /// `<checkout>` (link_dep links a checkout's src/ when it has one), anything
 /// else is the checkout itself.
 fn checkout_of_target(string target) -> string {
-    if ends_with(target, "/src") && path_exists(join2(target, "coil.toml")) == false {
+    if target.ends_with("/src") && path_exists(join2(target, "coil.toml")) == false {
         let parent = path_dirname(target);
         if path_exists(join2(parent, "coil.toml")) {
             return parent;
@@ -165,7 +165,7 @@ fn dep_checkouts(string project_root) -> Vec<string> {
         let name = entries[i];
         let p = join2(deps, name);
         i = i + 1;
-        if ends_with(p, ".hy") || is_link(p) == false {
+        if p.ends_with(".hy") || is_link(p) == false {
             continue;
         }
         let dir = match is_dir(p) {

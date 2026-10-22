@@ -12,7 +12,7 @@ use manifest::{
 use lock::{lock_native_parse, lock_native_pkg, lock_native_stem, lock_native_sha, lock_allow_comptime};
 use config::{config_path};
 use io::file::{read_text};
-use text::{starts_with, ends_with, slice, contains, replace, to_lower, split};
+use text::{Searchable, slice, to_lower};
 use io::fs::{is_dir, list_dir};
 use term::{eprintln};
 
@@ -140,7 +140,7 @@ fn abs_under(string root, string p) -> string {
     if path_is_absolute(p) {
         return p;
     }
-    if starts_with(p, "./") {
+    if p.starts_with("./") {
         return join2(root, match slice(p, 2, p.len()) {
             Result::Ok(x) => x,
             Result::Err(_) => p,
@@ -195,7 +195,7 @@ fn dload_stem(string pkg, string native_stem) -> string {
     if native_stem.len() > 0 {
         return native_stem;
     }
-    if starts_with(pkg, "coil-") {
+    if pkg.starts_with("coil-") {
         return match slice(pkg, 5, pkg.len()) {
             Result::Ok(x) => x,
             Result::Err(_) => pkg,
@@ -223,7 +223,7 @@ fn is_sha256_hex(string s) -> bool {
                 return false;
             },
         };
-        if contains("0123456789abcdef", c) == false {
+        if "0123456789abcdef".contains(c) == false {
             return false;
         }
         i = i + 1;
@@ -293,10 +293,7 @@ fn dload_flags(string manifest, string lock) -> Result<Vec<string>, string> {
 
 /// `\,` for each comma, so a value cannot end an `--ffi-native` field.
 fn spec_escape(string v) -> string {
-    return match replace(v, ",", "\\,") {
-        Result::Ok(x) => x,
-        Result::Err(_) => v,
-    };
+    return v.replace_all(",", "\\,");
 }
 
 /// The `--ffi-native` value for one `[[ffi.native]]` row (relative `path`
@@ -359,12 +356,7 @@ fn inside_checkout(string p) -> bool {
     if p.len() == 0 || path_is_absolute(p) {
         return false;
     }
-    let parts = match split(p, "/") {
-        Result::Ok(v) => v,
-        Result::Err(_) => {
-            return false;
-        },
-    };
+    let parts = p.split("/");
     let i = 0;
     while i < parts.len() {
         if parts[i] == ".." {
@@ -660,10 +652,10 @@ fn dep_top_modules(string checkout) -> Vec<string> {
     while i < entries.len() {
         let name = entries[i];
         i = i + 1;
-        if starts_with(name, ".") {
+        if name.starts_with(".") {
             continue;
         }
-        if ends_with(name, ".hy") {
+        if name.ends_with(".hy") {
             name = match slice(name, 0, name.len() - 3) {
                 Result::Ok(s) => s,
                 Result::Err(_) => name,

@@ -2,7 +2,7 @@ use tests::assert;
 use toolchain::{dload_flags, dload_stem, is_sha256_hex, ffi_native_specs};
 use lock::{lock_parse, lock_native_parse, lock_native_pkg, lock_native_stem, lock_native_sha};
 use manifest::{ffi_natives_parse, native_package, native_url, native_requires};
-use text::{contains, join as text_join, repeat};
+use text::{Searchable, join as text_join, repeat};
 
 fn sha(string c) -> string {
     return repeat(c, 64);
@@ -29,10 +29,10 @@ test("dload stem strips coil- unless the lock names one") {
 test("trusted coil-prefixed dep maps to the stripped stem") {
     let manifest = "[dependencies]\ncoil-foo = { git = \"https://example.com/coil-foo.git\", version = \"^0.1\", trusted = true }\nbar = { git = \"https://example.com/bar.git\", version = \"^0.1\" }\n";
     let f = flags_of(manifest, "")?;
-    assert!(contains(f, "--dload-trusted foo"));
-    assert!(contains(f, "--dload-trusted coil-foo"));
-    assert!(contains(f, "bar") == false);
-    assert!(contains(f, "--dload-pin") == false);
+    assert!(f.contains("--dload-trusted foo"));
+    assert!(f.contains("--dload-trusted coil-foo"));
+    assert!(f.contains("bar") == false);
+    assert!(f.contains("--dload-pin") == false);
 }
 
 test("lock native stem is pinned and trusted") {
@@ -47,10 +47,10 @@ test("lock native stem is pinned and trusted") {
     assert!(lock_native_stem(natives[0]) == "hycrypto");
     assert!(lock_native_sha(natives[1]) == sha("b"));
     let f = flags_of(manifest, lock)?;
-    assert!(contains(f, "--dload-pin hycrypto=" + sha("a")));
-    assert!(contains(f, "--dload-pin tls=" + sha("b")));
-    assert!(contains(f, "--dload-trusted hycrypto"));
-    assert!(contains(f, "--dload-trusted crypto"));
+    assert!(f.contains("--dload-pin hycrypto=" + sha("a")));
+    assert!(f.contains("--dload-pin tls=" + sha("b")));
+    assert!(f.contains("--dload-trusted hycrypto"));
+    assert!(f.contains("--dload-trusted crypto"));
 }
 
 test("trusted dep takes its lock native stem even without a sha256") {
@@ -63,7 +63,7 @@ test("trusted dep takes its lock native stem even without a sha256") {
 test("trusted coil-crypto bootstraps the crypto stem") {
     let manifest = "[dependencies]\ncoil-crypto = { git = \"https://example.com/coil-crypto.git\", version = \"^0.1\", trusted = true }\n";
     let f = flags_of(manifest, "")?;
-    assert!(contains(f, "--dload-trusted crypto"));
+    assert!(f.contains("--dload-trusted crypto"));
 }
 
 test("pins with a malformed sha256 are skipped") {
@@ -79,7 +79,7 @@ test("trusted must be a bool") {
             assert!(false);
         },
         Result::Err(e) => {
-            assert!(contains(e, "trusted must be a bool"));
+            assert!(e.contains("trusted must be a bool"));
         },
     };
 }
@@ -102,7 +102,7 @@ test("ffi.native unknown and missing keys are errors") {
             assert!(false);
         },
         Result::Err(e) => {
-            assert!(contains(e, "unknown key ffi.native.colour"));
+            assert!(e.contains("unknown key ffi.native.colour"));
         },
     };
     match ffi_natives_parse("[[ffi.native]]\nname = \"re\"\nversion = \"1\"\n") {
@@ -110,7 +110,7 @@ test("ffi.native unknown and missing keys are errors") {
             assert!(false);
         },
         Result::Err(e) => {
-            assert!(contains(e, "path"));
+            assert!(e.contains("path"));
         },
     };
 }

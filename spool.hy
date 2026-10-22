@@ -3,7 +3,7 @@ use env::{args, var, cwd, exit};
 use term::{println, eprintln};
 use io::fs::{remove_dir_all};
 use string::{format};
-use text::{split, split_once, contains, starts_with, join as text_join};
+use text::{Searchable, join as text_join};
 use util::{
     join2, path_exists, path_dirname, path_is_absolute, ensure_dir, home_dir, trim_or,
     check_pkg_name, check_git_url, vec_has,
@@ -317,10 +317,10 @@ fn has_target(Vec<string> args, Vec<string> valued) -> bool {
         if a == "--" {
             return i < args.len();
         }
-        if a == "--entry" || starts_with(a, "--entry=") {
+        if a == "--entry" || a.starts_with("--entry=") {
             return true;
         }
-        if starts_with(a, "-") && a != "-" {
+        if a.starts_with("-") && a != "-" {
             if vec_has(valued, a) {
                 i = i + 1;
             }
@@ -392,8 +392,8 @@ fn report_flags(Vec<string> args) -> Result<(Vec<string>, bool, string), string>
             i = i + 1;
             continue;
         }
-        if starts_with(a, "--color=") {
-            let kv = split_once(a, "=")?;
+        if a.starts_with("--color=") {
+            let kv = match a.split_once("=") { Option::Some(p) => p, Option::None => raise "separator not found" };
             let (_, v) = kv;
             color = v;
             continue;
@@ -436,15 +436,12 @@ fn self_exe() -> string {
         return "";
     }
     let a = argv[0];
-    let parts = match split(a, "/") {
-        Result::Ok(v) => v,
-        Result::Err(_) => strs(a),
-    };
+    let parts = a.split("/");
     // Run in memory (`coil spool.hy`), argv[0] is coil itself.
     if parts[parts.len() - 1] == "coil" {
         return "";
     }
-    if contains(a, "/") == false {
+    if a.contains("/") == false {
         return which(a);
     }
     if path_is_absolute(a) {
@@ -471,13 +468,13 @@ fn coil_help(string coil, Vec<string> args) -> string {
 
 /// Whether this coil has the `coil <sub>` subcommand.
 fn coil_has_command(string coil, string sub) -> bool {
-    return contains(coil_help(coil, no_strs()), "\n  " + sub + " ");
+    return coil_help(coil, no_strs()).contains("\n  " + sub + " ");
 }
 
 /// Whether `coil <sub>` streams `--json` events (older coils do not, and
 /// an older `coil mutate --json` prints one object at the end instead).
 fn coil_streams_json(string coil, string sub) -> bool {
-    return contains(coil_help(coil, strs(sub)), "NDJSON events");
+    return coil_help(coil, strs(sub)).contains("NDJSON events");
 }
 
 fn update_coil_hint() -> string {
@@ -603,11 +600,11 @@ fn cmd_lsp(Vec<string> rest) -> Result<int, string> {
                 },
             };
             let lsp_help = coil_help(require_coil()?, strs("lsp"));
-            if contains(lsp_help, "--workspace") {
+            if lsp_help.contains("--workspace") {
                 argv.push("--workspace");
                 argv.push(root);
             }
-            if contains(lsp_help, "--root") {
+            if lsp_help.contains("--root") {
                 argv = push_all(argv, compile_flags(root)?);
             } else {
                 say("this coil's `coil lsp` takes no --root; dependencies and the stdlib will not resolve");
@@ -662,10 +659,7 @@ fn cmd_new(Vec<string> rest, bool here) -> Result<int, string> {
         at_most(pos, 0, "spool init [--name N] [--lib] [--no-git]")?;
         dir = current_dir()?;
         if name.len() == 0 {
-            let parts = match split(dir, "/") {
-                Result::Ok(v) => v,
-                Result::Err(_) => strs("app"),
-            };
+            let parts = dir.split("/");
             name = parts[parts.len() - 1];
         }
     } else {
@@ -708,7 +702,7 @@ fn cmd_install(Vec<string> rest) -> Result<int, string> {
 
 /// Values written into coil.toml as TOML basic strings.
 fn check_toml_value(string what, string v) -> Result<int, string> {
-    if contains(v, "\"") || contains(v, "\\") || contains(v, "\n") {
+    if v.contains("\"") || v.contains("\\") || v.contains("\n") {
         raise format("%s must not contain quotes, backslashes or newlines", what);
     }
     return 0;

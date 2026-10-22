@@ -4,7 +4,7 @@
 use io::{stdin, read, wait_readable};
 use term::{print, println};
 use string::{format, from_bytes};
-use text::{split};
+use text::{Searchable};
 use json::{Json, JsonValue};
 
 fn emit_raw(string s) {
@@ -162,13 +162,7 @@ fn pad_left(string s, int width) -> string {
 
 /// Each line of `text` behind `prefix` (a trailing newline adds no line).
 fn print_block(bool c, string prefix, string text) {
-    let lines = match split(text, "\n") {
-        Result::Ok(v) => v,
-        Result::Err(_) => {
-            emit(prefix + text);
-            return;
-        },
-    };
+    let lines = text.split("\n");
     let n = lines.len();
     if n > 0 && lines[n - 1] == "" {
         n = n - 1;

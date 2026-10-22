@@ -1,6 +1,6 @@
 // Semver tag matching for spool (MAJOR.MINOR.PATCH, optional v prefix).
 // Ranges: caret (^), comparison (>= > <= < =), exact, or *.
-use text::{starts_with, split, trim, slice, contains, find};
+use text::{Searchable, trim, slice};
 use conv::{parse_int};
 use string::{format};
 
@@ -13,19 +13,13 @@ fn strip_v(string raw) -> string {
         Result::Ok(t) => t,
         Result::Err(_) => raw,
     };
-    if starts_with(s, "v") == false {
+    if s.starts_with("v") == false {
         return s;
     }
     if s.len() <= 1 {
         return s;
     }
-    let parts = match split(s, "v") {
-        Result::Ok(p) => p,
-        Result::Err(_) => {
-            let empty: Vec<string> = Vec::new();
-            empty
-        },
-    };
+    let parts = s.split("v");
     if parts.len() >= 2 {
         return parts[1];
     }
@@ -33,19 +27,13 @@ fn strip_v(string raw) -> string {
 }
 
 fn strip_caret(string req) -> string {
-    if starts_with(req, "^") == false {
+    if req.starts_with("^") == false {
         return req;
     }
     if req.len() <= 1 {
         return req;
     }
-    let parts = match split(req, "^") {
-        Result::Ok(p) => p,
-        Result::Err(_) => {
-            let empty: Vec<string> = Vec::new();
-            empty
-        },
-    };
+    let parts = req.split("^");
     if parts.len() >= 2 {
         return parts[1];
     }
@@ -53,7 +41,7 @@ fn strip_caret(string req) -> string {
 }
 
 fn rest_after(string s, string prefix) -> string {
-    if starts_with(s, prefix) == false {
+    if s.starts_with(prefix) == false {
         return s;
     }
     let rest = match slice(s, prefix.len(), s.len()) {
@@ -71,11 +59,11 @@ fn rest_after(string s, string prefix) -> string {
 /// Cut a `-prerelease` / `+build` suffix (`1.2.3-rc.1` → `1.2.3`).
 fn strip_pre(string s) -> string {
     let cut = s.len();
-    let dash = find(s, "-");
+    let dash = (match s.find("-") { Option::Some(sp) => sp.start, Option::None => -1 });
     if dash >= 0 && dash < cut {
         cut = dash;
     }
-    let plus = find(s, "+");
+    let plus = (match s.find("+") { Option::Some(sp) => sp.start, Option::None => -1 });
     if plus >= 0 && plus < cut {
         cut = plus;
     }
@@ -89,15 +77,12 @@ fn strip_pre(string s) -> string {
 }
 
 fn is_prerelease(string raw) -> bool {
-    return contains(strip_v(raw), "-");
+    return strip_v(raw).contains("-");
 }
 
 fn parse_semver(string raw) -> Result<SemVer, string> {
     let s = strip_pre(strip_v(raw));
-    let parts = match split(s, ".") {
-        Result::Ok(p) => p,
-        Result::Err(_) => raise "bad semver",
-    };
+    let parts = s.split(".");
     if parts.len() < 1 {
         raise "bad semver";
     }
@@ -177,12 +162,7 @@ fn satisfies_caret_base(SemVer base, SemVer version) -> bool {
 }
 
 fn component_count(string raw) -> int {
-    let parts = match split(strip_pre(strip_v(raw)), ".") {
-        Result::Ok(p) => p,
-        Result::Err(_) => {
-            return 0;
-        },
-    };
+    let parts = strip_pre(strip_v(raw)).split(".");
     return parts.len();
 }
 
@@ -222,11 +202,8 @@ fn satisfies_range(string requirement, SemVer version) -> Result<bool, string> {
     if req.len() == 0 {
         return true;
     }
-    if contains(req, ",") {
-        let parts = match split(req, ",") {
-            Result::Ok(p) => p,
-            Result::Err(_) => raise format("bad requirement %s", req),
-        };
+    if req.contains(",") {
+        let parts = req.split(",");
         let i = 0;
         while i < parts.len() {
             let ok = satisfies_range(parts[i], version)?;
@@ -237,36 +214,36 @@ fn satisfies_range(string requirement, SemVer version) -> Result<bool, string> {
         }
         return true;
     }
-    if starts_with(req, "~") {
+    if req.starts_with("~") {
         return satisfies_tilde(rest_after(req, "~"), version)?;
     }
-    if starts_with(req, "^") {
+    if req.starts_with("^") {
         let base = parse_semver(strip_caret(req))?;
         return satisfies_caret_base(base, version);
     }
-    if starts_with(req, ">=") {
+    if req.starts_with(">=") {
         let base = parse_semver(rest_after(req, ">="))?;
         if cmp_semver(version, base) < 0 {
             return false;
         }
         return true;
     }
-    if starts_with(req, "<=") {
+    if req.starts_with("<=") {
         let base = parse_semver(rest_after(req, "<="))?;
         if cmp_semver(version, base) > 0 {
             return false;
         }
         return true;
     }
-    if starts_with(req, ">") {
+    if req.starts_with(">") {
         let base = parse_semver(rest_after(req, ">"))?;
         return cmp_semver(version, base) > 0;
     }
-    if starts_with(req, "<") {
+    if req.starts_with("<") {
         let base = parse_semver(rest_after(req, "<"))?;
         return cmp_semver(version, base) < 0;
     }
-    if starts_with(req, "=") {
+    if req.starts_with("=") {
         let exact = parse_semver(rest_after(req, "="))?;
         return cmp_semver(exact, version) == 0;
     }

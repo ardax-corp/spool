@@ -3,7 +3,7 @@
 // Constraint rows: name \t git \t req \t who  (req is a range, `latest` or `@<rev>`).
 // `latest` is a pin on the remote's HEAD (its default branch), locked like a branch.
 use io::file::{read_text};
-use text::{trim, split, starts_with, slice};
+use text::{Searchable, trim, slice};
 use string::{format};
 use util::{join2, path_is_absolute, path_exists, tsv_field, vec_has, check_pkg_name, check_git_url};
 use lock::{
@@ -185,7 +185,7 @@ fn pin_of(string name, Vec<string> reqs, Vec<string> cons) -> Result<string, str
     while i < reqs.len() {
         let r = reqs[i];
         i = i + 1;
-        if starts_with(r, "@") || r == "latest" {
+        if r.starts_with("@") || r == "latest" {
             let p = latest_ref();
             if r != "latest" {
                 p = strip_at(r);

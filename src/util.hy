@@ -4,7 +4,7 @@ use io::fs::{exists, create_dir_all};
 use io::file::{write_text, read_text};
 use env::{var};
 use string::{format};
-use text::{starts_with, ends_with, slice, split, trim, contains};
+use text::{Searchable, slice, trim};
 
 fn join2(string a, string b) -> string {
     if a.len() == 0 {
@@ -13,10 +13,10 @@ fn join2(string a, string b) -> string {
     if b.len() == 0 {
         return a;
     }
-    if starts_with(b, "/") {
+    if b.starts_with("/") {
         return b;
     }
-    if ends_with(a, "/") {
+    if a.ends_with("/") {
         return a + b;
     }
     return a + "/" + b;
@@ -31,7 +31,7 @@ fn join4(string a, string b, string c, string d) -> string {
 }
 
 fn path_is_absolute(string p) -> bool {
-    return starts_with(p, "/");
+    return p.starts_with("/");
 }
 
 fn path_dirname(string p) -> string {
@@ -40,7 +40,7 @@ fn path_dirname(string p) -> string {
     }
     let s = p;
     while s.len() > 1 {
-        if ends_with(s, "/") == false {
+        if s.ends_with("/") == false {
             break;
         }
         let chopped = match slice(s, 0, s.len() - 1) {
@@ -52,12 +52,7 @@ fn path_dirname(string p) -> string {
         }
         s = chopped;
     }
-    let parts = match split(s, "/") {
-        Result::Ok(v) => v,
-        Result::Err(_) => {
-            return ".";
-        },
-    };
+    let parts = s.split("/");
     if parts.len() <= 1 {
         return ".";
     }
@@ -134,12 +129,7 @@ fn lines_of(string body) -> Vec<string> {
     if body.len() == 0 {
         return out;
     }
-    let parts = match split(body, "\n") {
-        Result::Ok(v) => v,
-        Result::Err(_) => {
-            return out;
-        },
-    };
+    let parts = body.split("\n");
     let i = 0;
     while i < parts.len() {
         let line = trim_or(parts[i]);
@@ -152,13 +142,7 @@ fn lines_of(string body) -> Vec<string> {
 }
 
 fn tsv_field(string row, int idx) -> string {
-    let parts = match split(row, "\t") {
-        Result::Ok(v) => v,
-        Result::Err(_) => {
-            let empty: Vec<string> = Vec::new();
-            empty
-        },
-    };
+    let parts = row.split("\t");
     if idx < parts.len() {
         return parts[idx];
     }
@@ -177,7 +161,7 @@ fn vec_has(Vec<string> xs, string x) -> bool {
 }
 
 fn char_in(string c, string set) -> bool {
-    return contains(set, c);
+    return set.contains(c);
 }
 
 /// Package names become paths under `.spool/deps` and cache keys, so they
@@ -226,22 +210,22 @@ fn valid_git_url(string url) -> bool {
     if url.len() == 0 {
         return false;
     }
-    if starts_with(url, "-") {
+    if url.starts_with("-") {
         return false;
     }
-    if contains(url, " ") || contains(url, "\t") || contains(url, "\n") {
+    if url.contains(" ") || url.contains("\t") || url.contains("\n") {
         return false;
     }
-    if starts_with(url, "https://") || starts_with(url, "http://") {
+    if url.starts_with("https://") || url.starts_with("http://") {
         return true;
     }
-    if starts_with(url, "ssh://") || starts_with(url, "git://") {
+    if url.starts_with("ssh://") || url.starts_with("git://") {
         return true;
     }
-    if starts_with(url, "file://") || starts_with(url, "/") {
+    if url.starts_with("file://") || url.starts_with("/") {
         return true;
     }
-    if starts_with(url, "git@") {
+    if url.starts_with("git@") {
         return true;
     }
     return false;

@@ -9,7 +9,7 @@ use lock::{
     lock_find, lock_pkg_hook_path, lock_pkg_hook_hash,
 };
 use manifest::{package_include_parse};
-use text::{contains};
+use text::{Searchable};
 
 // Match the Err payload in a bool helper: on coil main, matching a Result
 // parameter inside a Result-returning fn loses the payload (see README).
@@ -19,7 +19,7 @@ fn denied_with(Result<int, string> r, string needle) -> bool {
             return false;
         },
         Result::Err(e) => {
-            return contains(e, needle);
+            return e.contains(needle);
         },
     };
 }
@@ -299,7 +299,7 @@ test("allow_include list is explicit") {
 
 test("default: include hook not allowed") {
     let lock = http_lock(false);
-    assert!(contains(lock, "allow_include =") == false);
+    assert!(lock.contains("allow_include =") == false);
     assert!(denied_with(
         include_from_lock(
             default_hooks_off(),
@@ -324,9 +324,9 @@ test("default: include hook not allowed") {
 
 test("after allow-include: may_run_hook only for recorded path and hash") {
     let lock = http_lock(true);
-    assert!(contains(lock, "allow_include = ['http']"));
-    assert!(contains(lock, "hook_path = './hooks/include.sh'"));
-    assert!(contains(lock, "hook_hash = 'hookabc'"));
+    assert!(lock.contains("allow_include = ['http']"));
+    assert!(lock.contains("hook_path = './hooks/include.sh'"));
+    assert!(lock.contains("hook_hash = 'hookabc'"));
     let n = include_from_lock(
         hooks_are_off("0"),
         lock,
@@ -430,7 +430,7 @@ roots = [\"./src\"]
 [dependencies]
 http = { git = \"https://x/y.git\", version = \"^1.0\" }
 ";
-    assert!(contains(toml, "[hooks]") == false);
+    assert!(toml.contains("[hooks]") == false);
     assert!(package_include_parse(toml) == "");
     let stray = "[package]
 name = \"app\"

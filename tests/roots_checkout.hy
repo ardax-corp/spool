@@ -4,11 +4,11 @@ use toolchain::{project_roots};
 use util::{join2, ensure_dir, vec_has};
 use env::{cwd};
 use io::file::{write_text};
-use text::{ends_with};
+use text::{Searchable};
 
 test("checkout_module_root prefers src when present") {
     let root = checkout_module_root("examples/greet");
-    assert!(ends_with(root, "/src") || ends_with(root, "src"));
+    assert!(root.ends_with("/src") || root.ends_with("src"));
 }
 
 test("checkout_module_root keeps checkout without src") {

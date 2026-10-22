@@ -9,7 +9,7 @@ use lock::{
 };
 use io::file::{write_text, read_text};
 use io::fs::{create_dir_all};
-use text::{contains};
+use text::{Searchable};
 
 test("lock round-trip preserves fields and sorts by name") {
     let pkgs = Vec::new();
@@ -49,7 +49,7 @@ test("lock_parse names corrupt files") {
             assert!(false);
         },
         Result::Err(e) => {
-            assert!(contains(e, "corrupt coil.lock"));
+            assert!(e.contains("corrupt coil.lock"));
         },
     };
 }
@@ -66,8 +66,8 @@ test("lock round-trip keeps hook path and hash") {
         "hookabc",
     ));
     let text = lock_serialize(pkgs);
-    assert!(contains(text, "hook_path = './hooks/include.sh'"));
-    assert!(contains(text, "hook_hash = 'hookabc'"));
+    assert!(text.contains("hook_path = './hooks/include.sh'"));
+    assert!(text.contains("hook_hash = 'hookabc'"));
     let back = lock_parse(text)?;
     assert!(back.len() == 1);
     assert!(lock_pkg_hook_path(back[0]) == "./hooks/include.sh");
@@ -78,8 +78,8 @@ test("lock omits empty hook fields") {
     let pkgs = Vec::new();
     pkgs.push(make_git_pkg("http", "https://x", "v1", "c", "h1"));
     let text = lock_serialize(pkgs);
-    assert!(contains(text, "hook_path") == false);
-    assert!(contains(text, "hook_hash") == false);
+    assert!(text.contains("hook_path") == false);
+    assert!(text.contains("hook_hash") == false);
 }
 
 test("lock without [hooks] has empty allow_include") {
@@ -94,7 +94,7 @@ test("lock without [hooks] has empty allow_include") {
         "hookabc",
     ));
     let text = lock_serialize(pkgs);
-    assert!(contains(text, "allow_include =") == false);
+    assert!(text.contains("allow_include =") == false);
     let names = lock_parse_allow(text)?;
     assert!(names.len() == 0);
 }
@@ -106,8 +106,8 @@ test("lock allow_include round-trip") {
     allow.push("zeta");
     allow.push("http");
     let text = lock_serialize_full(pkgs, allow);
-    assert!(contains(text, "[hooks]"));
-    assert!(contains(text, "allow_include"));
+    assert!(text.contains("[hooks]"));
+    assert!(text.contains("allow_include"));
     let names = lock_parse_allow(text)?;
     assert!(names.len() == 2);
     assert!(names[0] == "http");
@@ -144,10 +144,10 @@ test("lock [scripts] round-trip is not a package row") {
     scripts.push(make_lock_script("pre_install", "./scripts/pre-install.sh", "abc123"));
     scripts.push(make_lock_script("post_install", "./scripts/post-install.sh", "def456"));
     let text = lock_serialize_all(pkgs, allow, scripts);
-    assert!(contains(text, "[scripts]"));
-    assert!(contains(text, "pre_install = './scripts/pre-install.sh'"));
-    assert!(contains(text, "pre_install_hash = 'abc123'"));
-    assert!(contains(text, "name = 'app'") == false);
+    assert!(text.contains("[scripts]"));
+    assert!(text.contains("pre_install = './scripts/pre-install.sh'"));
+    assert!(text.contains("pre_install_hash = 'abc123'"));
+    assert!(text.contains("name = 'app'") == false);
     let back = lock_parse_scripts(text)?;
     assert!(back.len() == 2);
     let pre = lock_find_script(back, "pre_install");

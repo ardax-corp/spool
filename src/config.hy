@@ -3,7 +3,7 @@
 use env::{var};
 use io::fs::{exists};
 use io::file::{read_text};
-use text::{trim, starts_with, ends_with, split, contains, slice};
+use text::{Searchable, trim, slice};
 use util::{home_dir, join2};
 
 fn trim_str(string s) -> string {
@@ -17,10 +17,10 @@ fn strip_quotes(string s) -> string {
     if s.len() < 2 {
         return s;
     }
-    if starts_with(s, "\"") == false {
+    if s.starts_with("\"") == false {
         return s;
     }
-    if ends_with(s, "\"") == false {
+    if s.ends_with("\"") == false {
         return s;
     }
     return match slice(s, 1, s.len() - 1) {
@@ -57,10 +57,7 @@ fn read_cache_dir_from_config() -> Result<string, string> {
         Result::Ok(s) => s,
         Result::Err(_) => raise "read config failed",
     };
-    let lines = match split(body, "\n") {
-        Result::Ok(ls) => ls,
-        Result::Err(_) => raise "split config failed",
-    };
+    let lines = body.split("\n");
     let in_cache = false;
     let i = 0;
     while i < lines.len() {
@@ -69,27 +66,21 @@ fn read_cache_dir_from_config() -> Result<string, string> {
         if line.len() == 0 {
             continue;
         }
-        if starts_with(line, "#") {
+        if line.starts_with("#") {
             continue;
         }
         if line == "[cache]" {
             in_cache = true;
             continue;
         }
-        if starts_with(line, "[") {
+        if line.starts_with("[") {
             in_cache = false;
             continue;
         }
         if in_cache {
-            if starts_with(line, "dir") {
-                if contains(line, "=") {
-                    let parts = match split(line, "=") {
-                        Result::Ok(p) => p,
-                        Result::Err(_) => {
-                            let empty: Vec<string> = Vec::new();
-                            empty
-                        },
-                    };
+            if line.starts_with("dir") {
+                if line.contains("=") {
+                    let parts = line.split("=");
                     if parts.len() >= 2 {
                         return strip_quotes(trim_str(parts[1]));
                     }

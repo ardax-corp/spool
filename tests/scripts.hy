@@ -10,7 +10,7 @@ use lock::{
 };
 use io::file::{write_text};
 use io::fs::{exists, create_dir_all, remove_file};
-use text::{contains};
+use text::{Searchable};
 
 // Match the Err payload in a bool helper: on coil main, matching a Result
 // parameter inside a Result-returning fn loses the payload (see README).
@@ -20,7 +20,7 @@ fn denied_with(Result<int, string> r, string needle) -> bool {
             return false;
         },
         Result::Err(e) => {
-            return contains(e, needle);
+            return e.contains(needle);
         },
     };
 }
@@ -171,10 +171,10 @@ test("--ignore-scripts wins over --enable-scripts") {
 
 test("lock [scripts] hash lives off the package row") {
     let lock = app_lock_scripts("./scripts/pre-install.sh", "abc");
-    assert!(contains(lock, "[scripts]"));
-    assert!(contains(lock, "pre_install = './scripts/pre-install.sh'"));
-    assert!(contains(lock, "pre_install_hash = 'abc'"));
-    assert!(contains(lock, "name = 'app'") == false);
+    assert!(lock.contains("[scripts]"));
+    assert!(lock.contains("pre_install = './scripts/pre-install.sh'"));
+    assert!(lock.contains("pre_install_hash = 'abc'"));
+    assert!(lock.contains("name = 'app'") == false);
     let pkgs = lock_parse(lock)?;
     assert!(pkgs.len() == 1);
     assert!(lock_pkg_hook_path(pkgs[0]) == "");
@@ -231,7 +231,7 @@ test("missing lock pin first-pins then gates; empty hash does not skip the gate"
     let marker = "scratch/coi103/first/HOOK_RAN";
     clear_marker(marker);
     let lock = empty_scripts_lock();
-    assert!(contains(lock, "pre_install_hash") == false);
+    assert!(lock.contains("pre_install_hash") == false);
     let scripts = lock_parse_scripts(lock)?;
     let rec = lock_find_script(scripts, "pre_install");
     assert!(denied_with(

@@ -12,7 +12,7 @@ use lock::{
 use manifest::{package_include_parse, scripts_parse, scripts_path_of};
 use io::file::{write_text};
 use io::fs::{exists, create_dir_all, remove_file};
-use text::{contains};
+use text::{Searchable};
 
 // Match the Err payload in a bool helper: on coil main, matching a Result
 // parameter inside a Result-returning fn loses the payload (see README).
@@ -22,7 +22,7 @@ fn denied_with(Result<int, string> r, string needle) -> bool {
             return false;
         },
         Result::Err(e) => {
-            return contains(e, needle);
+            return e.contains(needle);
         },
     };
 }
@@ -164,7 +164,7 @@ test("allowlisted + matching lock hash: may run") {
     clear_marker(marker);
     let lock = http_lock("./hooks/include.sh", "abc", true);
     assert!(enable_scripts_flag("--enable-scripts"));
-    assert!(contains(lock, "allow_include = ['http']"));
+    assert!(lock.contains("allow_include = ['http']"));
     assert!(mark_if_allowed(
         marker,
         include_from_lock(
@@ -205,7 +205,7 @@ test("no lock row / missing hash: deny, no sh") {
     let allow = Vec::new();
     allow.push("http");
     let lock = lock_serialize_full(pkgs, allow);
-    assert!(contains(lock, "allow_include"));
+    assert!(lock.contains("allow_include"));
     let parsed = lock_parse(lock)?;
     assert!(parsed.len() == 0);
     let rec = lock_find(parsed, "http");

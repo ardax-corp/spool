@@ -1,6 +1,6 @@
 use tests::assert;
 use engine::{parse_coil_version_output, enforce_engine};
-use text::{contains};
+use text::{Searchable};
 
 test("parse_coil_version_output reads coil --version") {
     assert!(parse_coil_version_output("coil 0.1.0")? == "0.1.0");
@@ -28,9 +28,9 @@ test("enforce_engine refuses too-old toolchain") {
             assert!(false);
         },
         Result::Err(e) => {
-            assert!(contains(e, "http"));
-            assert!(contains(e, ">=99.0.0"));
-            assert!(contains(e, "0.1.0"));
+            assert!(e.contains("http"));
+            assert!(e.contains(">=99.0.0"));
+            assert!(e.contains("0.1.0"));
         },
     };
 }
@@ -42,9 +42,9 @@ test("enforce_engine refuses >=0.2.0 on coil 0.1.0") {
             assert!(false);
         },
         Result::Err(e) => {
-            assert!(contains(e, "http"));
-            assert!(contains(e, ">=0.2.0"));
-            assert!(contains(e, "0.1.0"));
+            assert!(e.contains("http"));
+            assert!(e.contains(">=0.2.0"));
+            assert!(e.contains("0.1.0"));
         },
     };
 }
@@ -56,9 +56,9 @@ test("enforce_engine refuses ^0.2 on coil 0.1.0") {
             assert!(false);
         },
         Result::Err(e) => {
-            assert!(contains(e, "http"));
-            assert!(contains(e, "^0.2"));
-            assert!(contains(e, "0.1.0"));
+            assert!(e.contains("http"));
+            assert!(e.contains("^0.2"));
+            assert!(e.contains("0.1.0"));
         },
     };
 }

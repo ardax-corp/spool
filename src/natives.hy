@@ -10,7 +10,7 @@
 // then, and spool says so with a warning.
 use term::{println, eprintln};
 use io::fs::{rename, remove_file};
-use text::{starts_with, slice, contains, to_lower};
+use text::{Searchable, slice, to_lower};
 use string::{format};
 use util::{join2, ensure_dir, path_exists, home_dir, lines_of, trim_or, tsv_field};
 use proc::{sh_capture, sh_run, first_line};
@@ -105,7 +105,7 @@ fn drop_file(string p) {
 
 /// Lock fields become path segments; keep them to one plain segment.
 fn safe_segment(string what, string s) -> Result<int, string> {
-    if s.len() == 0 || s == "." || s == ".." || contains(s, "/") || contains(s, "\\") {
+    if s.len() == 0 || s == "." || s == ".." || s.contains("/") || s.contains("\\") {
         raise format("native lock has an unsafe %s: %s", what, s);
     }
     return 0;
@@ -136,7 +136,7 @@ fn curl_to(string part, string url) -> Result<int, string> {
 /// is removed and this fails); without one it is placed unchecked, with a
 /// warning. A file already at `dest_dir` is left alone.
 fn fetch_missing(string dest_dir, string name, string package, string version, string filename, string url, string sha) -> Result<bool, string> {
-    if starts_with(url, "https://") == false {
+    if url.starts_with("https://") == false {
         raise format("%s: native url must be https://, got %s", package, url);
     }
     safe_segment("filename", filename)?;
@@ -177,7 +177,7 @@ fn fetch_missing(string dest_dir, string name, string package, string version, s
 }
 
 fn fetch_one(string root, string package, string version, string filename, string url, string sha, string size) -> Result<bool, string> {
-    if starts_with(url, "https://") == false {
+    if url.starts_with("https://") == false {
         raise format("%s: native url must be https://, got %s", package, url);
     }
     safe_segment("package", package)?;
@@ -326,15 +326,15 @@ fn download_natives(string coil, string project_root, string exe) -> Result<int,
     while i < lines.len() {
         let line = lines[i];
         i = i + 1;
-        if starts_with(line, "# os=") {
+        if line.starts_with("# os=") {
             lock_os = after_prefix(line, "# os=");
             continue;
         }
-        if starts_with(line, "# arch=") {
+        if line.starts_with("# arch=") {
             lock_arch = after_prefix(line, "# arch=");
             continue;
         }
-        if starts_with(line, "#") {
+        if line.starts_with("#") {
             continue;
         }
         if lock_os.len() > 0 && lock_os != os {
@@ -425,7 +425,7 @@ fn cache_packaged_natives(string coil, string project_root, string exe, Vec<stri
     let (code, tsv) = res;
     if code != 0 {
         // No library the program loads needed a row: nothing to cache.
-        if contains(tsv, "no embedded native lock") {
+        if tsv.contains("no embedded native lock") {
             return 0;
         }
         raise format("coil natives dump failed for %s: %s", exe, first_line(tsv));
@@ -436,7 +436,7 @@ fn cache_packaged_natives(string coil, string project_root, string exe, Vec<stri
     while i < lines.len() {
         let line = lines[i];
         i = i + 1;
-        if starts_with(line, "#") {
+        if line.starts_with("#") {
             continue;
         }
         let package = tsv_field(line, 0);

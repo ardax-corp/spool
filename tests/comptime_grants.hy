@@ -9,7 +9,7 @@ use lock::lock_add_allow_comptime;
 use util::{join2, ensure_dir, vec_has};
 use env::cwd;
 use io::file::write_text;
-use text::{join as text_join, contains};
+use text::{Searchable, join as text_join};
 
 fn write_file(string path, string body) -> Result<int, string> {
     return match write_text(path, body) {
@@ -54,12 +54,12 @@ test("the project's grants and cache are flags") {
     let base = fixture("comptime_own", proj_toml())?;
     let proj = join2(base, "proj");
     let flags = text_join(grant_flags(proj)?, " ");
-    assert!(contains(flags, "--comptime-read " + join2(proj, "data")));
-    assert!(contains(flags, "--comptime-env CI"));
-    assert!(contains(flags, "--comptime-net api.example.com:443"));
-    assert!(contains(flags, "--comptime-cache " + join2(proj, ".comptime")));
+    assert!(flags.contains("--comptime-read " + join2(proj, "data")));
+    assert!(flags.contains("--comptime-env CI"));
+    assert!(flags.contains("--comptime-net api.example.com:443"));
+    assert!(flags.contains("--comptime-cache " + join2(proj, ".comptime")));
     // Not allowed yet: the dependency's grants are not passed.
-    assert!(contains(flags, "GEN_TOKEN") == false);
+    assert!(flags.contains("GEN_TOKEN") == false);
 }
 
 test("an allowed dependency's grants are scoped to its modules") {
@@ -67,10 +67,10 @@ test("an allowed dependency's grants are scoped to its modules") {
     let proj = join2(base, "proj");
     lock_add_allow_comptime(join2(proj, "coil.lock"), "gen")?;
     let flags = text_join(grant_flags(proj)?, " ");
-    assert!(contains(flags, "--comptime-env gen=GEN_TOKEN"));
-    assert!(contains(flags, "--comptime-env util=GEN_TOKEN"));
-    assert!(contains(flags, "--comptime-read gen=" + join2(base, "gen/schemas")));
-    assert!(contains(flags, "--comptime-env GEN_TOKEN") == false, "never unscoped");
+    assert!(flags.contains("--comptime-env gen=GEN_TOKEN"));
+    assert!(flags.contains("--comptime-env util=GEN_TOKEN"));
+    assert!(flags.contains("--comptime-read gen=" + join2(base, "gen/schemas")));
+    assert!(flags.contains("--comptime-env GEN_TOKEN") == false, "never unscoped");
 }
 
 test("a dependency's top-level modules are its files and directories") {
@@ -85,5 +85,5 @@ test("[comptime] cache moves the result cache") {
     let base = fixture("comptime_cache", toml)?;
     let proj = join2(base, "proj");
     let flags = text_join(grant_flags(proj)?, " ");
-    assert!(contains(flags, "--comptime-cache " + join2(proj, "build/ct")));
+    assert!(flags.contains("--comptime-cache " + join2(proj, "build/ct")));
 }
