@@ -16,16 +16,97 @@ dependencies, and the stdlib, then runs `coil` for you.
 
 ## Install
 
-spool is written in Coil and packaged with `coil package`:
+Two ways: download the prebuilt `spool` from the `edge` release, or run
+`bootstrap.sh`. Either way, spool needs a coil toolchain and the stdlib at
+run time; see [What spool needs](#what-spool-needs).
+
+### From the edge release
+
+The [`edge` pre-release](https://github.com/ardax-corp/spool/releases/tag/edge)
+is rebuilt from `main` after every green CI run. It is a snapshot, not a
+stable release. It currently has:
+
+| Platform | Archive |
+|---|---|
+| Linux x86-64 (glibc) | `spool-x86_64-unknown-linux-gnu.tar.gz` |
+| Linux ARM64 (glibc) | `spool-aarch64-unknown-linux-gnu.tar.gz` |
+| macOS, Apple silicon | `spool-aarch64-apple-darwin.tar.gz` |
+
+plus a `SHA256SUMS` file. There is no build for macOS on Intel, for musl
+Linux or for Windows; on those, use `bootstrap.sh` below (where the platform
+is supported) or build from source. Each archive holds a single `spool`
+executable.
+
+**1. spool.** Download, verify and install it (set `TRIPLE` to your row
+above):
 
 ```bash
+TRIPLE=x86_64-unknown-linux-gnu    # or aarch64-unknown-linux-gnu, aarch64-apple-darwin
+BASE=https://github.com/ardax-corp/spool/releases/download/edge
+mkdir -p ~/.local/bin && cd "$(mktemp -d)"
+curl -fLO "$BASE/spool-$TRIPLE.tar.gz" -O "$BASE/SHA256SUMS"
+grep " spool-$TRIPLE.tar.gz\$" SHA256SUMS | sha256sum -c -    # macOS: shasum -a 256 -c -
+tar xzf "spool-$TRIPLE.tar.gz" -C ~/.local/bin spool
+```
+
+**2. coil.** The spool binary does not download coil. Take the toolkit from
+the coil-lang [`edge` release](https://github.com/ardax-corp/coil-lang/releases/tag/edge)
+and unpack it into `~/.coil/bin`, one of the places spool looks for coil.
+The helper binaries (`coil-fmt`, `coil-test`, `coil-lsp`, …) must stay next
+to `coil`:
+
+```bash
+BASE=https://github.com/ardax-corp/coil-lang/releases/download/edge
+mkdir -p ~/.coil/bin && cd "$(mktemp -d)"
+curl -fLO "$BASE/coil-$TRIPLE.tar.gz" -O "$BASE/SHA256SUMS"
+grep " coil-$TRIPLE.tar.gz\$" SHA256SUMS | sha256sum -c -     # macOS: shasum -a 256 -c -
+tar xzf "coil-$TRIPLE.tar.gz" -C ~/.coil/bin --strip-components=1
+```
+
+**3. The stdlib.** It is plain Coil source:
+
+```bash
+git clone https://github.com/ardax-corp/coil-stdlib.git ~/.coil/stdlib
+```
+
+**4. Check.** Put `~/.local/bin` and `~/.coil/bin` on your `PATH` and run:
+
+```bash
+spool doctor
+```
+
+Steps 2 and 3 are manual for now. A `spool` subcommand that does them for
+you is planned (issue #51) but does not exist yet. Until it does,
+`bootstrap.sh` is the one-command route.
+
+### What spool needs
+
+spool finds coil in this order: `$COIL`, `coil` on `PATH`, then
+`~/.coil/bin/coil`. It finds the stdlib through `COIL_STDLIB_DIR`,
+`COIL_STDLIB`, the `[stdlib] dir` setting in its config file, then
+`~/.coil/stdlib`. Plain `coil` does not look for the stdlib on its own;
+`--root` is how a compile is told where modules live, and spool passes it
+for you.
+
+Runtime requirements: host `git` and `sh`. `curl` is needed for `download`.
+
+### With bootstrap.sh
+
+`bootstrap.sh` builds spool from this checkout and can fetch everything
+else in one go. It needs `git`, `sh` and `curl`:
+
+```bash
+git clone https://github.com/ardax-corp/spool.git && cd spool
 ./bootstrap.sh              # → target/spool
 ./bootstrap.sh --install    # also: ~/.local/bin/spool, ~/.coil/stdlib,
                             # and ~/.coil/bin/coil if bootstrap built or downloaded it
 ./bootstrap.sh --channel edge --install   # same, with coil from the edge snapshot
 ```
 
-`bootstrap.sh`:
+Without a coil release for your platform (or with `--from-source`), it
+builds coil from source, which needs `cargo`, libffi and pcre2 dev files.
+
+`bootstrap.sh` does this:
 
 1. Looks for a usable coil: `$COIL`, `coil` on `PATH`, `~/.coil/bin/coil`, or a
    previous bootstrap build. A candidate needs to meet `COIL_MIN_VERSION`, have
@@ -74,8 +155,6 @@ Other flags: `--from-source` (skip installed coil and releases),
 `--coil-only`. Overrides: `COIL_LANG_REPO/REF`, `COIL_STDLIB_REPO/REF`,
 `COIL_TOML_REPO/REF`, `COIL_JSON_REPO/REF`, `COIL_STDLIB_DIR`, `COIL_TOML_DIR`,
 `COIL_JSON_DIR`, `SPOOL_BOOTSTRAP_DIR`, `COIL_RELEASES_URL`.
-
-Runtime requirements: host `git` and `sh`. `curl` is needed for `download`.
 
 ## Quick start
 
