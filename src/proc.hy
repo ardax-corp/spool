@@ -5,7 +5,7 @@ use io::file::{read_text};
 use io::fs::{remove_file};
 use clock::{wall_nanos};
 use string::{format};
-use text::{split};
+use text::{Searchable};
 use util::{join2, ensure_dir, home_dir, trim_or};
 
 fn spawn(string program, Vec<string> argv) -> Result<int, string> {
@@ -91,12 +91,7 @@ fn sh_output(string script, Vec<string> args, string what) -> Result<string, str
 }
 
 fn first_line(string s) -> string {
-    let parts = match split(s, "\n") {
-        Result::Ok(v) => v,
-        Result::Err(_) => {
-            return trim_or(s);
-        },
-    };
+    let parts = s.split("\n");
     if parts.len() == 0 {
         return "";
     }

@@ -4,7 +4,7 @@
 //   "p\tvalue"           positional
 //   "r\tvalue"           raw argument after `--`
 use string::{format};
-use text::{starts_with, contains, split_once};
+use text::{Searchable};
 use util::{tsv_field, vec_has};
 
 fn parse_args(Vec<string> args, Vec<string> valued, Vec<string> bools) -> Result<Vec<string>, string> {
@@ -22,12 +22,12 @@ fn parse_args(Vec<string> args, Vec<string> valued, Vec<string> bools) -> Result
             raw = true;
             continue;
         }
-        if starts_with(a, "-") && a != "-" {
+        if a.starts_with("-") && a != "-" {
             let key = a;
             let inline = "";
             let has_inline = false;
-            if starts_with(a, "--") && contains(a, "=") {
-                let kv = split_once(a, "=")?;
+            if a.starts_with("--") && a.contains("=") {
+                let kv = match a.split_once("=") { Option::Some(p) => p, Option::None => raise "separator not found" };
                 let (k, v) = kv;
                 key = k;
                 inline = v;

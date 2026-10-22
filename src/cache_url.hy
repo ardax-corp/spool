@@ -1,18 +1,12 @@
 // Pure git-URL → cache key helpers (no env::exec — safe for coil test).
-use text::{split, starts_with, ends_with, contains, trim, slice, find};
+use text::{Searchable, trim, slice};
 use string::{format};
 
 fn replace_first_colon(string s) -> string {
-    if contains(s, ":") == false {
+    if s.contains(":") == false {
         return s;
     }
-    let parts = match split(s, ":") {
-        Result::Ok(p) => p,
-        Result::Err(_) => {
-            let empty: Vec<string> = Vec::new();
-            empty
-        },
-    };
+    let parts = s.split(":");
     if parts.len() < 2 {
         return s;
     }
@@ -30,39 +24,27 @@ fn strip_scheme(string url) -> string {
         Result::Ok(t) => t,
         Result::Err(_) => url,
     };
-    if starts_with(u, "https://") {
-        let parts = match split(u, "https://") {
-            Result::Ok(p) => p,
-            Result::Err(_) => {
-                let empty: Vec<string> = Vec::new();
-                empty
-            },
-        };
+    if u.starts_with("https://") {
+        let parts = u.split("https://");
         if parts.len() >= 2 {
             return parts[1];
         }
         return u;
     }
-    if starts_with(u, "http://") {
-        let parts = match split(u, "http://") {
-            Result::Ok(p) => p,
-            Result::Err(_) => {
-                let empty: Vec<string> = Vec::new();
-                empty
-            },
-        };
+    if u.starts_with("http://") {
+        let parts = u.split("http://");
         if parts.len() >= 2 {
             return parts[1];
         }
         return u;
     }
-    if starts_with(u, "ssh://") || starts_with(u, "git://") {
+    if u.starts_with("ssh://") || u.starts_with("git://") {
         let after = match slice(u, 6, u.len()) {
             Result::Ok(x) => x,
             Result::Err(_) => u,
         };
-        let at = find(after, "@");
-        let slash = find(after, "/");
+        let at = (match after.find("@") { Option::Some(sp) => sp.start, Option::None => -1 });
+        let slash = (match after.find("/") { Option::Some(sp) => sp.start, Option::None => -1 });
         if at >= 0 && (slash < 0 || at < slash) {
             return match slice(after, at + 1, after.len()) {
                 Result::Ok(x) => x,
@@ -71,27 +53,15 @@ fn strip_scheme(string url) -> string {
         }
         return after;
     }
-    if starts_with(u, "git@") {
-        let parts = match split(u, "git@") {
-            Result::Ok(p) => p,
-            Result::Err(_) => {
-                let empty: Vec<string> = Vec::new();
-                empty
-            },
-        };
+    if u.starts_with("git@") {
+        let parts = u.split("git@");
         if parts.len() >= 2 {
             return replace_first_colon(parts[1]);
         }
         return u;
     }
-    if starts_with(u, "file://") {
-        let parts = match split(u, "file://") {
-            Result::Ok(p) => p,
-            Result::Err(_) => {
-                let empty: Vec<string> = Vec::new();
-                empty
-            },
-        };
+    if u.starts_with("file://") {
+        let parts = u.split("file://");
         if parts.len() >= 2 {
             return parts[1];
         }
@@ -104,13 +74,13 @@ fn strip_scheme(string url) -> string {
 /// `my.gitea.io/o/r.git` keeps its host.
 fn strip_git_suffix(string s) -> string {
     let t = s;
-    while ends_with(t, "/") && t.len() > 1 {
+    while t.ends_with("/") && t.len() > 1 {
         t = match slice(t, 0, t.len() - 1) {
             Result::Ok(x) => x,
             Result::Err(_) => t,
         };
     }
-    if ends_with(t, ".git") && t.len() > 4 {
+    if t.ends_with(".git") && t.len() > 4 {
         return match slice(t, 0, t.len() - 4) {
             Result::Ok(x) => x,
             Result::Err(_) => t,
@@ -125,10 +95,7 @@ fn strip_git_suffix(string s) -> string {
 /// `…/github.com/acme/widgets`.
 fn url_cache_key(string url) -> Result<(string, string, string), string> {
     let rest = strip_git_suffix(strip_scheme(url));
-    let parts = match split(rest, "/") {
-        Result::Ok(p) => p,
-        Result::Err(_) => raise "bad url path",
-    };
+    let parts = rest.split("/");
     let segs: Vec<string> = Vec::new();
     let i = 0;
     while i < parts.len() {

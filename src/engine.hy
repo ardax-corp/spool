@@ -1,5 +1,5 @@
 // Coil engine-range check helpers (no filesystem, no path).
-use text::{trim, starts_with, slice, split};
+use text::{Searchable, trim, slice};
 use semver::{parse_semver, satisfies_range};
 
 fn parse_coil_version_output(string raw) -> Result<string, string> {
@@ -7,7 +7,7 @@ fn parse_coil_version_output(string raw) -> Result<string, string> {
         Result::Ok(t) => t,
         Result::Err(_) => raw,
     };
-    if starts_with(s, "coil") == false {
+    if s.starts_with("coil") == false {
         raise "unrecognized coil --version output";
     }
     let rest = match slice(s, 4, s.len()) {
@@ -21,10 +21,7 @@ fn parse_coil_version_output(string raw) -> Result<string, string> {
     if rest.len() == 0 {
         raise "unrecognized coil --version output";
     }
-    let parts = match split(rest, " ") {
-        Result::Ok(p) => p,
-        Result::Err(_) => raise "unrecognized coil --version output",
-    };
+    let parts = rest.split(" ");
     if parts.len() < 1 {
         raise "unrecognized coil --version output";
     }

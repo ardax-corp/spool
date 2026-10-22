@@ -1,6 +1,6 @@
 // Parse and update coil.toml [dependencies] (git / path inline tables).
 // Manifest decode uses coil-toml; deps_insert_line still edits text to preserve comments.
-use text::{trim, starts_with, ends_with, split, contains, slice, to_lower, join as text_join};
+use text::{Searchable, trim, slice, to_lower, join as text_join};
 use io::file::{read_text, write_text};
 use io::fs::{exists};
 use string::{format};
@@ -19,13 +19,7 @@ fn make_path_dep(string name, string path) -> string {
 }
 
 fn dep_field(string d, int idx) -> string {
-    let parts = match split(d, "\t") {
-        Result::Ok(v) => v,
-        Result::Err(_) => {
-            let empty: Vec<string> = Vec::new();
-            empty
-        },
-    };
+    let parts = d.split("\t");
     if idx < parts.len() {
         return parts[idx];
     }
@@ -274,15 +268,10 @@ fn script_rel_ok(string p) -> bool {
     if p.len() == 0 {
         return false;
     }
-    if starts_with(p, "/") {
+    if p.starts_with("/") {
         return false;
     }
-    let parts = match split(p, "/") {
-        Result::Ok(v) => v,
-        Result::Err(_) => {
-            return false;
-        },
-    };
+    let parts = p.split("/");
     let i = 0;
     while i < parts.len() {
         if parts[i] == ".." {
@@ -316,13 +305,7 @@ fn package_include_read(string path) -> Result<string, string> {
 }
 
 fn scripts_field(string rec, int idx) -> string {
-    let parts = match split(rec, "\t") {
-        Result::Ok(v) => v,
-        Result::Err(_) => {
-            let empty: Vec<string> = Vec::new();
-            empty
-        },
-    };
+    let parts = rec.split("\t");
     if idx < parts.len() {
         return parts[idx];
     }
@@ -472,10 +455,7 @@ fn push_before_blanks(Vec<string> out, string line) -> Vec<string> {
 }
 
 fn deps_insert_line(string body, string line) -> Result<string, string> {
-    let lines = match split(body, "\n") {
-        Result::Ok(ls) => ls,
-        Result::Err(_) => raise "split failed",
-    };
+    let lines = body.split("\n");
     let out: Vec<string> = Vec::new();
     let i = 0;
     let in_deps = false;
@@ -488,7 +468,7 @@ fn deps_insert_line(string body, string line) -> Result<string, string> {
             Result::Err(_) => raw,
         };
         i = i + 1;
-        if starts_with(trimmed, "[") {
+        if trimmed.starts_with("[") {
             if in_deps && inserted == false {
                 out = push_before_blanks(out, line);
                 inserted = true;
@@ -513,7 +493,7 @@ fn deps_insert_line(string body, string line) -> Result<string, string> {
         out.push(line);
     }
     let joined = text_join(out, "\n");
-    if ends_with(joined, "\n") == false {
+    if joined.ends_with("\n") == false {
         joined = joined + "\n";
     }
     return joined;
@@ -692,7 +672,7 @@ fn manifest_validate(string body) -> Result<int, string> {
         while j < m {
             let k = tab.key_at(j);
             j = j + 1;
-            if contains(keys, "," + k + ",") == false {
+            if keys.contains("," + k + ",") == false {
                 raise format("unknown key %s.%s", section, k);
             }
         }
@@ -719,10 +699,7 @@ fn package_version_parse(string body) -> string {
 /// Drop the `[dependencies]` line for `name`. Only single-line entries
 /// (`name = { … }`, as `spool add` writes them) are supported.
 fn deps_remove_line(string body, string name) -> Result<string, string> {
-    let lines = match split(body, "\n") {
-        Result::Ok(ls) => ls,
-        Result::Err(_) => raise "split failed",
-    };
+    let lines = body.split("\n");
     let out: Vec<string> = Vec::new();
     let in_deps = false;
     let removed = false;
@@ -734,13 +711,13 @@ fn deps_remove_line(string body, string name) -> Result<string, string> {
             Result::Ok(x) => x,
             Result::Err(_) => raw,
         };
-        if starts_with(t, "[") {
+        if t.starts_with("[") {
             in_deps = t == "[dependencies]";
             out.push(raw);
             continue;
         }
         if in_deps && removed == false {
-            if starts_with(t, name) {
+            if t.starts_with(name) {
                 let tail = match slice(t, name.len(), t.len()) {
                     Result::Ok(x) => x,
                     Result::Err(_) => "",
@@ -749,8 +726,8 @@ fn deps_remove_line(string body, string name) -> Result<string, string> {
                     Result::Ok(x) => x,
                     Result::Err(_) => tail,
                 };
-                if starts_with(rest, "=") {
-                    if contains(rest, "}") == false {
+                if rest.starts_with("=") {
+                    if rest.contains("}") == false {
                         raise format("dependency %s spans several lines; remove it by hand", name);
                     }
                     removed = true;
@@ -852,7 +829,7 @@ fn native_sha256_value(string name, string s) -> Result<string, string> {
     let i = 0;
     while ok && i < 64 {
         let c = slice(low, i, i + 1)?;
-        if contains("0123456789abcdef", c) == false {
+        if "0123456789abcdef".contains(c) == false {
             ok = false;
         }
         i = i + 1;
@@ -902,7 +879,7 @@ fn ffi_native_row(TomlValue row, int idx) -> Result<string, string> {
         if v.is_string() == false {
             raise format("[[ffi.native]] %s must be a string", k);
         }
-        if contains(v.s, "\t") {
+        if v.s.contains("\t") {
             raise format("[[ffi.native]] %s cannot contain a tab", k);
         }
         if k == "name" {

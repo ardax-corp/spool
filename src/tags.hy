@@ -1,15 +1,9 @@
 // Parse `git ls-remote --tags` output (prefer peeled annotated-tag SHAs).
-use text::{trim, starts_with, split, contains, ends_with, split_once, find};
+use text::{Searchable, trim};
 use string::{format};
 
 fn ls_field(string row, int idx) -> string {
-    let parts = match split(row, "\t") {
-        Result::Ok(v) => v,
-        Result::Err(_) => {
-            let empty: Vec<string> = Vec::new();
-            empty
-        },
-    };
+    let parts = row.split("\t");
     if idx < parts.len() {
         return parts[idx];
     }
@@ -17,13 +11,13 @@ fn ls_field(string row, int idx) -> string {
 }
 
 fn split_sha_ref(string line) -> Result<(string, string), string> {
-    if contains(line, "\t") {
-        return split_once(line, "\t")?;
+    if line.contains("\t") {
+        return match line.split_once("\t") { Option::Some(p) => p, Option::None => raise "separator not found" };
     }
-    if find(line, " ") < 0 {
+    if !line.contains(" ") {
         raise "expected sha and ref";
     }
-    let pair = split_once(line, " ")?;
+    let pair = match line.split_once(" ") { Option::Some(p) => p, Option::None => raise "separator not found" };
     let (sha, rest) = pair;
     let refname = match trim(rest) {
         Result::Ok(t) => t,
@@ -37,23 +31,23 @@ fn parse_tag_ref(string refname) -> Result<(string, bool), string> {
         Result::Ok(t) => t,
         Result::Err(_) => refname,
     };
-    if starts_with(r, "refs/tags/") == false {
+    if r.starts_with("refs/tags/") == false {
         raise "not a tag ref";
     }
-    let rest = match split_once(r, "refs/tags/") {
-        Result::Ok(p) => {
+    let rest = match r.split_once("refs/tags/") {
+        Option::Some(p) => {
             let (l, rr) = p;
             rr
         },
-        Result::Err(_) => raise "not a tag ref",
+        Option::None => raise "not a tag ref",
     };
-    if ends_with(rest, "^{}") {
-        let tag = match split_once(rest, "^{}") {
-            Result::Ok(p) => {
+    if rest.ends_with("^{}") {
+        let tag = match rest.split_once("^{}") {
+            Option::Some(p) => {
                 let (l, rr) = p;
                 l
             },
-            Result::Err(_) => rest,
+            Option::None => rest,
         };
         return (tag, true);
     }
@@ -76,10 +70,7 @@ fn upsert_tag_sha(Vec<string> rows, string tag, string sha, bool peeled) -> Vec<
 }
 
 fn parse_ls_remote(string body) -> Result<Vec<string>, string> {
-    let lines = match split(body, "\n") {
-        Result::Ok(ls) => ls,
-        Result::Err(_) => raise "split ls-remote failed",
-    };
+    let lines = body.split("\n");
     let rows: Vec<string> = Vec::new();
     let i = 0;
     while i < lines.len() {
@@ -131,10 +122,7 @@ fn ls_remote_sha(Vec<string> rows, string tag) -> Result<string, string> {
 /// refs ending in `/PATTERN` (`refs/remotes/origin/HEAD`,
 /// `refs/heads/feature/main`); those never count.
 fn ls_remote_exact_sha(string body, string want) -> Result<string, string> {
-    let lines = match split(body, "\n") {
-        Result::Ok(ls) => ls,
-        Result::Err(_) => raise "split ls-remote failed",
-    };
+    let lines = body.split("\n");
     let i = 0;
     while i < lines.len() {
         let line = match trim(lines[i]) {

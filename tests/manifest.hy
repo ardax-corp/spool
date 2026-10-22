@@ -5,7 +5,7 @@ use manifest::{
     package_include_parse, scripts_parse, scripts_path_of, script_rel_ok, dep_rev, dep_req,
     deps_remove_line, manifest_validate, ffi_natives_parse, native_sha256, native_url,
 };
-use text::{contains};
+use text::{Searchable};
 
 test("parse git dependency inline table") {
     let body = "[dependencies]
@@ -41,8 +41,8 @@ version = \"0.1.0\"
 ";
     let line = format_dep_line(make_git_dep("http", "https://x/y.git", "^1.0"))?;
     let out = deps_insert_line(body, line)?;
-    assert!(contains(out, "[dependencies]"));
-    assert!(contains(out, "http = { git = \"https://x/y.git\", version = \"^1.0\" }"));
+    assert!(out.contains("[dependencies]"));
+    assert!(out.contains("http = { git = \"https://x/y.git\", version = \"^1.0\" }"));
 }
 
 test("deps_has_name finds existing") {
@@ -118,7 +118,7 @@ include = \"./hooks/include.sh\"
 [module]
 roots = [\"./src\"]
 ";
-    assert!(contains(body, "[hooks]") == false);
+    assert!(body.contains("[hooks]") == false);
     assert!(package_include_parse(body) == "./hooks/include.sh");
 }
 
@@ -158,7 +158,7 @@ preinstall = \"./hooks/preinstall.sh\"
             assert!(false);
         },
         Result::Err(e) => {
-            assert!(contains(e, "unknown scripts key"));
+            assert!(e.contains("unknown scripts key"));
         },
     };
 }
@@ -172,7 +172,7 @@ test("script paths stay in the project tree") {
 test("deps_insert_line keeps entries together and ends with a newline") {
     let body = "[package]\nname = \"app\"\nversion = \"0.1.0\"\n\n[dependencies]\na = { path = \"../a\" }\n\n";
     let out = deps_insert_line(body, "b = { path = \"../b\" }")?;
-    assert!(contains(out, "a = { path = \"../a\" }\nb = { path = \"../b\" }\n"));
+    assert!(out.contains("a = { path = \"../a\" }\nb = { path = \"../b\" }\n"));
     let deps = deps_parse(out)?;
     assert!(deps.len() == 2);
 }
@@ -249,31 +249,31 @@ http = { git = \"https://x/http.git\", version = \"^0.2\", trusted = true }
 }
 
 test("manifest_validate rejects unknown sections and keys") {
-    assert!(contains(validate_err("[permisions]
+    assert!(validate_err("[permisions]
 read = true
-"), "unknown section [permisions]"));
-    assert!(contains(validate_err("[env]
+").contains("unknown section [permisions]"));
+    assert!(validate_err("[env]
 allow_exce = true
-"), "unknown key env.allow_exce"));
-    assert!(contains(validate_err("[package]
+").contains("unknown key env.allow_exce"));
+    assert!(validate_err("[package]
 name = \"a\"
 version = \"1\"
 authors = [\"x\"]
-"), "unknown key package.authors"));
-    assert!(contains(validate_err("[module]
+").contains("unknown key package.authors"));
+    assert!(validate_err("[module]
 preludes = []
-"), "unknown key module.preludes"));
-    assert!(contains(validate_err("name = \"a\"
-"), "unknown key name"));
-    assert!(contains(validate_err("[scripts]
+").contains("unknown key module.preludes"));
+    assert!(validate_err("name = \"a\"
+").contains("unknown key name"));
+    assert!(validate_err("[scripts]
 pre_build = \"./x.sh\"
-"), "unknown scripts key"));
-    assert!(contains(validate_err("[[ffi.native]]
+").contains("unknown scripts key"));
+    assert!(validate_err("[[ffi.native]]
 name = \"r\"
 version = \"1\"
 path = \".\"
 url2 = \"x\"
-"), "unknown key ffi.native.url2"));
+").contains("unknown key ffi.native.url2"));
 }
 
 test("[[ffi.native]] sha256 is optional, checked and stored lowercase (coil-lang#1657)") {
@@ -290,8 +290,8 @@ url = \"https://x/libr.so\"
     rows = ffi_natives_parse(row + "sha256 = \"" + hex + "\"\n")?;
     assert!(native_sha256(rows[0]) == "4ff52df5d95227db32fde1c372fc45ec07f2d939937b8e8f5971223037023a67");
     assert!(validate_err(row + "sha256 = \"" + hex + "\"\n") == "");
-    assert!(contains(validate_err(row + "sha256 = \"abc\"\n"), "sha256 must be 64 hex digits"));
-    assert!(contains(validate_err(row + "sha256 = \"" + "0g" + "2df5d95227db32fde1c372fc45ec07f2d939937b8e8f5971223037023a67" + "\"\n"), "sha256 must be 64 hex digits"));
+    assert!(validate_err(row + "sha256 = \"abc\"\n").contains("sha256 must be 64 hex digits"));
+    assert!(validate_err(row + "sha256 = \"" + "0g" + "2df5d95227db32fde1c372fc45ec07f2d939937b8e8f5971223037023a67" + "\"\n").contains("sha256 must be 64 hex digits"));
 }
 
 test("version = latest parses as a latest requirement (#32)") {
@@ -314,9 +314,9 @@ msgpack = { git = \"https://x/msgpack.git\", version = \"latest\", rev = \"main\
             assert!(false);
         },
         Result::Err(e) => {
-            assert!(contains(e, "msgpack"));
-            assert!(contains(e, "latest"));
-            assert!(contains(e, "rev"));
+            assert!(e.contains("msgpack"));
+            assert!(e.contains("latest"));
+            assert!(e.contains("rev"));
         },
     };
 }
@@ -330,9 +330,9 @@ foo = { git = \"https://example/foo.git\", version = \"^1.0\", rev = \"main\" }
             assert!(false);
         },
         Result::Err(e) => {
-            assert!(contains(e, "foo"));
-            assert!(contains(e, "version"));
-            assert!(contains(e, "rev"));
+            assert!(e.contains("foo"));
+            assert!(e.contains("version"));
+            assert!(e.contains("rev"));
         },
     };
 }

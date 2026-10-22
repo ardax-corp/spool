@@ -1,7 +1,7 @@
 use tests::assert;
 use resolve::{make_con, pin_of, locked_ok, latest_ref};
 use lock::{make_git_pkg, make_git_pkg_ref};
-use text::{contains};
+use text::{Searchable};
 
 fn one(string a) -> Vec<string> {
     let v: Vec<string> = Vec::new();
@@ -42,12 +42,12 @@ test("latest combined with a range is a diamond conflict (#32)") {
         make_con("c", "https://x/c.git", "^1.0", "b"),
     );
     let e = pin_err(two("latest", "^1.0"), cons);
-    assert!(contains(e, "diamond conflict for c"));
-    assert!(contains(e, "a requires latest"));
-    assert!(contains(e, "b requires ^1.0"));
+    assert!(e.contains("diamond conflict for c"));
+    assert!(e.contains("a requires latest"));
+    assert!(e.contains("b requires ^1.0"));
     // Order does not matter.
     let e2 = pin_err(two("^1.0", "latest"), cons);
-    assert!(contains(e2, "diamond conflict for c"));
+    assert!(e2.contains("diamond conflict for c"));
 }
 
 test("latest combined with a branch pin is a diamond conflict (#32)") {
@@ -56,7 +56,7 @@ test("latest combined with a branch pin is a diamond conflict (#32)") {
         make_con("c", "https://x/c.git", "@main", "b"),
     );
     let e = pin_err(two("latest", "@main"), cons);
-    assert!(contains(e, "diamond conflict for c"));
+    assert!(e.contains("diamond conflict for c"));
 }
 
 test("a ref = HEAD lock row satisfies latest until update (#32)") {

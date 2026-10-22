@@ -4,7 +4,7 @@
 // Optional [hooks] allow_include is a consumer allowlist (not a git identity);
 // [hooks] allow_comptime lists the dependencies whose [comptime] grants apply.
 // Consumer [scripts] hashes live in a lock [scripts] table, not a [[package]] row.
-use text::{trim, starts_with, split, contains, ends_with, slice, join as text_join};
+use text::{Searchable, trim, slice, join as text_join};
 use io::file::read_text;
 use io::file::write_text;
 use io::fs::exists;
@@ -43,13 +43,7 @@ fn make_git_pkg_ref(
 }
 
 fn field_at(string p, int idx) -> string {
-    let parts = match split(p, "\t") {
-        Result::Ok(v) => v,
-        Result::Err(_) => {
-            let empty: Vec<string> = Vec::new();
-            empty
-        },
-    };
+    let parts = p.split("\t");
     if idx < parts.len() {
         return parts[idx];
     }
@@ -205,16 +199,16 @@ fn strip_quotes(string s) -> string {
         Result::Err(_) => s,
     };
     if t.len() >= 2 {
-        if starts_with(t, "'") {
-            if ends_with(t, "'") {
+        if t.starts_with("'") {
+            if t.ends_with("'") {
                 return match slice(t, 1, t.len() - 1) {
                     Result::Ok(inner) => inner,
                     Result::Err(_) => t,
                 };
             }
         }
-        if starts_with(t, "\"") {
-            if ends_with(t, "\"") {
+        if t.starts_with("\"") {
+            if t.ends_with("\"") {
                 return match slice(t, 1, t.len() - 1) {
                     Result::Ok(inner) => inner,
                     Result::Err(_) => t,
@@ -226,13 +220,10 @@ fn strip_quotes(string s) -> string {
 }
 
 fn parse_kv_line(string line) -> Result<(string, string), string> {
-    if contains(line, "=") == false {
+    if line.contains("=") == false {
         raise "expected key = value";
     }
-    let parts = match split(line, "=") {
-        Result::Ok(p) => p,
-        Result::Err(_) => raise "split failed",
-    };
+    let parts = line.split("=");
     if parts.len() < 2 {
         raise "expected key = value";
     }
@@ -271,17 +262,14 @@ fn parse_string_array(string value) -> Result<Vec<string>, string> {
         Result::Ok(x) => x,
         Result::Err(_) => value,
     };
-    if starts_with(t, "[") == false {
+    if t.starts_with("[") == false {
         raise "corrupt coil.lock: expected allow_include array";
     }
-    if ends_with(t, "]") == false {
+    if t.ends_with("]") == false {
         raise "corrupt coil.lock: expected allow_include array";
     }
     let inner = slice(t, 1, t.len() - 1)?;
-    let pieces = match split(inner, ",") {
-        Result::Ok(p) => p,
-        Result::Err(_) => raise "split allow_include failed",
-    };
+    let pieces = inner.split(",");
     let out: Vec<string> = Vec::new();
     let i = 0;
     while i < pieces.len() {
@@ -498,10 +486,7 @@ fn finish_pkg(
 }
 
 fn lock_parse_all(string source) -> Result<(Vec<string>, Vec<string>, Vec<string>), string> {
-    let lines = match split(source, "\n") {
-        Result::Ok(ls) => ls,
-        Result::Err(_) => raise "split lock failed",
-    };
+    let lines = source.split("\n");
     let out: Vec<string> = Vec::new();
     let allow: Vec<string> = Vec::new();
     let scripts: Vec<string> = Vec::new();
@@ -529,7 +514,7 @@ fn lock_parse_all(string source) -> Result<(Vec<string>, Vec<string>, Vec<string
         if line.len() == 0 {
             continue;
         }
-        if starts_with(line, "#") {
+        if line.starts_with("#") {
             continue;
         }
         if line == "[hooks]" {
@@ -683,12 +668,7 @@ fn push_native(Vec<string> out, string pkg, bool open, string stem, string sha) 
 /// sections are ignored, so this never fails on a lock lock_parse accepts.
 fn lock_native_parse(string source) -> Result<Vec<string>, string> {
     let out: Vec<string> = Vec::new();
-    let lines = match split(source, "\n") {
-        Result::Ok(ls) => ls,
-        Result::Err(_) => {
-            return out;
-        },
-    };
+    let lines = source.split("\n");
     let pkg = "";
     let in_pkg = false;
     let in_native = false;
@@ -701,10 +681,10 @@ fn lock_native_parse(string source) -> Result<Vec<string>, string> {
             Result::Err(_) => lines[i],
         };
         i = i + 1;
-        if line.len() == 0 || starts_with(line, "#") {
+        if line.len() == 0 || line.starts_with("#") {
             continue;
         }
-        if starts_with(line, "[") {
+        if line.starts_with("[") {
             out = push_native(out, pkg, in_native, stem, sha);
             in_native = line == "[[package.native]]" && in_pkg;
             stem = "";
@@ -719,7 +699,7 @@ fn lock_native_parse(string source) -> Result<Vec<string>, string> {
             }
             continue;
         }
-        if contains(line, "=") == false {
+        if line.contains("=") == false {
             continue;
         }
         let kv = parse_kv_line(line)?;
@@ -746,12 +726,7 @@ fn lock_native_parse(string source) -> Result<Vec<string>, string> {
 /// writes these rows itself, so a lock rewrite carries them over as-is.
 fn lock_native_blocks(string source) -> Vec<(string, string)> {
     let out: Vec<(string, string)> = Vec::new();
-    let lines = match split(source, "\n") {
-        Result::Ok(ls) => ls,
-        Result::Err(_) => {
-            return out;
-        },
-    };
+    let lines = source.split("\n");
     let pkg = "";
     let in_pkg = false;
     let block = "";
@@ -762,10 +737,10 @@ fn lock_native_blocks(string source) -> Vec<(string, string)> {
             Result::Err(_) => lines[i],
         };
         i = i + 1;
-        if line.len() == 0 || starts_with(line, "#") {
+        if line.len() == 0 || line.starts_with("#") {
             continue;
         }
-        if starts_with(line, "[") {
+        if line.starts_with("[") {
             if block.len() > 0 {
                 out.push((pkg, block));
             }
@@ -786,7 +761,7 @@ fn lock_native_blocks(string source) -> Vec<(string, string)> {
             block = block + line + "\n";
             continue;
         }
-        if in_pkg && contains(line, "=") {
+        if in_pkg && line.contains("=") {
             let kv = match parse_kv_line(line) {
                 Result::Ok(x) => x,
                 Result::Err(_) => ("", ""),
@@ -951,12 +926,7 @@ fn lock_write_scripts(string path, Vec<string> scripts) -> Result<int, string> {
 /// `[comptime]` grants spool passes to coil (`spool allow-comptime`).
 fn lock_allow_comptime(string source) -> Result<Vec<string>, string> {
     let out: Vec<string> = Vec::new();
-    let lines = match split(source, "\n") {
-        Result::Ok(ls) => ls,
-        Result::Err(_) => {
-            return out;
-        },
-    };
+    let lines = source.split("\n");
     let in_hooks = false;
     let i = 0;
     while i < lines.len() {
@@ -965,10 +935,10 @@ fn lock_allow_comptime(string source) -> Result<Vec<string>, string> {
             Result::Err(_) => lines[i],
         };
         i = i + 1;
-        if line.len() == 0 || starts_with(line, "#") {
+        if line.len() == 0 || line.starts_with("#") {
             continue;
         }
-        if starts_with(line, "[") {
+        if line.starts_with("[") {
             in_hooks = line == "[hooks]";
             continue;
         }
