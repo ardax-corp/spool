@@ -24,7 +24,7 @@ fn manifest_template(string name, bool lib) -> string {
 }
 
 fn main_template(string name) -> string {
-    return "use io::sync::{println};\n\nfn main() {\n    match println(\"hello from " + name + "\") {\n        Result::Ok(_) => 0,\n        Result::Err(_) => 0,\n    };\n}\n";
+    return "use io::sync::{println};\n\nfn main() {\n    println(\"hello from " + name + "\")?;\n}\n";
 }
 
 fn lib_template() -> string {
