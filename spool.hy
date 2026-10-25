@@ -21,6 +21,7 @@ use config::cache_root;
 use git::ls_remote_tags;
 use tags::{parse_ls_remote, ls_remote_tag_names};
 use semver::has_version_tag;
+use setup::cmd_setup;
 
 fn usage() -> string {
     return "spool " + spool_version() + " — Coil project and dependency manager
@@ -66,6 +67,8 @@ Dependencies:
   allow-comptime <name>             give a dependency the compile-time grants it asks for
 
 Tooling:
+  setup [--channel stable|edge|TAG] [--coil-only | --stdlib-only]
+                                    fetch coil and the stdlib into ~/.coil
   doctor                            check the toolchain and environment
   cache dir | cache clean           show or clear the shared git cache
   version, --version                print the spool version
@@ -918,13 +921,13 @@ fn cmd_doctor(Vec<string> rest) -> Result<int, string> {
             coil_streams_json(coil, "test"),
         );
     } else {
-        good = doctor_line("coil", "(set COIL or run ./bootstrap.sh --install)", false) && good;
+        good = doctor_line("coil", "(spool setup, or set COIL)", false) && good;
     }
     let stdlib = find_stdlib();
     if stdlib.len() > 0 {
         doctor_line("coil-stdlib", stdlib, true);
     } else {
-        good = doctor_line("coil-stdlib", "(set COIL_STDLIB_DIR or ~/.coil/stdlib)", false) && good;
+        good = doctor_line("coil-stdlib", "(spool setup, or set COIL_STDLIB_DIR)", false) && good;
     }
     let tools = strs4("git", "sh", "curl", "tar");
     let i = 0;
@@ -1075,6 +1078,9 @@ fn dispatch(string cmd, Vec<string> rest) -> Result<int, string> {
     }
     if cmd == "cache" {
         return cmd_cache(rest)?;
+    }
+    if cmd == "setup" {
+        return cmd_setup(rest)?;
     }
     raise format("unknown command `%s` (see spool help)", cmd);
 }

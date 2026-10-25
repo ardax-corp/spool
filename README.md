@@ -16,8 +16,9 @@ dependencies, and the stdlib, then runs `coil` for you.
 
 ## Install
 
-Two ways: download the prebuilt `spool` from the `edge` release, or run
-`bootstrap.sh`. Either way, spool needs a coil toolchain and the stdlib at
+Two ways: download the prebuilt `spool` from the `edge` release and let it
+fetch the rest with `spool setup`, or build from source with `bootstrap.sh`
+(the contributor path). Either way, spool needs a coil toolchain and the stdlib at
 run time; see [What spool needs](#what-spool-needs).
 
 ### From the edge release
@@ -49,35 +50,35 @@ grep " spool-$TRIPLE.tar.gz\$" SHA256SUMS | sha256sum -c -    # macOS: shasum -a
 tar xzf "spool-$TRIPLE.tar.gz" -C ~/.local/bin spool
 ```
 
-**2. coil.** The spool binary does not download coil. Take the toolkit from
-the coil-lang [`edge` release](https://github.com/ardax-corp/coil-lang/releases/tag/edge)
-and unpack it into `~/.coil/bin`, one of the places spool looks for coil.
-The helper binaries (`coil-fmt`, `coil-test`, `coil-lsp`, …) must stay next
-to `coil`:
+**2. coil and the stdlib.** Let spool fetch them into `~/.coil`, where it
+looks for them:
 
 ```bash
-BASE=https://github.com/ardax-corp/coil-lang/releases/download/edge
-mkdir -p ~/.coil/bin && cd "$(mktemp -d)"
-curl -fLO "$BASE/coil-$TRIPLE.tar.gz" -O "$BASE/SHA256SUMS"
-grep " coil-$TRIPLE.tar.gz\$" SHA256SUMS | sha256sum -c -     # macOS: shasum -a 256 -c -
-tar xzf "coil-$TRIPLE.tar.gz" -C ~/.coil/bin --strip-components=1
+~/.local/bin/spool setup --channel edge   # or stable (default), or a release tag
 ```
 
-**3. The stdlib.** It is plain Coil source:
+`spool setup` downloads `coil-<triple>.tar.gz` from the coil-lang release of
+that channel, checks it against the release's `SHA256SUMS` (a release without
+one, or a mismatch, is refused), and unpacks the toolkit into `~/.coil/bin`
+with its helper binaries (`coil-fmt`, `coil-test`, `coil-lsp`, …) next to
+`coil`. It then clones coil-stdlib's default branch and puts its `src` at
+`~/.coil/stdlib`. Run it again to update; each piece is swapped in only once
+it is complete. `--coil-only` / `--stdlib-only` do one half.
+`COIL_HOME=DIR` installs into `DIR` instead; spool itself only looks in
+`~/.coil`, so then set `COIL` and `COIL_STDLIB_DIR` as it tells you.
+`COIL_LANG_URL` and `COIL_STDLIB_REPO` point it at other repositories.
 
-```bash
-git clone https://github.com/ardax-corp/coil-stdlib.git ~/.coil/stdlib
-```
-
-**4. Check.** Put `~/.local/bin` and `~/.coil/bin` on your `PATH` and run:
+**3. Check.** Put `~/.local/bin` (and, if you like, `~/.coil/bin`) on your
+`PATH` and run:
 
 ```bash
 spool doctor
 ```
 
-Steps 2 and 3 are manual for now. A `spool` subcommand that does them for
-you is planned (issue #51) but does not exist yet. Until it does,
-`bootstrap.sh` is the one-command route.
+To do step 2 by hand instead, unpack the coil-lang
+[`edge` release](https://github.com/ardax-corp/coil-lang/releases/tag/edge)
+archive into `~/.coil/bin` (verify it against `SHA256SUMS` the same way as
+spool) and `git clone https://github.com/ardax-corp/coil-stdlib.git ~/.coil/stdlib`.
 
 ### What spool needs
 
