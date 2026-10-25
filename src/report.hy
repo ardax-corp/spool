@@ -1,7 +1,7 @@
 // `spool tree` and `spool outdated`.
-use term::{println};
-use string::{format};
-use text::{slice};
+use term::println;
+use string::format;
+use text::Text;
 use util::{join2, path_exists, tsv_field, vec_has};
 use lock::{lock_find, lock_pkg_name, lock_pkg_tag, lock_pkg_rev, lock_pkg_ref, lock_pkg_hash};
 use manifest::{deps_read, dep_kind, dep_name, dep_path, package_name_read, package_version_parse, manifest_body};
@@ -14,7 +14,7 @@ fn short_sha(string s) -> string {
     if s.len() <= 10 {
         return s;
     }
-    return match slice(s, 0, 10) {
+    return match s.slice(0, 10) {
         Result::Ok(x) => x,
         Result::Err(_) => s,
     };
@@ -58,7 +58,13 @@ fn children_of(string toml) -> Vec<string> {
     return out;
 }
 
-fn print_children(string root, Vec<string> packages, Vec<string> kids, string prefix, Vec<string> stack) {
+fn print_children(
+    string root,
+    Vec<string> packages,
+    Vec<string> kids,
+    string prefix,
+    Vec<string> stack,
+) {
     let i = 0;
     while i < kids.len() {
         let k = kids[i];

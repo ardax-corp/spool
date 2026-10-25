@@ -1,20 +1,16 @@
 // Locate the coil toolchain and turn a project manifest into coil flags.
-use env::{var};
-use string::{format};
+use env::var;
+use string::format;
 use util::{join2, join3, path_exists, path_is_absolute, home_dir, trim_or, vec_has, tsv_field};
 use roots::{dep_module_roots, dep_checkouts, checkout_module_root};
 use proc::{which, sh_capture, first_line};
-use manifest::{
-    manifest_body, manifest_validate, module_roots_parse, section_string, section_bool, section_strings,
-    trusted_deps_parse, ffi_natives_parse, native_name, native_package, native_version,
-    native_path, native_requires, native_requires_hint,
-};
+use manifest::{manifest_body, manifest_validate, module_roots_parse, section_string, section_bool, section_strings, trusted_deps_parse, ffi_natives_parse, native_name, native_package, native_version, native_path, native_requires, native_requires_hint};
 use lock::{lock_native_parse, lock_native_pkg, lock_native_stem, lock_native_sha, lock_allow_comptime};
-use config::{config_path};
-use io::file::{read_text};
-use text::{Searchable, slice, to_lower};
+use config::config_path;
+use io::file::read_text;
+use text::{Searchable, Text};
 use io::fs::{is_dir, list_dir};
-use term::{eprintln};
+use term::eprintln;
 
 fn env_or(string key, string fallback) -> string {
     return match var(key) {
@@ -47,7 +43,7 @@ fn find_coil() -> string {
             }
         },
         Result::Err(_) => {},
-    };
+    }
     return "";
 }
 
@@ -132,7 +128,7 @@ fn find_stdlib() -> string {
             return stdlib_src_of(join2(h, ".coil/stdlib"));
         },
         Result::Err(_) => {},
-    };
+    }
     return "";
 }
 
@@ -141,10 +137,13 @@ fn abs_under(string root, string p) -> string {
         return p;
     }
     if p.starts_with("./") {
-        return join2(root, match slice(p, 2, p.len()) {
-            Result::Ok(x) => x,
-            Result::Err(_) => p,
-        });
+        return join2(
+            root,
+            match p.slice(2, p.len()) {
+                Result::Ok(x) => x,
+                Result::Err(_) => p,
+            },
+        );
     }
     return join2(root, p);
 }
@@ -196,7 +195,7 @@ fn dload_stem(string pkg, string native_stem) -> string {
         return native_stem;
     }
     if pkg.starts_with("coil-") {
-        return match slice(pkg, 5, pkg.len()) {
+        return match pkg.slice(5, pkg.len()) {
             Result::Ok(x) => x,
             Result::Err(_) => pkg,
         };
@@ -209,15 +208,10 @@ fn is_sha256_hex(string s) -> bool {
     if s.len() != 64 {
         return false;
     }
-    let lower = match to_lower(s) {
-        Result::Ok(x) => x,
-        Result::Err(_) => {
-            return false;
-        },
-    };
+    let lower = s.to_lower();
     let i = 0;
     while i < 64 {
-        let c = match slice(lower, i, i + 1) {
+        let c = match lower.slice(i, i + 1) {
             Result::Ok(x) => x,
             Result::Err(_) => {
                 return false;
@@ -257,7 +251,10 @@ fn dload_flags(string manifest, string lock) -> Result<Vec<string>, string> {
         i = i + 1;
         let sha = lock_native_sha(n);
         if is_sha256_hex(sha) {
-            pins = push_unique(pins, dload_stem(lock_native_pkg(n), lock_native_stem(n)) + "=" + sha);
+            pins = push_unique(
+                pins,
+                dload_stem(lock_native_pkg(n), lock_native_stem(n)) + "=" + sha,
+            );
         }
     }
     i = 0;
@@ -341,7 +338,10 @@ fn flag_pairs(string flag, Vec<string> values) -> Vec<string> {
 /// `--ffi-native SPEC` pairs for the project's own `[[ffi.native]]` rows
 /// (`coil natives dump`, so `spool download`).
 fn ffi_native_flags(string root) -> Result<Vec<string>, string> {
-    return flag_pairs("--ffi-native", ffi_native_specs(root, manifest_body(join2(root, "coil.toml"))?)?);
+    return flag_pairs(
+        "--ffi-native",
+        ffi_native_specs(root, manifest_body(join2(root, "coil.toml"))?)?,
+    );
 }
 
 // ---- dependency natives (spool#38, coil-tls#17) ----------------------------
@@ -454,16 +454,16 @@ fn ffi_search_dirs(string root, string body) -> Result<Vec<string>, string> {
 /// Whether `dir` holds the shared library for stem `name`
 /// (`lib<name>.so`, `lib<name>.dylib` or `<name>.dll`).
 fn dir_has_lib(string dir, string name) -> bool {
-    return path_exists(join2(dir, "lib" + name + ".so"))
-        || path_exists(join2(dir, "lib" + name + ".dylib"))
-        || path_exists(join2(dir, name + ".dll"));
+    return path_exists(join2(dir, "lib" + name + ".so")) ||
+           path_exists(join2(dir, "lib" + name + ".dylib")) ||
+           path_exists(join2(dir, name + ".dll"));
 }
 
 /// `r` with its path field replaced (record layout in manifest.hy).
 fn with_native_path(string r, string path) -> string {
-    return native_name(r) + "\t" + native_package(r) + "\t" + native_version(r) + "\t" + path
-        + "\t" + tsv_field(r, 4) + "\t" + native_requires(r) + "\t" + native_requires_hint(r)
-        + "\t" + tsv_field(r, 7);
+    return native_name(r) + "\t" + native_package(r) + "\t" + native_version(r) + "\t" + path + "\t" +
+           tsv_field(r, 4) + "\t" + native_requires(r) + "\t" + native_requires_hint(r) + "\t" +
+           tsv_field(r, 7);
 }
 
 /// The `[[ffi.native]]` rows `coil package` gets, every path absolute: the
@@ -656,7 +656,7 @@ fn dep_top_modules(string checkout) -> Vec<string> {
             continue;
         }
         if name.ends_with(".hy") {
-            name = match slice(name, 0, name.len() - 3) {
+            name = match name.slice(0, name.len() - 3) {
                 Result::Ok(s) => s,
                 Result::Err(_) => name,
             };
@@ -707,11 +707,13 @@ fn comptime_flags(string root, string body) -> Result<Vec<string>, string> {
             continue;
         }
         if vec_has(allowed, name) == false {
-            eprintln(format(
-                "spool: %s asks for compile-time grants ([comptime] in its coil.toml); `spool allow-comptime %s` gives them",
-                name,
-                name,
-            ));
+            eprintln(
+                format(
+                    "spool: %s asks for compile-time grants ([comptime] in its coil.toml); `spool allow-comptime %s` gives them",
+                    name,
+                    name,
+                ),
+            );
             continue;
         }
         let modules = dep_top_modules(checkout);

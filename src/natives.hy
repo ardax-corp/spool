@@ -10,15 +10,12 @@
 // then, and spool says so with a warning.
 use term::{println, eprintln};
 use io::fs::{rename, remove_file};
-use text::{Searchable, slice, to_lower};
-use string::{format};
+use text::{Searchable, Text};
+use string::format;
 use util::{join2, ensure_dir, path_exists, home_dir, lines_of, trim_or, tsv_field};
 use proc::{sh_capture, sh_run, first_line};
 use toolchain::{env_or, ffi_native_flags, abs_under};
-use manifest::{
-    manifest_body, ffi_natives_parse, native_name, native_package, native_version, native_url,
-    native_path, native_sha256,
-};
+use manifest::{manifest_body, ffi_natives_parse, native_name, native_package, native_version, native_url, native_path, native_sha256};
 
 fn natives_root() -> Result<string, string> {
     let r = env_or("COIL_NATIVES_DIR", "");
@@ -42,10 +39,7 @@ fn cmd_line(string script) -> string {
 
 /// Rust `std::env::consts::OS` spelling (linux, macos, windows, …).
 fn host_os() -> string {
-    let os = match to_lower(cmd_line("uname -s")) {
-        Result::Ok(s) => s,
-        Result::Err(_) => "",
-    };
+    let os = cmd_line("uname -s").to_lower();
     if os == "darwin" {
         return "macos";
     }
@@ -90,7 +84,7 @@ fn size_of(string file) -> string {
 }
 
 fn after_prefix(string s, string prefix) -> string {
-    return match slice(s, prefix.len(), s.len()) {
+    return match s.slice(prefix.len(), s.len()) {
         Result::Ok(x) => trim_or(x),
         Result::Err(_) => "",
     };
@@ -100,7 +94,7 @@ fn drop_file(string p) {
     match remove_file(p) {
         Result::Ok(_) => 0,
         Result::Err(_) => 0,
-    };
+    }
 }
 
 /// Lock fields become path segments; keep them to one plain segment.
@@ -135,7 +129,15 @@ fn curl_to(string part, string url) -> Result<int, string> {
 /// pins it. With the row's own `sha256` the download must match it (else it
 /// is removed and this fails); without one it is placed unchecked, with a
 /// warning. A file already at `dest_dir` is left alone.
-fn fetch_missing(string dest_dir, string name, string package, string version, string filename, string url, string sha) -> Result<bool, string> {
+fn fetch_missing(
+    string dest_dir,
+    string name,
+    string package,
+    string version,
+    string filename,
+    string url,
+    string sha,
+) -> Result<bool, string> {
     if url.starts_with("https://") == false {
         raise format("%s: native url must be https://, got %s", package, url);
     }
@@ -152,15 +154,17 @@ fn fetch_missing(string dest_dir, string name, string package, string version, s
         match rename(part, dest) {
             Result::Ok(_) => 0,
             Result::Err(_) => raise format("cannot move %s into place", dest),
-        };
-        eprintln(format(
-            "spool download: WARNING: fetched %s %s -> %s over https without a hash check (sha256 %s); coil package pins it when it hashes it. Add sha256 = \"<hex>\" to [[ffi.native]] %s to check it",
-            package,
-            version,
-            dest,
-            sha256_of(dest)?,
-            name,
-        ));
+        }
+        eprintln(
+            format(
+                "spool download: WARNING: fetched %s %s -> %s over https without a hash check (sha256 %s); coil package pins it when it hashes it. Add sha256 = \"<hex>\" to [[ffi.native]] %s to check it",
+                package,
+                version,
+                dest,
+                sha256_of(dest)?,
+                name,
+            ),
+        );
         return true;
     }
     let got = sha256_of(part)?;
@@ -171,12 +175,28 @@ fn fetch_missing(string dest_dir, string name, string package, string version, s
     match rename(part, dest) {
         Result::Ok(_) => 0,
         Result::Err(_) => raise format("cannot move %s into place", dest),
-    };
-    println(format("spool download: fetched %s %s -> %s (sha256 %s verified)", package, version, dest, sha));
+    }
+    println(
+        format(
+            "spool download: fetched %s %s -> %s (sha256 %s verified)",
+            package,
+            version,
+            dest,
+            sha,
+        ),
+    );
     return true;
 }
 
-fn fetch_one(string root, string package, string version, string filename, string url, string sha, string size) -> Result<bool, string> {
+fn fetch_one(
+    string root,
+    string package,
+    string version,
+    string filename,
+    string url,
+    string sha,
+    string size,
+) -> Result<bool, string> {
     if url.starts_with("https://") == false {
         raise format("%s: native url must be https://, got %s", package, url);
     }
@@ -186,7 +206,7 @@ fn fetch_one(string root, string package, string version, string filename, strin
     if sha.len() < 16 {
         raise format("%s: native lock has no sha256", package);
     }
-    let hash16 = match slice(sha, 0, 16) {
+    let hash16 = match sha.slice(0, 16) {
         Result::Ok(x) => x,
         Result::Err(_) => sha,
     };
@@ -218,7 +238,7 @@ fn fetch_one(string root, string package, string version, string filename, strin
     match rename(part, dest) {
         Result::Ok(_) => 0,
         Result::Err(_) => raise format("cannot move %s into place", dest),
-    };
+    }
     println(format("spool download: installed %s %s -> %s", package, version, dest));
     return true;
 }
@@ -351,7 +371,14 @@ fn download_natives(string coil, string project_root, string exe) -> Result<int,
         let filename = tsv_field(line, 2);
         let url = url_for(rows, package, version, filename);
         if url.len() == 0 {
-            println(format("spool download: no [[ffi.native]] url for %s %s (%s); skipped", package, version, filename));
+            println(
+                format(
+                    "spool download: no [[ffi.native]] url for %s %s (%s); skipped",
+                    package,
+                    version,
+                    filename,
+                ),
+            );
             no_url = no_url + 1;
             continue;
         }
@@ -390,7 +417,14 @@ fn download_natives(string coil, string project_root, string exe) -> Result<int,
     if installed == 0 && skipped == 0 && no_url == 0 {
         println("spool download: nothing to download");
     } else {
-        println(format("spool download: ok (%i installed, %i skipped, %i without url)", installed, skipped, no_url));
+        println(
+            format(
+                "spool download: ok (%i installed, %i skipped, %i without url)",
+                installed,
+                skipped,
+                no_url,
+            ),
+        );
     }
     return 0;
 }
@@ -401,7 +435,9 @@ fn row_for(Vec<string> rows, string package, string version, string filename) ->
     while i < rows.len() {
         let r = rows[i];
         i = i + 1;
-        if native_package(r) == package && native_version(r) == version && lib_file_of(filename, native_name(r)) {
+        if native_package(r) == package &&
+           native_version(r) == version &&
+           lib_file_of(filename, native_name(r)) {
             return r;
         }
     }
@@ -413,7 +449,12 @@ fn row_for(Vec<string> rows, string package, string version, string filename) ->
 /// natives cache, where the exe looks first, so it runs on this machine with
 /// no `spool download` and no URL. A cache entry with the right sha256 is
 /// left alone; a local file that no longer matches the pin is an error.
-fn cache_packaged_natives(string coil, string project_root, string exe, Vec<string> rows) -> Result<int, string> {
+fn cache_packaged_natives(
+    string coil,
+    string project_root,
+    string exe,
+    Vec<string> rows,
+) -> Result<int, string> {
     if rows.len() == 0 {
         return 0;
     }
@@ -453,7 +494,7 @@ fn cache_packaged_natives(string coil, string project_root, string exe, Vec<stri
         safe_segment("package", package)?;
         safe_segment("version", version)?;
         safe_segment("filename", filename)?;
-        let hash16 = match slice(sha, 0, 16) {
+        let hash16 = match sha.slice(0, 16) {
             Result::Ok(x) => x,
             Result::Err(_) => sha,
         };
@@ -482,7 +523,7 @@ fn cache_packaged_natives(string coil, string project_root, string exe, Vec<stri
         match rename(part, dest) {
             Result::Ok(_) => 0,
             Result::Err(_) => raise format("cannot move %s into place", dest),
-        };
+        }
         eprintln(format("spool: cached native %s %s (%s) -> %s", package, version, filename, dest));
     }
     return 0;
