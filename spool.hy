@@ -1,35 +1,26 @@
 // spool — Coil project and dependency manager (standalone; build with bootstrap.sh).
 use env::{args, var, cwd, exit};
 use term::{println, eprintln};
-use io::fs::{remove_dir_all};
-use string::{format};
-use text::{Searchable, join as text_join};
-use util::{
-    join2, path_exists, path_dirname, path_is_absolute, ensure_dir, home_dir, trim_or,
-    check_pkg_name, check_git_url, vec_has,
-};
+use io::fs::remove_dir_all;
+use string::format;
+use text::{Joined, Searchable};
+use util::{join2, path_exists, path_dirname, path_is_absolute, ensure_dir, home_dir, trim_or, check_pkg_name, check_git_url, vec_has};
 use cli::{parse_args, opt, has, positionals, raw_args, at_most, strs, strs2, strs3, strs4, no_strs};
-use version::{spool_version};
+use version::spool_version;
 use proc::{run_in, spawn, sh_run, sh_capture, which};
-use toolchain::{
-    find_coil, require_coil, coil_version_output, find_stdlib, compile_flags, project_roots, env_or,
-    package_native_flags, package_native_rows,
-};
-use manifest::{
-    deps_read, dep_kind, dep_name, make_git_rev_dep, make_path_dep, deps_append, deps_remove,
-    manifest_body, section_string, package_name_read,
-};
+use toolchain::{find_coil, require_coil, coil_version_output, find_stdlib, compile_flags, project_roots, env_or, package_native_flags, package_native_rows};
+use manifest::{deps_read, dep_kind, dep_name, make_git_rev_dep, make_path_dep, deps_append, deps_remove, manifest_body, section_string, package_name_read};
 use lock::{lock_read_or_empty, lock_pkg_name, lock_add_allow_include, lock_add_allow_comptime};
-use hooks::{hooks_are_off};
+use hooks::hooks_are_off;
 use sync::{sync, snapshot, restore};
 use report::{print_tree, print_outdated};
 use natives::{download_natives, cache_packaged_natives};
-use scaffold::{scaffold};
-use render::{render_events};
-use config::{cache_root};
-use git::{ls_remote_tags};
+use scaffold::scaffold;
+use render::render_events;
+use config::cache_root;
+use git::ls_remote_tags;
 use tags::{parse_ls_remote, ls_remote_tag_names};
-use semver::{has_version_tag};
+use semver::has_version_tag;
 
 fn usage() -> string {
     return "spool " + spool_version() + " — Coil project and dependency manager
@@ -393,7 +384,10 @@ fn report_flags(Vec<string> args) -> Result<(Vec<string>, bool, string), string>
             continue;
         }
         if a.starts_with("--color=") {
-            let kv = match a.split_once("=") { Option::Some(p) => p, Option::None => raise "separator not found" };
+            let kv = match a.split_once("=") {
+                Option::Some(p) => p,
+                Option::None => raise "separator not found",
+            };
             let (_, v) = kv;
             color = v;
             continue;
@@ -598,7 +592,7 @@ fn cmd_lsp(Vec<string> rest) -> Result<int, string> {
                 Result::Err(e) => {
                     say("dependencies not installed: " + e);
                 },
-            };
+            }
             let lsp_help = coil_help(require_coil()?, strs("lsp"));
             if lsp_help.contains("--workspace") {
                 argv.push("--workspace");
@@ -607,14 +601,16 @@ fn cmd_lsp(Vec<string> rest) -> Result<int, string> {
             if lsp_help.contains("--root") {
                 argv = push_all(argv, compile_flags(root)?);
             } else {
-                say("this coil's `coil lsp` takes no --root; dependencies and the stdlib will not resolve");
+                say(
+                    "this coil's `coil lsp` takes no --root; dependencies and the stdlib will not resolve",
+                );
                 say("(" + update_coil_hint() + ")");
             }
         },
         Result::Err(_) => {
             dir = current_dir()?;
         },
-    };
+    }
     argv = push_all(argv, tool_args(rest));
     return coil_in(dir, argv)?;
 }
@@ -715,7 +711,12 @@ fn bare_git_version(string name, string git) -> Result<string, string> {
     if has_version_tag(ls_remote_tag_names(rows)) {
         return "*";
     }
-    say(format("note: %s has no version tags; using version = \"latest\" (the default branch tip)", name));
+    say(
+        format(
+            "note: %s has no version tags; using version = \"latest\" (the default branch tip)",
+            name,
+        ),
+    );
     return "latest";
 }
 
@@ -768,7 +769,7 @@ fn cmd_add(Vec<string> rest) -> Result<int, string> {
             restore(root, toml, lock_body, had_lock);
             raise e + "\n(coil.toml and coil.lock were restored)";
         },
-    };
+    }
     say("added " + name);
     return 0;
 }
@@ -789,7 +790,7 @@ fn cmd_remove(Vec<string> rest) -> Result<int, string> {
             restore(root, toml, lock_body, had_lock);
             raise e + "\n(coil.toml and coil.lock were restored)";
         },
-    };
+    }
     say("removed " + pos[0]);
     return 0;
 }
@@ -911,7 +912,11 @@ fn cmd_doctor(Vec<string> rest) -> Result<int, string> {
     if coil.len() > 0 {
         good = doctor_line("coil", coil + " (" + coil_version_output(coil) + ")", true) && good;
         doctor_line("coil mutate", "(spool infect)", coil_has_command(coil, "mutate"));
-        doctor_line("coil test --json", "(rendered spool test / coverage)", coil_streams_json(coil, "test"));
+        doctor_line(
+            "coil test --json",
+            "(rendered spool test / coverage)",
+            coil_streams_json(coil, "test"),
+        );
     } else {
         good = doctor_line("coil", "(set COIL or run ./bootstrap.sh --install)", false) && good;
     }
@@ -940,17 +945,17 @@ fn cmd_doctor(Vec<string> rest) -> Result<int, string> {
             doctor_line("project", root, true);
             match project_roots(root) {
                 Result::Ok(roots) => {
-                    out("  roots: " + text_join(roots, ", "));
+                    out("  roots: " + roots.join(", "));
                 },
                 Result::Err(e) => {
                     good = doctor_line("coil.toml", e, false) && good;
                 },
-            };
+            }
         },
         Result::Err(_) => {
             out("  (no project in this directory)");
         },
-    };
+    }
     if good {
         return 0;
     }
@@ -977,7 +982,7 @@ fn cmd_cache(Vec<string> rest) -> Result<int, string> {
                 remove_tree(join2(h, ".cache/spool/tmp"))?;
             },
             Result::Err(_) => {},
-        };
+        }
         say("cleared " + join2(cache, "git"));
         return 0;
     }
@@ -1108,5 +1113,5 @@ fn main() {
             say("error: " + e);
             exit(1);
         },
-    };
+    }
 }

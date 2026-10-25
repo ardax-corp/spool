@@ -1,12 +1,12 @@
 // Host git through proc: ls-remote, bare cache clones, detached worktrees.
 // GIT_TERMINAL_PROMPT=0 so a missing credential fails instead of hanging.
-use string::{format};
-use text::{Searchable, slice};
-use clock::{wall_nanos};
+use string::format;
+use text::{Searchable, Text};
+use clock::wall_nanos;
 use util::{join2, join3, join4, ensure_dir, path_dirname, path_exists, trim_or, check_git_url};
 use proc::{sh_run, sh_capture, first_line};
-use config::{cache_root};
-use cache_url::{url_cache_key};
+use config::cache_root;
+use cache_url::url_cache_key;
 use tags::{ls_remote_head_sha, ls_remote_ref_sha};
 
 fn git_auth_hint() -> string {
@@ -41,7 +41,7 @@ fn is_hex_sha(string s) -> bool {
     let hex = "0123456789abcdef";
     let i = 0;
     while i < 40 {
-        let c = match slice(s, i, i + 1) {
+        let c = match s.slice(i, i + 1) {
             Result::Ok(x) => x,
             Result::Err(_) => {
                 return false;
@@ -69,8 +69,7 @@ fn ls_remote_ref(string url, string rev) -> Result<string, string> {
     a.push(rev);
     // `ls-remote` matches patterns by suffix; ls_remote_ref_sha keeps only
     // exact refnames, preferring an annotated tag's peeled commit (#41).
-    let script = git_env_prefix()
-        + "git ls-remote \"$1\" \"$2\" \"refs/tags/$2^{}\" \"refs/heads/$2\" \"refs/tags/$2\"";
+    let script = git_env_prefix() + "git ls-remote \"$1\" \"$2\" \"refs/tags/$2^{}\" \"refs/heads/$2\" \"refs/tags/$2\"";
     let res = sh_capture(script, a)?;
     let (code, body) = res;
     if code != 0 {
@@ -119,9 +118,8 @@ fn checkout_path(string tree) -> Result<string, string> {
 }
 
 fn bare_sync_script() -> string {
-    return git_env_prefix()
-        + "if [ -d \"$1\" ]; then git -C \"$1\" fetch -q --tags --force origin \"+refs/heads/*:refs/heads/*\" || exit 3; "
-        + "else git clone -q --bare -- \"$2\" \"$1\" || exit 3; fi; ";
+    return git_env_prefix() + "if [ -d \"$1\" ]; then git -C \"$1\" fetch -q --tags --force origin \"+refs/heads/*:refs/heads/*\" || exit 3; " +
+           "else git clone -q --bare -- \"$2\" \"$1\" || exit 3; fi; ";
 }
 
 /// Fetch `rev` from `url` into the cache and return the checkout tree id.
@@ -138,14 +136,11 @@ fn fetch_rev(string url, string rev) -> Result<string, string> {
     a.push(rev);
     a.push(tmp);
     a.push(checkouts);
-    let script = bare_sync_script()
-        + "git -C \"$1\" worktree prune; "
-        + "git -C \"$1\" worktree add -q --detach \"$4\" \"$3\" >&2 || exit 4; "
-        + "tree=$(git -C \"$4\" rev-parse 'HEAD^{tree}') || exit 4; "
-        + "dest=\"$5/$tree\"; "
-        + "if [ -d \"$dest\" ]; then git -C \"$1\" worktree remove --force \"$4\" || rm -rf \"$4\"; "
-        + "else git -C \"$1\" worktree move \"$4\" \"$dest\" || exit 4; fi; "
-        + "echo \"$tree\"";
+    let script = bare_sync_script() + "git -C \"$1\" worktree prune; " +
+                 "git -C \"$1\" worktree add -q --detach \"$4\" \"$3\" >&2 || exit 4; " +
+                 "tree=$(git -C \"$4\" rev-parse 'HEAD^{tree}') || exit 4; " + "dest=\"$5/$tree\"; " + "if [ -d \"$dest\" ]; then git -C \"$1\" worktree remove --force \"$4\" || rm -rf \"$4\"; " +
+                 "else git -C \"$1\" worktree move \"$4\" \"$dest\" || exit 4; fi; " +
+                 "echo \"$tree\"";
     let res = sh_capture(script, a)?;
     let (code, body) = res;
     if code == 3 {
@@ -175,10 +170,8 @@ fn ensure_checkout(string url, string rev, string tree) -> Result<string, string
     a.push(url);
     a.push(rev);
     a.push(dest);
-    let script = bare_sync_script()
-        + "git -C \"$1\" worktree prune; "
-        + "rm -rf \"$4\"; "
-        + "git -C \"$1\" worktree add -q --detach \"$4\" \"$3\" >&2 || exit 4";
+    let script = bare_sync_script() + "git -C \"$1\" worktree prune; " + "rm -rf \"$4\"; " +
+                 "git -C \"$1\" worktree add -q --detach \"$4\" \"$3\" >&2 || exit 4";
     let code = sh_run(script, a)?;
     if code == 3 {
         raise git_failed("fetch", url);

@@ -6,9 +6,9 @@ use tests::assert;
 use roots::{link_all, dep_checkouts};
 use toolchain::{dep_ffi_search_paths, grant_flags, package_native_flags, ffi_native_flags};
 use util::{join2, ensure_dir, vec_has};
-use env::{cwd};
-use io::file::{write_text};
-use text::{Searchable, join as text_join};
+use env::cwd;
+use io::file::write_text;
+use text::{Joined, Searchable};
 
 fn write_file(string path, string body) -> Result<int, string> {
     return match write_text(path, body) {
@@ -102,7 +102,7 @@ test("dependency search paths follow the project's own") {
 test("coil package gets each dependency's [[ffi.native]] rows") {
     let base = fixture("depffi_native", plain_proj())?;
     let proj = join2(base, "proj");
-    let f = text_join(package_native_flags(proj)?, " ");
+    let f = (package_native_flags(proj)?).join(" ");
     assert!(f.contains("--ffi-native name=nat,version=0.1.0,path=" + join2(base, "nat/native")));
     // A row whose path leaves the checkout is dropped.
     assert!(f.contains("outside") == false);
@@ -114,8 +114,10 @@ test("coil package gets each dependency's [[ffi.native]] rows") {
 test("the project's own [[ffi.native]] row wins over a dependency's") {
     let toml = plain_proj() + "\n[[ffi.native]]\nname = \"nat\"\npackage = \"my-nat\"\nversion = \"9.9.9\"\npath = \"./vendor\"\n";
     let base = fixture("depffi_own", toml)?;
-    let f = text_join(package_native_flags(join2(base, "proj"))?, " ");
-    assert!(f.contains("name=nat,version=9.9.9,path=" + join2(base, "proj/vendor") + ",package=my-nat"));
+    let f = (package_native_flags(join2(base, "proj"))?).join(" ");
+    assert!(
+        f.contains("name=nat,version=9.9.9,path=" + join2(base, "proj/vendor") + ",package=my-nat"),
+    );
     assert!(f.contains("version=0.1.0") == false);
 }
 
@@ -127,6 +129,6 @@ test("a dependency native is packaged from the dir its search order finds first"
     let base = fixture("depffi_sibling", toml)?;
     let proj = join2(base, "proj");
     write_file(join2(proj, "vendor/libnat.so"), "sibling build\n")?;
-    let f = text_join(package_native_flags(proj)?, " ");
+    let f = (package_native_flags(proj)?).join(" ");
     assert!(f.contains("name=nat,version=0.1.0,path=" + join2(proj, "vendor")));
 }

@@ -2,24 +2,21 @@
 //   engine check → pre script → fetch locked checkouts (verify tree ids)
 //   → resolve (or --locked check) → prune → write lock → engine check
 //   → link .spool/deps → include-hooks → post script.
-use term::{eprintln};
-use io::file::{read_text, write_text};
-use io::fs::{remove_file, remove_dir_all};
-use string::{format};
-use text::{join as text_join};
+use term::eprintln;
+use io::file::read_text;
+use io::file::write_text;
+use io::fs::remove_file;
+use io::fs::remove_dir_all;
+use string::format;
+use text::Joined;
 use util::{join2, path_exists, tsv_field, vec_has};
-use lock::{
-    lock_read_or_empty, lock_write, lock_serialize, lock_pkg_name, lock_pkg_git, lock_pkg_rev,
-    lock_pkg_hash,
-};
+use lock::{lock_read_or_empty, lock_write, lock_serialize, lock_pkg_name, lock_pkg_git, lock_pkg_rev, lock_pkg_hash};
 use manifest::{deps_read, manifest_body, manifest_validate};
-use resolve::{
-    collect, resolve_all, reachable_names, prune, link_rows, check_engine_all,
-};
-use roots::{link_all};
+use resolve::{collect, resolve_all, reachable_names, prune, link_rows, check_engine_all};
+use roots::link_all;
 use lifecycle::{run_project_script, run_include_hooks};
 use git::{ensure_checkout, tree_of};
-use engine::{parse_coil_version_output};
+use engine::parse_coil_version_output;
 use toolchain::{find_coil, coil_version_output};
 
 fn running_coil_version() -> string {
@@ -46,7 +43,7 @@ fn fetch_locked(Vec<string> packages) -> Result<int, string> {
             match remove_dir_all(dest) {
                 Result::Ok(_) => 0,
                 Result::Err(_) => 0,
-            };
+            }
             raise format(
                 "integrity mismatch for %s: expected %s, got %s",
                 lock_pkg_name(p),
@@ -65,7 +62,7 @@ fn todo_names(Vec<string> todo) -> string {
         names.push(tsv_field(todo[i], 0));
         i = i + 1;
     }
-    return text_join(names, ", ");
+    return names.join(", ");
 }
 
 fn dropped_names(Vec<string> before, Vec<string> after) -> string {
@@ -84,7 +81,7 @@ fn dropped_names(Vec<string> before, Vec<string> after) -> string {
         }
         i = i + 1;
     }
-    return text_join(gone, ", ");
+    return gone.join(", ");
 }
 
 /// Run the shared pipeline. `force` names are re-resolved (update).
@@ -172,17 +169,17 @@ fn restore(string root, string toml, string lock_body, bool had_lock) {
     match write_text(join2(root, "coil.toml"), toml) {
         Result::Ok(_) => 0,
         Result::Err(_) => 0,
-    };
+    }
     let lock_path = join2(root, "coil.lock");
     if had_lock {
         match write_text(lock_path, lock_body) {
             Result::Ok(_) => 0,
             Result::Err(_) => 0,
-        };
+        }
     } else {
         match remove_file(lock_path) {
             Result::Ok(_) => 0,
             Result::Err(_) => 0,
-        };
+        }
     }
 }

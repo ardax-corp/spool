@@ -12,7 +12,7 @@
 // `[ffi]` paths resolve against it (spool#38).
 use io::fs::{is_dir, is_symlink, remove_file, symlink, list_dir, realpath};
 use collections::sort;
-use text::{Searchable, slice};
+use text::{Searchable, Text};
 use string::format;
 use util::{join2, ensure_dir, path_exists, path_dirname, tsv_field, vec_has, check_pkg_name};
 
@@ -83,7 +83,7 @@ fn link_dep(string project_root, string name, string checkout_path) -> Result<in
 
 fn strip_hy(string entry) -> string {
     if entry.ends_with(".hy") && entry.len() > 3 {
-        return match slice(entry, 0, entry.len() - 3) {
+        return match entry.slice(0, entry.len() - 3) {
             Result::Ok(x) => x,
             Result::Err(_) => entry,
         };

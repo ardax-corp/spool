@@ -9,7 +9,7 @@ use lock::lock_add_allow_comptime;
 use util::{join2, ensure_dir, vec_has};
 use env::cwd;
 use io::file::write_text;
-use text::{Searchable, join as text_join};
+use text::{Joined, Searchable};
 
 fn write_file(string path, string body) -> Result<int, string> {
     return match write_text(path, body) {
@@ -53,7 +53,7 @@ fn proj_toml() -> string {
 test("the project's grants and cache are flags") {
     let base = fixture("comptime_own", proj_toml())?;
     let proj = join2(base, "proj");
-    let flags = text_join(grant_flags(proj)?, " ");
+    let flags = (grant_flags(proj)?).join(" ");
     assert!(flags.contains("--comptime-read " + join2(proj, "data")));
     assert!(flags.contains("--comptime-env CI"));
     assert!(flags.contains("--comptime-net api.example.com:443"));
@@ -66,7 +66,7 @@ test("an allowed dependency's grants are scoped to its modules") {
     let base = fixture("comptime_dep", proj_toml())?;
     let proj = join2(base, "proj");
     lock_add_allow_comptime(join2(proj, "coil.lock"), "gen")?;
-    let flags = text_join(grant_flags(proj)?, " ");
+    let flags = (grant_flags(proj)?).join(" ");
     assert!(flags.contains("--comptime-env gen=GEN_TOKEN"));
     assert!(flags.contains("--comptime-env util=GEN_TOKEN"));
     assert!(flags.contains("--comptime-read gen=" + join2(base, "gen/schemas")));
@@ -84,6 +84,6 @@ test("[comptime] cache moves the result cache") {
     let toml = "[package]\nname = \"proj\"\nversion = \"0.0.1\"\n\n[comptime]\ncache = \"build/ct\"\n";
     let base = fixture("comptime_cache", toml)?;
     let proj = join2(base, "proj");
-    let flags = text_join(grant_flags(proj)?, " ");
+    let flags = (grant_flags(proj)?).join(" ");
     assert!(flags.contains("--comptime-cache " + join2(proj, "build/ct")));
 }
