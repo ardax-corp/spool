@@ -1,16 +1,13 @@
 // Resolve shared cache root and global config.
 // Helpers first — coil has no forward references within a module.
-use env::{var};
-use io::fs::{exists};
-use io::file::{read_text};
-use text::{Searchable, trim, slice};
+use env::var;
+use io::fs::exists;
+use io::file::read_text;
+use text::{Searchable, Text};
 use util::{home_dir, join2};
 
 fn trim_str(string s) -> string {
-    return match trim(s) {
-        Result::Ok(t) => t,
-        Result::Err(_) => s,
-    };
+    return s.trim();
 }
 
 fn strip_quotes(string s) -> string {
@@ -23,7 +20,7 @@ fn strip_quotes(string s) -> string {
     if s.ends_with("\"") == false {
         return s;
     }
-    return match slice(s, 1, s.len() - 1) {
+    return match s.slice(1, s.len() - 1) {
         Result::Ok(inner) => inner,
         Result::Err(_) => s,
     };
@@ -38,7 +35,7 @@ fn config_path() -> Result<string, string> {
             }
         },
         Result::Err(_) => 0,
-    };
+    }
     let home = home_dir()?;
     return join2(home, ".config/coil/config.toml");
 }
@@ -101,14 +98,14 @@ fn cache_root() -> Result<string, string> {
             }
         },
         Result::Err(_) => 0,
-    };
+    }
 
     match read_cache_dir_from_config() {
         Result::Ok(p) => {
             return p;
         },
         Result::Err(_) => 0,
-    };
+    }
 
     match var("XDG_CACHE_HOME") {
         Result::Ok(xdg) => {
@@ -118,7 +115,7 @@ fn cache_root() -> Result<string, string> {
             }
         },
         Result::Err(_) => 0,
-    };
+    }
 
     let home = home_dir()?;
     return join2(home, ".cache/coil");

@@ -2,21 +2,15 @@
 // pick tags (or `rev` pins) against ls-remote, fetch, and prune the lock.
 // Constraint rows: name \t git \t req \t who  (req is a range, `latest` or `@<rev>`).
 // `latest` is a pin on the remote's HEAD (its default branch), locked like a branch.
-use io::file::{read_text};
-use text::{Searchable, trim, slice};
-use string::{format};
+use io::file::read_text;
+use text::{Searchable, Text};
+use string::format;
 use util::{join2, path_is_absolute, path_exists, tsv_field, vec_has, check_pkg_name, check_git_url};
-use lock::{
-    make_git_pkg_ref, lock_upsert, lock_find, lock_pkg_name, lock_pkg_tag, lock_pkg_hash,
-    lock_pkg_git, lock_pkg_rev, lock_pkg_ref,
-};
-use manifest::{
-    deps_read, dep_kind, dep_name, dep_git, dep_path, dep_req, dep_rev,
-    package_name_read, package_name_parse, package_coil_parse,
-};
+use lock::{make_git_pkg_ref, lock_upsert, lock_find, lock_pkg_name, lock_pkg_tag, lock_pkg_hash, lock_pkg_git, lock_pkg_rev, lock_pkg_ref};
+use manifest::{deps_read, dep_kind, dep_name, dep_git, dep_path, dep_req, dep_rev, package_name_read, package_name_parse, package_coil_parse};
 use tags::{parse_ls_remote, ls_remote_tag_names, ls_remote_sha};
 use semver::{select_tag, select_tag_all, tag_satisfies_all};
-use engine::{enforce_engine};
+use engine::enforce_engine;
 use git::{ls_remote_tags, ls_remote_ref, ls_remote_head, fetch_rev, checkout_path, is_hex_sha};
 
 fn resolve_dep_path(string root, string p) -> string {
@@ -71,7 +65,8 @@ fn push_git_cons(Vec<string> cons, Vec<string> deps, string who) -> Result<Vec<s
         let j = 0;
         while j < cons.len() {
             if con_name(cons[j]) == name && con_git(cons[j]) != git {
-                raise "package " + name + ": git url mismatch (" + con_who(cons[j]) + " wants " + con_git(cons[j]) + ", " + who + " wants " + git + ")";
+                raise "package " + name + ": git url mismatch (" + con_who(cons[j]) + " wants " +
+                      con_git(cons[j]) + ", " + who + " wants " + git + ")";
             }
             j = j + 1;
         }
@@ -165,7 +160,7 @@ fn format_diamond(string name, Vec<string> cons) -> string {
 }
 
 fn strip_at(string req) -> string {
-    return match slice(req, 1, req.len()) {
+    return match req.slice(1, req.len()) {
         Result::Ok(x) => x,
         Result::Err(_) => req,
     };
@@ -233,7 +228,11 @@ fn locked_ok(string locked, string url, Vec<string> reqs, string pin) -> bool {
 /// Walk the graph from the project through locked checkouts.
 /// Returns (constraints, todo) where todo rows are `name \t url`.
 /// Names in `force` are re-resolved even when the lock satisfies them.
-fn collect(string root, Vec<string> packages, Vec<string> force) -> Result<(Vec<string>, Vec<string>), string> {
+fn collect(
+    string root,
+    Vec<string> packages,
+    Vec<string> force,
+) -> Result<(Vec<string>, Vec<string>), string> {
     let cons = root_cons(root)?;
     let scanned: Vec<string> = Vec::new();
     let todo: Vec<string> = Vec::new();
@@ -319,7 +318,11 @@ fn resolve_one(string name, string url, Vec<string> cons) -> Result<string, stri
 }
 
 /// Resolve until the lock satisfies every reachable constraint.
-fn resolve_all(string root, Vec<string> packages, Vec<string> force) -> Result<Vec<string>, string> {
+fn resolve_all(
+    string root,
+    Vec<string> packages,
+    Vec<string> force,
+) -> Result<Vec<string>, string> {
     let pass = 0;
     let f = force;
     while pass < 32 {

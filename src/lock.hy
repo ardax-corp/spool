@@ -4,7 +4,7 @@
 // Optional [hooks] allow_include is a consumer allowlist (not a git identity);
 // [hooks] allow_comptime lists the dependencies whose [comptime] grants apply.
 // Consumer [scripts] hashes live in a lock [scripts] table, not a [[package]] row.
-use text::{Searchable, trim, slice, join as text_join};
+use text::{Joined, Searchable, Text};
 use io::file::read_text;
 use io::file::write_text;
 use io::fs::exists;
@@ -194,14 +194,11 @@ fn quote(string s) -> string {
 }
 
 fn strip_quotes(string s) -> string {
-    let t = match trim(s) {
-        Result::Ok(x) => x,
-        Result::Err(_) => s,
-    };
+    let t = s.trim();
     if t.len() >= 2 {
         if t.starts_with("'") {
             if t.ends_with("'") {
-                return match slice(t, 1, t.len() - 1) {
+                return match t.slice(1, t.len() - 1) {
                     Result::Ok(inner) => inner,
                     Result::Err(_) => t,
                 };
@@ -209,7 +206,7 @@ fn strip_quotes(string s) -> string {
         }
         if t.starts_with("\"") {
             if t.ends_with("\"") {
-                return match slice(t, 1, t.len() - 1) {
+                return match t.slice(1, t.len() - 1) {
                     Result::Ok(inner) => inner,
                     Result::Err(_) => t,
                 };
@@ -227,10 +224,7 @@ fn parse_kv_line(string line) -> Result<(string, string), string> {
     if parts.len() < 2 {
         raise "expected key = value";
     }
-    let key = match trim(parts[0]) {
-        Result::Ok(t) => t,
-        Result::Err(_) => parts[0],
-    };
+    let key = parts[0].trim();
     let rhs = parts[1];
     let i = 2;
     while i < parts.len() {
@@ -258,25 +252,19 @@ fn format_allow_include(Vec<string> names) -> string {
 }
 
 fn parse_string_array(string value) -> Result<Vec<string>, string> {
-    let t = match trim(value) {
-        Result::Ok(x) => x,
-        Result::Err(_) => value,
-    };
+    let t = value.trim();
     if t.starts_with("[") == false {
         raise "corrupt coil.lock: expected allow_include array";
     }
     if t.ends_with("]") == false {
         raise "corrupt coil.lock: expected allow_include array";
     }
-    let inner = slice(t, 1, t.len() - 1)?;
+    let inner = t.slice(1, t.len() - 1)?;
     let pieces = inner.split(",");
     let out: Vec<string> = Vec::new();
     let i = 0;
     while i < pieces.len() {
-        let piece = match trim(pieces[i]) {
-            Result::Ok(x) => x,
-            Result::Err(_) => pieces[i],
-        };
+        let piece = pieces[i].trim();
         i = i + 1;
         if piece.len() == 0 {
             continue;
@@ -332,7 +320,11 @@ fn scripts_have_any(Vec<string> scripts) -> bool {
     return false;
 }
 
-fn lock_serialize_all(Vec<string> packages, Vec<string> allow_include, Vec<string> scripts) -> string {
+fn lock_serialize_all(
+    Vec<string> packages,
+    Vec<string> allow_include,
+    Vec<string> scripts,
+) -> string {
     let none: Vec<(string, string)> = Vec::new();
     return lock_serialize_natives(packages, allow_include, scripts, none);
 }
@@ -506,10 +498,7 @@ fn lock_parse_all(string source) -> Result<(Vec<string>, Vec<string>, Vec<string
     let i = 0;
 
     while i < lines.len() {
-        let line = match trim(lines[i]) {
-            Result::Ok(t) => t,
-            Result::Err(_) => lines[i],
-        };
+        let line = lines[i].trim();
         i = i + 1;
         if line.len() == 0 {
             continue;
@@ -573,9 +562,9 @@ fn lock_parse_all(string source) -> Result<(Vec<string>, Vec<string>, Vec<string
             let (k, v) = kv;
             if k == "allow_include" {
                 allow = parse_string_array(v)?;
-            } else if k == "allow_comptime" {
+            } else if k == "allow_comptime" {} else {
                 // Read by lock_allow_comptime.
-            } else {
+
                 raise format("corrupt coil.lock: unknown key %s", k);
             }
             continue;
@@ -676,10 +665,7 @@ fn lock_native_parse(string source) -> Result<Vec<string>, string> {
     let sha = "";
     let i = 0;
     while i < lines.len() {
-        let line = match trim(lines[i]) {
-            Result::Ok(t) => t,
-            Result::Err(_) => lines[i],
-        };
+        let line = lines[i].trim();
         i = i + 1;
         if line.len() == 0 || line.starts_with("#") {
             continue;
@@ -732,10 +718,7 @@ fn lock_native_blocks(string source) -> Vec<(string, string)> {
     let block = "";
     let i = 0;
     while i < lines.len() {
-        let line = match trim(lines[i]) {
-            Result::Ok(t) => t,
-            Result::Err(_) => lines[i],
-        };
+        let line = lines[i].trim();
         i = i + 1;
         if line.len() == 0 || line.starts_with("#") {
             continue;
@@ -814,10 +797,12 @@ fn lock_parse_scripts(string source) -> Result<Vec<string>, string> {
     return scripts;
 }
 
-fn lock_write_all(string path, Vec<string> packages, Vec<string> allow_include, Vec<string> scripts) -> Result<
-    int,
-    string,
-> {
+fn lock_write_all(
+    string path,
+    Vec<string> packages,
+    Vec<string> allow_include,
+    Vec<string> scripts,
+) -> Result<int, string> {
     let natives: Vec<(string, string)> = Vec::new();
     let ct: Vec<string> = Vec::new();
     let present = match exists(path) {
@@ -831,7 +816,7 @@ fn lock_write_all(string path, Vec<string> packages, Vec<string> allow_include, 
                 ct = lock_allow_comptime(old)?;
             },
             Result::Err(_) => {},
-        };
+        }
     }
     let body = lock_serialize_with(packages, allow_include, ct, scripts, natives);
     return match write_text(path, body) {
@@ -856,10 +841,11 @@ fn lock_read_scripts_or_empty(string path) -> Result<Vec<string>, string> {
     return lock_parse_scripts(body)?;
 }
 
-fn lock_write_full(string path, Vec<string> packages, Vec<string> allow_include) -> Result<
-    int,
-    string,
-> {
+fn lock_write_full(
+    string path,
+    Vec<string> packages,
+    Vec<string> allow_include,
+) -> Result<int, string> {
     let scripts = lock_read_scripts_or_empty(path)?;
     return lock_write_all(path, packages, allow_include, scripts)?;
 }
@@ -930,10 +916,7 @@ fn lock_allow_comptime(string source) -> Result<Vec<string>, string> {
     let in_hooks = false;
     let i = 0;
     while i < lines.len() {
-        let line = match trim(lines[i]) {
-            Result::Ok(t) => t,
-            Result::Err(_) => lines[i],
-        };
+        let line = lines[i].trim();
         i = i + 1;
         if line.len() == 0 || line.starts_with("#") {
             continue;
@@ -974,7 +957,7 @@ fn lock_add_allow_comptime(string path, string pkg) -> Result<int, string> {
                 ct = lock_allow_comptime(old)?;
             },
             Result::Err(_) => {},
-        };
+        }
     }
     if vec_contains(ct, pkg) == false {
         ct.push(pkg);

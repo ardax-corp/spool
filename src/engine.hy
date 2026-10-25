@@ -1,23 +1,17 @@
 // Coil engine-range check helpers (no filesystem, no path).
-use text::{Searchable, trim, slice};
+use text::{Searchable, Text};
 use semver::{parse_semver, satisfies_range};
 
 fn parse_coil_version_output(string raw) -> Result<string, string> {
-    let s = match trim(raw) {
-        Result::Ok(t) => t,
-        Result::Err(_) => raw,
-    };
+    let s = raw.trim();
     if s.starts_with("coil") == false {
         raise "unrecognized coil --version output";
     }
-    let rest = match slice(s, 4, s.len()) {
+    let rest = match s.slice(4, s.len()) {
         Result::Ok(r) => r,
         Result::Err(_) => raise "unrecognized coil --version output",
     };
-    rest = match trim(rest) {
-        Result::Ok(t) => t,
-        Result::Err(_) => rest,
-    };
+    rest = rest.trim();
     if rest.len() == 0 {
         raise "unrecognized coil --version output";
     }
@@ -32,10 +26,7 @@ fn parse_coil_version_output(string raw) -> Result<string, string> {
 }
 
 fn enforce_engine(string pkg, string range, string running) -> Result<int, string> {
-    let req = match trim(range) {
-        Result::Ok(t) => t,
-        Result::Err(_) => range,
-    };
+    let req = range.trim();
     if req.len() == 0 {
         return 0;
     }
@@ -61,10 +52,10 @@ fn enforce_engine(string pkg, string range, string running) -> Result<int, strin
                 Result::Err(_) => {
                     raise msg;
                 },
-            };
+            }
         },
         Result::Err(_) => {
             raise msg;
         },
-    };
+    }
 }

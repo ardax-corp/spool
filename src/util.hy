@@ -1,10 +1,12 @@
 // Path, text and validation helpers shared across modules (no env::exec).
 // String joins live here: stdlib `path` is a Path class and shadows join/dirname.
-use io::fs::{exists, create_dir_all};
-use io::file::{write_text, read_text};
-use env::{var};
-use string::{format};
-use text::{Searchable, slice, trim};
+use io::fs::exists;
+use io::fs::create_dir_all;
+use io::file::write_text;
+use io::file::read_text;
+use env::var;
+use string::format;
+use text::{Searchable, Text};
 
 fn join2(string a, string b) -> string {
     if a.len() == 0 {
@@ -43,7 +45,7 @@ fn path_dirname(string p) -> string {
         if s.ends_with("/") == false {
             break;
         }
-        let chopped = match slice(s, 0, s.len() - 1) {
+        let chopped = match s.slice(0, s.len() - 1) {
             Result::Ok(x) => x,
             Result::Err(_) => s,
         };
@@ -118,10 +120,7 @@ fn read_or_empty(string p) -> string {
 }
 
 fn trim_or(string s) -> string {
-    return match trim(s) {
-        Result::Ok(t) => t,
-        Result::Err(_) => s,
-    };
+    return s.trim();
 }
 
 fn lines_of(string body) -> Vec<string> {
@@ -179,7 +178,7 @@ fn valid_pkg_name(string name) -> bool {
     let digits = "0123456789";
     let i = 0;
     while i < n {
-        let c = match slice(name, i, i + 1) {
+        let c = match name.slice(i, i + 1) {
             Result::Ok(s) => s,
             Result::Err(_) => {
                 return false;
@@ -233,7 +232,10 @@ fn valid_git_url(string url) -> bool {
 
 fn check_git_url(string url) -> Result<int, string> {
     if valid_git_url(url) == false {
-        raise format("unsupported git url `%s` (use https://, ssh://, git@host:, git:// or file://)", url);
+        raise format(
+            "unsupported git url `%s` (use https://, ssh://, git@host:, git:// or file://)",
+            url,
+        );
     }
     return 0;
 }

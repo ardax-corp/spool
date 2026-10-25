@@ -1,6 +1,6 @@
 // Pure git-URL → cache key helpers (no env::exec — safe for coil test).
-use text::{Searchable, trim, slice};
-use string::{format};
+use text::{Searchable, Text};
+use string::format;
 
 fn replace_first_colon(string s) -> string {
     if s.contains(":") == false {
@@ -20,10 +20,7 @@ fn replace_first_colon(string s) -> string {
 }
 
 fn strip_scheme(string url) -> string {
-    let u = match trim(url) {
-        Result::Ok(t) => t,
-        Result::Err(_) => url,
-    };
+    let u = url.trim();
     if u.starts_with("https://") {
         let parts = u.split("https://");
         if parts.len() >= 2 {
@@ -39,14 +36,20 @@ fn strip_scheme(string url) -> string {
         return u;
     }
     if u.starts_with("ssh://") || u.starts_with("git://") {
-        let after = match slice(u, 6, u.len()) {
+        let after = match u.slice(6, u.len()) {
             Result::Ok(x) => x,
             Result::Err(_) => u,
         };
-        let at = (match after.find("@") { Option::Some(sp) => sp.start, Option::None => -1 });
-        let slash = (match after.find("/") { Option::Some(sp) => sp.start, Option::None => -1 });
+        let at = match after.find("@") {
+            Option::Some(sp) => sp.start,
+            Option::None => -1,
+        };
+        let slash = match after.find("/") {
+            Option::Some(sp) => sp.start,
+            Option::None => -1,
+        };
         if at >= 0 && (slash < 0 || at < slash) {
-            return match slice(after, at + 1, after.len()) {
+            return match after.slice(at + 1, after.len()) {
                 Result::Ok(x) => x,
                 Result::Err(_) => after,
             };
@@ -75,13 +78,13 @@ fn strip_scheme(string url) -> string {
 fn strip_git_suffix(string s) -> string {
     let t = s;
     while t.ends_with("/") && t.len() > 1 {
-        t = match slice(t, 0, t.len() - 1) {
+        t = match t.slice(0, t.len() - 1) {
             Result::Ok(x) => x,
             Result::Err(_) => t,
         };
     }
     if t.ends_with(".git") && t.len() > 4 {
-        return match slice(t, 0, t.len() - 4) {
+        return match t.slice(0, t.len() - 4) {
             Result::Ok(x) => x,
             Result::Err(_) => t,
         };

@@ -1,6 +1,6 @@
 // Parse `git ls-remote --tags` output (prefer peeled annotated-tag SHAs).
-use text::{Searchable, trim};
-use string::{format};
+use text::{Searchable, Text};
+use string::format;
 
 fn ls_field(string row, int idx) -> string {
     let parts = row.split("\t");
@@ -12,25 +12,25 @@ fn ls_field(string row, int idx) -> string {
 
 fn split_sha_ref(string line) -> Result<(string, string), string> {
     if line.contains("\t") {
-        return match line.split_once("\t") { Option::Some(p) => p, Option::None => raise "separator not found" };
+        return match line.split_once("\t") {
+            Option::Some(p) => p,
+            Option::None => raise "separator not found",
+        };
     }
     if !line.contains(" ") {
         raise "expected sha and ref";
     }
-    let pair = match line.split_once(" ") { Option::Some(p) => p, Option::None => raise "separator not found" };
-    let (sha, rest) = pair;
-    let refname = match trim(rest) {
-        Result::Ok(t) => t,
-        Result::Err(_) => rest,
+    let pair = match line.split_once(" ") {
+        Option::Some(p) => p,
+        Option::None => raise "separator not found",
     };
+    let (sha, rest) = pair;
+    let refname = rest.trim();
     return (sha, refname);
 }
 
 fn parse_tag_ref(string refname) -> Result<(string, bool), string> {
-    let r = match trim(refname) {
-        Result::Ok(t) => t,
-        Result::Err(_) => refname,
-    };
+    let r = refname.trim();
     if r.starts_with("refs/tags/") == false {
         raise "not a tag ref";
     }
@@ -74,10 +74,7 @@ fn parse_ls_remote(string body) -> Result<Vec<string>, string> {
     let rows: Vec<string> = Vec::new();
     let i = 0;
     while i < lines.len() {
-        let line = match trim(lines[i]) {
-            Result::Ok(t) => t,
-            Result::Err(_) => lines[i],
-        };
+        let line = lines[i].trim();
         i = i + 1;
         if line.len() == 0 {
             continue;
@@ -91,7 +88,7 @@ fn parse_ls_remote(string body) -> Result<Vec<string>, string> {
                 rows = upsert_tag_sha(rows, tag, sha, peeled);
             },
             Result::Err(_) => {},
-        };
+        }
     }
     return rows;
 }
@@ -125,20 +122,14 @@ fn ls_remote_exact_sha(string body, string want) -> Result<string, string> {
     let lines = body.split("\n");
     let i = 0;
     while i < lines.len() {
-        let line = match trim(lines[i]) {
-            Result::Ok(t) => t,
-            Result::Err(_) => lines[i],
-        };
+        let line = lines[i].trim();
         i = i + 1;
         if line.len() == 0 {
             continue;
         }
         let pair = split_sha_ref(line)?;
         let (sha, refname) = pair;
-        let r = match trim(refname) {
-            Result::Ok(t) => t,
-            Result::Err(_) => refname,
-        };
+        let r = refname.trim();
         if r == want {
             return sha;
         }
@@ -169,7 +160,7 @@ fn ls_remote_ref_sha(string body, string rev) -> Result<string, string> {
                 return sha;
             },
             Result::Err(_) => {},
-        };
+        }
         i = i + 1;
     }
     raise format("no ref %s in ls-remote output", rev);

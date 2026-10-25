@@ -1,9 +1,10 @@
 // Parse and update coil.toml [dependencies] (git / path inline tables).
 // Manifest decode uses coil-toml; deps_insert_line still edits text to preserve comments.
-use text::{Searchable, trim, slice, to_lower, join as text_join};
-use io::file::{read_text, write_text};
-use io::fs::{exists};
-use string::{format};
+use text::{Joined, Searchable, Text};
+use io::file::read_text;
+use io::file::write_text;
+use io::fs::exists;
+use string::format;
 use toml::{Toml, TomlValue, TomlError};
 
 fn make_git_rev_dep(string name, string git, string version, string rev) -> string {
@@ -87,7 +88,7 @@ fn toml_err(TomlError e) -> string {
         TomlError::Number { line, column } => {
             return format("toml number at %i:%i", line, column);
         },
-    };
+    }
 }
 
 fn decode_manifest(string body) -> Result<TomlValue, string> {
@@ -100,7 +101,7 @@ fn decode_manifest(string body) -> Result<TomlValue, string> {
         Result::Err(e) => {
             raise toml_err(e);
         },
-    };
+    }
 }
 
 fn table_get(TomlValue root, string key) -> Option<TomlValue> {
@@ -177,7 +178,11 @@ fn parse_dep_spec_value(string name, TomlValue value) -> Result<string, string> 
             raise format("git dependency %s needs version or rev", name);
         }
         if version.len() > 0 && rev.len() > 0 {
-            raise format("git dependency %s: version = \"%s\" cannot be combined with rev", name, version);
+            raise format(
+                "git dependency %s: version = \"%s\" cannot be combined with rev",
+                name,
+                version,
+            );
         }
         return make_git_rev_dep(name, git, version, rev);
     }
@@ -215,7 +220,7 @@ fn deps_parse(string body) -> Result<Vec<string>, string> {
             }
             return out;
         },
-    };
+    }
 }
 
 fn package_field_parse(string body, string key) -> string {
@@ -228,12 +233,12 @@ fn package_field_parse(string body, string key) -> string {
                 Option::Some(pkg) => {
                     return table_string(pkg, key);
                 },
-            };
+            }
         },
         Result::Err(_) => {
             return "";
         },
-    };
+    }
 }
 
 fn package_name_parse(string body) -> string {
@@ -370,7 +375,7 @@ fn scripts_parse(string body) -> Result<Vec<string>, string> {
             }
             return out;
         },
-    };
+    }
 }
 
 fn scripts_read(string path) -> Result<Vec<string>, string> {
@@ -463,10 +468,7 @@ fn deps_insert_line(string body, string line) -> Result<string, string> {
     let saw_deps = false;
     while i < lines.len() {
         let raw = lines[i];
-        let trimmed = match trim(raw) {
-            Result::Ok(t) => t,
-            Result::Err(_) => raw,
-        };
+        let trimmed = raw.trim();
         i = i + 1;
         if trimmed.starts_with("[") {
             if in_deps && inserted == false {
@@ -492,7 +494,7 @@ fn deps_insert_line(string body, string line) -> Result<string, string> {
         out.push("[dependencies]");
         out.push(line);
     }
-    let joined = text_join(out, "\n");
+    let joined = out.join("\n");
     if joined.ends_with("\n") == false {
         joined = joined + "\n";
     }
@@ -562,7 +564,7 @@ fn section_string(string body, string section, string key) -> Result<string, str
         Option::Some(tab) => {
             return table_string(tab, key);
         },
-    };
+    }
 }
 
 fn section_bool(string body, string section, string key) -> Result<bool, string> {
@@ -581,7 +583,7 @@ fn section_bool(string body, string section, string key) -> Result<bool, string>
             }
             return v.flag;
         },
-    };
+    }
 }
 
 fn section_strings(string body, string section, string key) -> Result<Vec<string>, string> {
@@ -611,7 +613,7 @@ fn section_strings(string body, string section, string key) -> Result<Vec<string
             }
             return out;
         },
-    };
+    }
 }
 
 /// Keys spool knows in a coil.toml section; "" for an unknown section.
@@ -707,10 +709,7 @@ fn deps_remove_line(string body, string name) -> Result<string, string> {
     while i < lines.len() {
         let raw = lines[i];
         i = i + 1;
-        let t = match trim(raw) {
-            Result::Ok(x) => x,
-            Result::Err(_) => raw,
-        };
+        let t = raw.trim();
         if t.starts_with("[") {
             in_deps = t == "[dependencies]";
             out.push(raw);
@@ -718,14 +717,11 @@ fn deps_remove_line(string body, string name) -> Result<string, string> {
         }
         if in_deps && removed == false {
             if t.starts_with(name) {
-                let tail = match slice(t, name.len(), t.len()) {
+                let tail = match t.slice(name.len(), t.len()) {
                     Result::Ok(x) => x,
                     Result::Err(_) => "",
                 };
-                let rest = match trim(tail) {
-                    Result::Ok(x) => x,
-                    Result::Err(_) => tail,
-                };
+                let rest = tail.trim();
                 if rest.starts_with("=") {
                     if rest.contains("}") == false {
                         raise format("dependency %s spans several lines; remove it by hand", name);
@@ -740,7 +736,7 @@ fn deps_remove_line(string body, string name) -> Result<string, string> {
     if removed == false {
         raise format("dependency %s is not declared in coil.toml", name);
     }
-    return text_join(out, "\n");
+    return out.join("\n");
 }
 
 fn deps_remove(string path, string name) -> Result<int, string> {
@@ -782,7 +778,7 @@ fn trusted_deps_parse(string body) -> Result<Vec<string>, string> {
             }
             return out;
         },
-    };
+    }
 }
 
 // `[[ffi.native]]` rows as tab-separated records:
@@ -824,11 +820,11 @@ fn native_sha256(string r) -> string {
 
 /// `s` lowercased when it is 64 hex digits, else an error naming row `name`.
 fn native_sha256_value(string name, string s) -> Result<string, string> {
-    let low = to_lower(s)?;
+    let low = s.to_lower();
     let ok = low.len() == 64;
     let i = 0;
     while ok && i < 64 {
-        let c = slice(low, i, i + 1)?;
+        let c = low.slice(i, i + 1)?;
         if "0123456789abcdef".contains(c) == false {
             ok = false;
         }
@@ -927,8 +923,8 @@ fn ffi_native_row(TomlValue row, int idx) -> Result<string, string> {
     if sha.len() > 0 {
         sha = native_sha256_value(name, sha)?;
     }
-    return name + "\t" + package + "\t" + version + "\t" + path + "\t" + url + "\t" + requires + "\t" + hint
-        + "\t" + sha;
+    return name + "\t" + package + "\t" + version + "\t" + path + "\t" + url + "\t" + requires +
+           "\t" + hint + "\t" + sha;
 }
 
 /// `[[ffi.native]]` rows (see the record layout above). Unknown keys hard-error.
@@ -954,5 +950,5 @@ fn ffi_natives_parse(string body) -> Result<Vec<string>, string> {
             }
             return out;
         },
-    };
+    }
 }

@@ -1,18 +1,15 @@
 // Semver tag matching for spool (MAJOR.MINOR.PATCH, optional v prefix).
 // Ranges: caret (^), comparison (>= > <= < =), exact, or *.
-use text::{Searchable, trim, slice};
-use conv::{parse_int};
-use string::{format};
+use text::{Searchable, Text};
+use conv::parse_int;
+use string::format;
 
 enum SemVer {
     Ver(int, int, int),
 }
 
 fn strip_v(string raw) -> string {
-    let s = match trim(raw) {
-        Result::Ok(t) => t,
-        Result::Err(_) => raw,
-    };
+    let s = raw.trim();
     if s.starts_with("v") == false {
         return s;
     }
@@ -44,33 +41,36 @@ fn rest_after(string s, string prefix) -> string {
     if s.starts_with(prefix) == false {
         return s;
     }
-    let rest = match slice(s, prefix.len(), s.len()) {
+    let rest = match s.slice(prefix.len(), s.len()) {
         Result::Ok(r) => r,
         Result::Err(_) => {
             return s;
         },
     };
-    return match trim(rest) {
-        Result::Ok(t) => t,
-        Result::Err(_) => rest,
-    };
+    return rest.trim();
 }
 
 /// Cut a `-prerelease` / `+build` suffix (`1.2.3-rc.1` → `1.2.3`).
 fn strip_pre(string s) -> string {
     let cut = s.len();
-    let dash = (match s.find("-") { Option::Some(sp) => sp.start, Option::None => -1 });
+    let dash = match s.find("-") {
+        Option::Some(sp) => sp.start,
+        Option::None => -1,
+    };
     if dash >= 0 && dash < cut {
         cut = dash;
     }
-    let plus = (match s.find("+") { Option::Some(sp) => sp.start, Option::None => -1 });
+    let plus = match s.find("+") {
+        Option::Some(sp) => sp.start,
+        Option::None => -1,
+    };
     if plus >= 0 && plus < cut {
         cut = plus;
     }
     if cut == s.len() {
         return s;
     }
-    return match slice(s, 0, cut) {
+    return match s.slice(0, cut) {
         Result::Ok(x) => x,
         Result::Err(_) => s,
     };
@@ -129,9 +129,9 @@ fn cmp_semver(SemVer a, SemVer b) -> int {
                     }
                     return 0;
                 },
-            };
+            }
         },
-    };
+    }
 }
 
 fn satisfies_caret_base(SemVer base, SemVer version) -> bool {
@@ -156,9 +156,9 @@ fn satisfies_caret_base(SemVer base, SemVer version) -> bool {
                     }
                     return vmaj == 0 && vmin == 0 && vpat == base_pat;
                 },
-            };
+            }
         },
-    };
+    }
 }
 
 fn component_count(string raw) -> int {
@@ -186,16 +186,13 @@ fn satisfies_tilde(string raw, SemVer version) -> Result<bool, string> {
                     }
                     return vmaj == base_maj && vmin == base_min;
                 },
-            };
+            }
         },
-    };
+    }
 }
 
 fn satisfies_range(string requirement, SemVer version) -> Result<bool, string> {
-    let req = match trim(requirement) {
-        Result::Ok(t) => t,
-        Result::Err(_) => requirement,
-    };
+    let req = requirement.trim();
     if req == "*" {
         return true;
     }
@@ -283,9 +280,8 @@ fn select_tag(string requirement, Vec<string> tags) -> Result<string, string> {
                     }
                 }
             },
-            Result::Err(_) => {
-            },
-        };
+            Result::Err(_) => {},
+        }
     }
     if has_best == false {
         raise format("no tag matches requirement %s", requirement);
@@ -337,9 +333,8 @@ fn select_tag_all(Vec<string> reqs, Vec<string> tags) -> Result<string, string> 
                     }
                 }
             },
-            Result::Err(_) => {
-            },
-        };
+            Result::Err(_) => {},
+        }
     }
     if has_best == false {
         raise "no tag matches combined requirements";
