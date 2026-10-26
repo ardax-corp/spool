@@ -63,3 +63,24 @@ jobs:
 
       - name: Smoke tests
         run: ./scripts/smoke_all.sh
+
+  # The musl build edge.yml publishes, inside Alpine (JavaScript actions
+  # cannot run in an Alpine job container): coil from its musl archive.
+  musl:
+    name: build (x86_64-unknown-linux-musl)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Bootstrap spool (Alpine)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          docker run --rm -e GITHUB_TOKEN -v "$PWD":/src -w /src alpine:3.20 sh -c '
+            set -eu
+            apk add --no-cache bash build-base curl git libffi pcre2-dev tar
+            git config --global --add safe.directory "*"
+            ./bootstrap.sh --channel edge
+            ./target/spool --version
+            ./target/spool doctor
+          '

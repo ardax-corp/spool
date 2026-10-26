@@ -2,19 +2,22 @@ name: Edge
 
 # One rolling pre-release, `edge`, with a spool binary per host. It is
 # rebuilt after every green CI run on main: the `edge` tag moves to that
-# commit and every asset is replaced. No other tags or releases are made.
+# commit and every asset is replaced. A pushed v* tag builds the same
+# archives for a release of its own.
 
 on:
   workflow_run:
     workflows: [CI]
     types: [completed]
     branches: [main]
+  push:
+    tags: ["v*"]
   workflow_dispatch:
 
-# A newer main build supersedes one still running.
+# A newer main build supersedes one still running; each tag builds once.
 concurrency:
-  group: edge
-  cancel-in-progress: true
+  group: ${{ github.ref_type == 'tag' && github.ref || 'edge' }}
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
 
 permissions:
   contents: write
@@ -23,11 +26,19 @@ env:
   CARGO_TERM_COLOR: always
   # The CI run's commit (workflow_run), or the dispatched ref's.
   EDGE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+  # coil-lang release spool is built with. Tagged builds too: coil-lang has
+  # no tagged release yet.
+  COIL_CHANNEL: edge
 
 jobs:
   build:
     name: spool (${{ matrix.triple }})
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    # Only pushes to main: a pull request whose head branch is named `main`
+    # also reports branch `main` here.
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push')
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -39,15 +50,20 @@ jobs:
             triple: aarch64-unknown-linux-gnu
           - os: macos-latest
             triple: aarch64-apple-darwin
+          # Built inside Alpine with coil's own musl archive.
+          - os: ubuntu-latest
+            triple: x86_64-unknown-linux-musl
+            musl: true
           # x86_64-apple-darwin: GitHub's Intel macOS runners queue for hours
-          # (coil-lang COI-100). Windows: spool needs a POSIX `sh`.
+          # (coil-lang COI-100); coil-lang publishes no such build either.
+          # Windows: spool needs a POSIX `sh`.
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ env.EDGE_SHA }}
 
       - name: Install system deps (Linux)
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && !matrix.musl
         run: |
           sudo apt-get update
           sudo apt-get install -y libffi-dev libpcre2-dev build-essential
@@ -59,8 +75,10 @@ jobs:
           pkg-config --exists libffi
 
       - uses: dtolnay/rust-toolchain@stable
+        if: ${{ !matrix.musl }}
 
       - name: Check host triple
+        if: ${{ !matrix.musl }}
         run: |
           host="$(rustc -vV | sed -n 's/^host: //p')"
           if [[ "$host" != "${{ matrix.triple }}" ]]; then
@@ -69,6 +87,7 @@ jobs:
           fi
 
       - name: Cache coil build
+        if: ${{ !matrix.musl }}
         uses: actions/cache@v4
         with:
           path: .bootstrap/coil-lang/target
@@ -78,11 +97,29 @@ jobs:
       # coil comes from the coil-lang `edge` release; the source build (and the
       # Rust toolchain and cache above) is only the fallback.
       - name: Bootstrap spool
+        if: ${{ !matrix.musl }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: ./bootstrap.sh --channel edge
+        run: ./bootstrap.sh --channel "$COIL_CHANNEL"
+
+      # JavaScript actions cannot run in an Alpine job container, so the
+      # musl build runs in one by hand. coil comes from its musl archive.
+      - name: Bootstrap spool (musl / Alpine)
+        if: ${{ matrix.musl }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          docker run --rm -e GITHUB_TOKEN -e COIL_CHANNEL -v "$PWD":/src -w /src alpine:3.20 sh -c '
+            set -eu
+            apk add --no-cache bash build-base curl git libffi pcre2-dev tar
+            git config --global --add safe.directory "*"
+            ./bootstrap.sh --channel "$COIL_CHANNEL"
+            ./target/spool --version
+          '
+          sudo chown -R "$(id -u):$(id -g)" .
 
       - name: Smoke check
+        if: ${{ !matrix.musl }}
         run: ./target/spool --version
 
       - name: Package
@@ -122,11 +159,13 @@ jobs:
           cat dist/SHA256SUMS
 
       - name: Move the edge tag
+        if: github.ref_type != 'tag'
         run: |
           git tag -f edge "$EDGE_SHA"
           git push -f origin refs/tags/edge
 
       - name: Update the edge release
+        if: github.ref_type != 'tag'
         run: |
           notes="Rolling pre-release of spool, rebuilt from main after every green CI run.
 
@@ -147,3 +186,13 @@ jobs:
               gh release delete-asset edge "$name" --yes
             fi
           done
+
+      - name: Publish the tagged release
+        if: github.ref_type == 'tag'
+        run: |
+          tag="$GITHUB_REF_NAME"
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" --verify-tag --title "$tag" \
+              --notes "spool $tag. Each archive holds the \`spool\` executable and \`libprocess\` (keep them in one directory); \`SHA256SUMS\` lists their checksums."
+          fi
+          gh release upload "$tag" dist/* --clobber
