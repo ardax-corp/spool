@@ -95,7 +95,6 @@ version = "0.0.1"
 [module]
 roots = ["./src"]
 [env]
-allow_exec = true
 EOF
   echo "// app" > "$1/src/main.hy"
 }

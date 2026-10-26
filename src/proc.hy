@@ -1,6 +1,6 @@
 // Child processes. Values never enter a shell script: every script here is a
 // constant and data is passed as positional arguments ("$1", "$2", …).
-use env::{exec};
+use process::{exec};
 use io::file::{read_text};
 use io::fs::{remove_file};
 use clock::{wall_nanos};

@@ -557,16 +557,13 @@ fn grant_flags(string root) -> Result<Vec<string>, string> {
     if section_bool(body, "permissions", "all")? {
         out.push("--allow-all");
     }
-    let caps = ["read", "write", "net", "env", "exec", "exit", "attach"];
+    let caps = ["read", "write", "net", "env", "exit", "attach"];
     let c = 0;
     while c < caps.len() {
         if section_bool(body, "permissions", caps[c])? {
             out.push("--allow-" + caps[c]);
         }
         c = c + 1;
-    }
-    if section_bool(body, "env", "allow_exec")? {
-        out.push("--allow-exec");
     }
     if section_bool(body, "env", "allow_exit")? {
         out.push("--allow-exit");
@@ -609,7 +606,7 @@ fn grant_flags(string root) -> Result<Vec<string>, string> {
 
 /// The `[comptime]` grant keys, each a `--comptime-<key>` flag.
 fn comptime_kinds() -> Vec<string> {
-    return ["read", "write", "env", "exec", "net"];
+    return ["read", "write", "env", "net"];
 }
 
 /// `--comptime-<key> VALUE` for each `[comptime]` grant in `body`, each value

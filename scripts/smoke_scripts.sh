@@ -50,7 +50,6 @@ version = "0.0.1"
 [module]
 roots = ["./src"]
 [env]
-allow_exec = true
 
 [scripts]
 pre_install = "./scripts/pre-install.sh"

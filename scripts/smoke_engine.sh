@@ -61,7 +61,6 @@ include = "./hooks/include.sh"
 [module]
 roots = ["./src"]
 [env]
-allow_exec = true
 
 [scripts]
 pre_install = "./hooks/preinstall.sh"

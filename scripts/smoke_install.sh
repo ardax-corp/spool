@@ -32,7 +32,6 @@ version = "0.0.1"
 roots = ["./src"]
 
 [env]
-allow_exec = true
 
 [dependencies]
 fixture = { git = "$URL", version = "^1" }

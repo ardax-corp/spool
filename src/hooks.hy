@@ -1,5 +1,4 @@
 // Fail-closed hook trust (COI-227). 103/104 must call may_run_hook before any sh.
-// allow_exec is not a parameter and is not a gate.
 use string::{format};
 
 fn hook_kind_include() -> string {

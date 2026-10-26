@@ -10,8 +10,13 @@ roots = ["./src"]
 file = "spool.hy"
 
 [env]
-allow_exec = true
 allow_exit = true
+
+# spool runs git, cc and coil through coil-process (libprocess, built by
+# bootstrap.sh beside the executable).
+[ffi]
+search_paths = [".bootstrap/coil-process/native"]
+allow = ["process"]
 
 [permissions]
 read = true
@@ -23,3 +28,4 @@ env = true
 toml = { git = "https://github.com/ardax-corp/coil-toml.git", rev = "3286add4c8286627146cb300c23ff026b4d9a042" }
 # Read API (get/at/as_*) for coil test/mutate --json events: ardax-corp/coil-json#10.
 json = { git = "https://github.com/ardax-corp/coil-json.git", rev = "b39175852e270c0bd3cd0c0a48b50de0b08c9f61" }
+process = { git = "https://github.com/ardax-corp/coil-process.git", rev = "6efd3a42a8676effb5a977186b29038799fe3094", trusted = true }

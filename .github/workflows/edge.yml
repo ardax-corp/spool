@@ -89,7 +89,8 @@ jobs:
         run: |
           mkdir -p dist
           archive="spool-${{ matrix.triple }}.tar.gz"
-          tar -C target -czf "dist/$archive" spool
+          lib="$(cd target && ls libprocess.so libprocess.dylib 2>/dev/null | head -n 1)"
+          tar -C target -czf "dist/$archive" spool "$lib"
           (cd dist && shasum -a 256 "$archive" > "$archive.sha256")
 
       - uses: actions/upload-artifact@v4
@@ -133,7 +134,7 @@ jobs:
           Built: $(date -u '+%Y-%m-%d %H:%M UTC')
 
           Not a stable release: the binaries and this tag are replaced on every build.
-          Each archive holds a single \`spool\` executable; \`SHA256SUMS\` lists their checksums."
+          Each archive holds the \`spool\` executable and \`libprocess\` (keep them in one directory); \`SHA256SUMS\` lists their checksums."
           if gh release view edge >/dev/null 2>&1; then
             gh release edit edge --prerelease --title "edge" --notes "$notes"
           else

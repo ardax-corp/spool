@@ -111,7 +111,7 @@ builds coil from source, which needs `cargo`, libffi and pcre2 dev files.
 
 1. Looks for a usable coil: `$COIL`, `coil` on `PATH`, `~/.coil/bin/coil`, or a
    previous bootstrap build. A candidate needs to meet `COIL_MIN_VERSION`, have
-   `coil package`, and compile a probe that uses `env::args/exec/exit`. A
+   `coil package`, and compile a probe that uses `env::args/exit`. A
    previous bootstrap build is reused only while its checkout is still the
    newest `COIL_LANG_REF`; otherwise it is rebuilt (incrementally). It warns
    when the coil lacks `coil mutate` or `coil test --json`.
@@ -242,7 +242,7 @@ start. From any folder inside the project it links missing dependencies
 (scripts off), then starts `coil lsp` with the project directory
 (`--workspace`) and the same roots (`[module].roots`, `.spool/deps`, the
 stdlib, each dependency's `src/`) and grants as every other command, so imports resolve and granted
-calls such as `env::exec` are not flagged, whatever folder the editor sent.
+calls such as `env::exit` are not flagged, whatever folder the editor sent.
 That needs a coil whose `coil lsp` accepts `--root` (ardax-corp/coil-lang#589)
 and `--workspace`; with an older one spool passes what it accepts.
 
@@ -260,9 +260,9 @@ spool runs `coil` from the project root with:
 - `--root <checkout>/src` for each linked dependency, after the stdlib (see
   [Linking](#linking))
 - grants the manifest records: `[permissions]` (`read`, `write`, `net`,
-  `env`, `exec`, `exit`, `attach` set to `true` give `--allow-<name>`, and
+  `env`, `exit`, `attach` set to `true` give `--allow-<name>`, and
   `all = true` gives `--allow-all`), the older `[env]
-  allow_exec/allow_exit/allow_ffi_exec` and `[ffi] allow_attach`, `[ffi]
+  allow_exit/allow_ffi_exec` and `[ffi] allow_attach`, `[ffi]
   allow` (`--allow-dload`), and `[ffi] search_paths` (`--ffi-search-path`)
 - `--ffi-search-path` for each linked dependency's own `[ffi] search_paths`,
   after the project's (see [Dependency natives](#dependency-natives))
@@ -275,7 +275,7 @@ spool runs `coil` from the project root with:
     the name without `coil-` (`coil-crypto` → `crypto`), and the lock's
     native stems for it
 - compile-time grants (see [Compile-time grants](#compile-time-grants)):
-  `--comptime-read/-write/-env/-exec/-net` for the project's `[comptime]`
+  `--comptime-read/-write/-env/-net` for the project's `[comptime]`
   keys, `--comptime-cache <project>/.comptime` (or `[comptime] cache`), and
   each `allow-comptime` dependency's own `[comptime]` grants scoped to its
   modules (`--comptime-env gen=TOKEN`)
@@ -452,8 +452,7 @@ package http requires coil >=0.2.0, running 0.1.0
 
 Hooks are off by default. `may_run_hook` is the gate. Every host `sh` of a user
 script goes through it first (`kind` `script` for current-project `[scripts]`,
-`kind` `include` for a dependency `[package].include`). `allow_exec` is not a
-gate.
+`kind` `include` for a dependency `[package].include`).
 
 `--enable-scripts` opts in. `--ignore-scripts` always wins, including in CI.
 `SPOOL_IGNORE_SCRIPTS=0` is the same opt-in the gate already understands.
@@ -500,7 +499,6 @@ project's own compile-time code may use:
 read = ["schemas"]          # paths, relative to the project
 write = ["gen"]
 env = ["CI"]
-exec = ["git"]
 net = ["api.example.com:443"]
 cache = ".comptime"         # result cache (the default)
 ```
@@ -598,7 +596,7 @@ consumer.
 Default is still off. `--enable-scripts` / `SPOOL_IGNORE_SCRIPTS=0` opt in.
 `--ignore-scripts` wins even when both flags are present. Include-hooks also
 need `spool allow-include <name>` on the consumer. Opt-in without that
-allowlist is deny, no `sh`. `allow_exec` is not the gate.
+allowlist is deny, no `sh`.
 
 Every include `sh` goes through `may_run_hook` first (`kind` `include`). The
 pin is `hook_path` / `hook_hash` on that dep's `[[package]]` row. The hash is
