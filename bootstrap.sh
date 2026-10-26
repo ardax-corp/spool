@@ -7,9 +7,10 @@
 #      `--channel edge` skips step 1 (except $COIL) and takes the rolling
 #      edge snapshot of coil-lang main instead.
 #   3. If there is no release, build coil-lang from source (default: main).
-#   4. Fetch coil-stdlib, coil-toml and coil-json into .bootstrap/ (or use siblings).
-#   5. `coil package spool.hy` → target/spool.
-#   6. --install: spool → DIR (default ~/.local/bin), stdlib → ~/.coil/stdlib,
+#   4. Fetch coil-stdlib, coil-toml, coil-json and coil-process into .bootstrap/
+#      (or use siblings) and build coil-process's native library (needs `cc`).
+#   5. `coil package spool.hy` → target/spool, with libprocess beside it.
+#   6. --install: spool and libprocess → DIR (default ~/.local/bin), stdlib → ~/.coil/stdlib,
 #      and a bootstrap-built coil with its tools (coil-test, coil-fmt, …) and
 #      coil-embed → ~/.coil/bin.
 #
@@ -36,6 +37,9 @@ COIL_TOML_REPO="${COIL_TOML_REPO:-$(pinned toml git)}"
 COIL_TOML_REF="${COIL_TOML_REF:-$(pinned toml rev)}"
 COIL_JSON_REPO="${COIL_JSON_REPO:-$(pinned json git)}"
 COIL_JSON_REF="${COIL_JSON_REF:-$(pinned json rev)}"
+# spool runs git, cc and coil through coil-process (coil has no env::exec).
+COIL_PROCESS_REPO="${COIL_PROCESS_REPO:-$(pinned process git)}"
+COIL_PROCESS_REF="${COIL_PROCESS_REF:-$(pinned process rev)}"
 # Binaries next to coil that it re-execs, plus the packaging runner.
 COIL_TOOLS="coil-embed coil-test coil-fmt coil-lsp coil-debug coil-dissect"
 COIL_RELEASES_URL="${COIL_RELEASES_URL:-https://api.github.com/repos/ardax-corp/coil-lang/releases}"
@@ -59,7 +63,7 @@ usage: ./bootstrap.sh [options]
                      (except \$COIL) and always downloads the release again.
   --from-source      skip installed/released coil; build coil-lang from source
   --coil-only        stop after a valid coil is found or built
-  --use-siblings     compile against ../coil-stdlib, ../coil-toml and ../coil-json
+  --use-siblings     compile against ../coil-stdlib, ../coil-toml, ../coil-json and ../coil-process
   --install [DIR]    copy target/spool to DIR (default: ~/.local/bin)
   -h, --help         show this help
 
@@ -69,9 +73,10 @@ Environment:
   GITHUB_TOKEN         sent with the release lookup, if set (avoids API rate limits in CI)
   COIL_MIN_VERSION     minimum coil version (default: $COIL_MIN_VERSION)
   COIL_LANG_REPO/REF   source for the fallback build (default: main)
-  COIL_STDLIB_REPO/REF, COIL_TOML_REPO/REF, COIL_JSON_REPO/REF
+  COIL_STDLIB_REPO/REF, COIL_TOML_REPO/REF, COIL_JSON_REPO/REF, COIL_PROCESS_REPO/REF
                        (empty REF = default branch)
-  COIL_STDLIB_DIR, COIL_TOML_DIR, COIL_JSON_DIR   use these checkouts instead of fetching
+  COIL_STDLIB_DIR, COIL_TOML_DIR, COIL_JSON_DIR, COIL_PROCESS_DIR
+                       use these checkouts instead of fetching
   SPOOL_BOOTSTRAP_DIR  work dir (default: .bootstrap)
 EOF
 }
@@ -159,7 +164,7 @@ cap_flags() {
 }
 
 # A valid coil: runs, meets the minimum version, has `package`, and compiles
-# a probe that uses the host APIs spool needs (args/exec/exit/set_cwd).
+# a probe that uses the host APIs spool needs (args/exit/set_cwd).
 coil_is_valid() {
   local bin="$1"
   [[ -n "$bin" && -x "$bin" ]] || return 1
@@ -180,19 +185,13 @@ coil_is_valid() {
   local probe_dir
   probe_dir="$(mktemp -d)"
   cat > "$probe_dir/probe.hy" <<'EOF'
-use env::{args, exec, exit, set_cwd};
+use env::{args, exit, set_cwd};
 fn main() {
     let a = match args() {
         Result::Ok(v) => v.len(),
         Result::Err(_) => 0,
     };
-    let argv: Vec<string> = Vec::new();
-    argv.push("-c");
-    argv.push("exit 0");
-    let rc = match exec("sh", argv) {
-        Result::Ok(c) => c,
-        Result::Err(_) => 1,
-    };
+    let rc = 0;
     if a < 0 {
         match set_cwd(".") {
             Result::Ok(_) => 0,
@@ -204,7 +203,7 @@ fn main() {
 EOF
   local ok=0
   # shellcheck disable=SC2046
-  if ( cd "$probe_dir" && "$bin" --allow-exec --allow-exit $(cap_flags "$bin") probe.hy ) >/dev/null 2>"$probe_dir/err"; then
+  if ( cd "$probe_dir" && "$bin" --allow-exit $(cap_flags "$bin") probe.hy ) >/dev/null 2>"$probe_dir/err"; then
     ok=1
   else
     say "  $bin: coil $ver failed the host-API probe:"
@@ -482,7 +481,26 @@ JSON_DIR="$(resolve_lib "${COIL_JSON_DIR:-}" "$ROOT/../coil-json" \
   "$COIL_JSON_REPO" "$COIL_JSON_REF" coil-json)"
 say "coil-stdlib: $STDLIB_DIR ($(git -C "$STDLIB_DIR" rev-parse --short HEAD 2>/dev/null || echo local))"
 say "coil-toml:   $TOML_DIR ($(git -C "$TOML_DIR" rev-parse --short HEAD 2>/dev/null || echo local))"
+PROCESS_DIR="$(resolve_lib "${COIL_PROCESS_DIR:-}" "$ROOT/../coil-process" \
+  "$COIL_PROCESS_REPO" "$COIL_PROCESS_REF" coil-process)"
 say "coil-json:   $JSON_DIR ($(git -C "$JSON_DIR" rev-parse --short HEAD 2>/dev/null || echo local))"
+say "coil-process: $PROCESS_DIR ($(git -C "$PROCESS_DIR" rev-parse --short HEAD 2>/dev/null || echo local))"
+
+# libprocess: spool's only native. The packaged spool loads it from beside
+# the executable (or its lib/), pinned by hash.
+say "building libprocess"
+make -C "$PROCESS_DIR/native" artifact >&2 || die "building $PROCESS_DIR/native failed (needs cc)"
+PROCESS_LIB=""
+for f in "$PROCESS_DIR/native/libprocess.so" "$PROCESS_DIR/native/libprocess.dylib" "$PROCESS_DIR/native/process.dll"; do
+  [[ -f "$f" ]] && PROCESS_LIB="$f" && break
+done
+[[ -n "$PROCESS_LIB" ]] || die "no libprocess in $PROCESS_DIR/native"
+if command -v sha256sum >/dev/null 2>&1; then
+  PROCESS_SHA="$(sha256sum "$PROCESS_LIB" | awk '{print $1}')"
+else
+  PROCESS_SHA="$(shasum -a 256 "$PROCESS_LIB" | awk '{print $1}')"
+fi
+PROCESS_VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' "$PROCESS_DIR/coil.toml" | head -n 1)"
 
 mkdir -p "$OUT_DIR"
 say "packaging $OUT"
@@ -491,17 +509,23 @@ say "packaging $OUT"
     --root "$STDLIB_DIR/src" \
     --root "$TOML_DIR/src" \
     --root "$JSON_DIR/src" \
-    --allow-exec --allow-exit $(cap_flags "$COIL_BIN") \
+    --root "$PROCESS_DIR/src" \
+    --ffi-search-path "$PROCESS_DIR/native" \
+    --allow-dload process --dload-pin "process=$PROCESS_SHA" \
+    --ffi-native "name=process,version=${PROCESS_VERSION:-0.1.0},path=$PROCESS_DIR/native" \
+    --allow-exit $(cap_flags "$COIL_BIN") \
     -o "$OUT" spool.hy ) \
   || die "coil package failed"
 
+cp "$PROCESS_LIB" "$OUT_DIR/"
 "$OUT" --version >/dev/null || die "packaged spool does not run"
 say "built $("$OUT" --version)"
 
 if [[ -n "$INSTALL_DIR" ]]; then
   mkdir -p "$INSTALL_DIR"
   install -m 0755 "$OUT" "$INSTALL_DIR/spool"
-  say "installed $INSTALL_DIR/spool"
+  install -m 0644 "$PROCESS_LIB" "$INSTALL_DIR/$(basename "$PROCESS_LIB")"
+  say "installed $INSTALL_DIR/spool (and $(basename "$PROCESS_LIB") beside it)"
 
   # Toolchain pieces spool looks for by default.
   COIL_HOME="${COIL_HOME:-$HOME/.coil}"
