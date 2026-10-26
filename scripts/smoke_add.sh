@@ -35,7 +35,6 @@ version = "0.0.1"
 roots = ["./src"]
 
 [env]
-allow_exec = true
 EOF
 echo "// consumer" > "$PROJ/src/main.hy"
 

@@ -46,7 +46,6 @@ include = "./hooks/include.sh"
 [module]
 roots = ["./src"]
 [env]
-allow_exec = true
 
 [scripts]
 pre_install = "./hooks/preinstall.sh"
@@ -89,7 +88,7 @@ echo "$HELP" | grep -q "allow-include"
 export COIL="$COIL_BIN"
 export COIL_CACHE_DIR="$CACHE"
 
-# Default install: allow_exec is on, hooks stay off, no sh.
+# Default install: hooks stay off, no sh.
 APP="$BASE/app"
 write_app "$APP" "app"
 export SPOOL_PROJECT="$APP"
@@ -120,7 +119,7 @@ assert_hooks_idle "$APP"
 "$SPOOL" --ignore-scripts install
 assert_hooks_idle "$APP"
 
-# Git dep with include-hook: install does not sh, even with allow_exec.
+# Git dep with include-hook: install does not sh.
 FIX="$BASE/fixture"
 write_lib "$FIX" "fixture"
 git init -q "$FIX"

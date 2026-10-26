@@ -629,16 +629,16 @@ fn manifest_section_keys(string section) -> string {
         return ",file,";
     }
     if section == "permissions" {
-        return ",read,write,net,env,exec,exit,attach,all,";
+        return ",read,write,net,env,exit,attach,all,";
     }
     if section == "env" {
-        return ",allow_exec,allow_exit,allow_ffi_exec,";
+        return ",allow_exit,allow_ffi_exec,";
     }
     if section == "ffi" {
         return ",search_paths,allow,allow_attach,native,";
     }
     if section == "comptime" {
-        return ",read,write,env,exec,net,cache,";
+        return ",read,write,env,net,cache,";
     }
     return "";
 }
@@ -675,6 +675,13 @@ fn manifest_validate(string body) -> Result<int, string> {
             let k = tab.key_at(j);
             j = j + 1;
             if keys.contains("," + k + ",") == false {
+                if k == "exec" || k == "allow_exec" {
+                    raise format(
+                        "%s.%s was removed: coil has no env::exec; run programs with the coil-process package",
+                        section,
+                        k,
+                    );
+                }
                 raise format("unknown key %s.%s", section, k);
             }
         }

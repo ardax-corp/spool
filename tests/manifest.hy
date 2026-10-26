@@ -224,7 +224,6 @@ read = true
 all = false
 
 [env]
-allow_exec = true
 allow_exit = true
 allow_ffi_exec = false
 
@@ -255,6 +254,12 @@ read = true
     assert!(validate_err("[env]
 allow_exce = true
 ").contains("unknown key env.allow_exce"));
+    assert!(validate_err("[env]
+allow_exec = true
+").contains("env.allow_exec was removed"));
+    assert!(validate_err("[comptime]
+exec = [\"git\"]
+").contains("comptime.exec was removed"));
     assert!(validate_err("[package]
 name = \"a\"
 version = \"1\"

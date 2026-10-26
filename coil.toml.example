@@ -42,15 +42,13 @@ roots = ["./src"]
 # write = true
 # net = true
 # env = true
-# exec = true
 # exit = true
 # attach = true
 #
 # The older spellings still work:
 #
 # [env]
-# allow_exec = true        # --allow-exec: env::exec only. Not FFI system/execve.
-# allow_exit = true        # --allow-exit: env::exit. Independent of allow_exec.
+# allow_exit = true        # --allow-exit: env::exit.
 # allow_ffi_exec = true    # --allow-ffi-exec: FFI system/execve resolve.
 
 # --------------------------------------------------------------------------
@@ -66,7 +64,6 @@ roots = ["./src"]
 # read = ["./schemas"]
 # write = ["./gen"]
 # env = ["CI"]
-# exec = ["git"]
 # net = ["api.example.com:443"]
 # cache = ".comptime"      # result cache (the default)
 
@@ -181,8 +178,8 @@ roots = ["./src"]
 #   [package]       name, version, coil, include
 #   [module]        roots
 #   [entry]         file
-#   [permissions]   read, write, net, env, exec, exit, attach, all
-#   [env]           allow_exec, allow_exit, allow_ffi_exec
+#   [permissions]   read, write, net, env, exit, attach, all
+#   [env]           allow_exit, allow_ffi_exec
 #   [ffi]           search_paths, allow, allow_attach
 #   [[ffi.native]]  name, version, path, package, url, requires, requires_hint
 #   [scripts]       pre_install, post_install, pre_update, post_update
