@@ -227,7 +227,8 @@ host_triple() {
   esac
   case "$os" in
     Linux)
-      if ldd --version 2>&1 | grep -qi musl; then
+      # Alpine's ldd prints no "musl" for --version; its loader is the tell.
+      if ls /lib/ld-musl-* >/dev/null 2>&1 || ldd --version 2>&1 | grep -qi musl; then
         printf '%s-unknown-linux-musl\n' "$arch"
       else
         printf '%s-unknown-linux-gnu\n' "$arch"
