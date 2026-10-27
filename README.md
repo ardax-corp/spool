@@ -209,6 +209,7 @@ way the library resolves them itself.
 | `allow-comptime <name>` | let a dependency's compile-time code use its own `[comptime]` grants |
 | `doctor` | check coil, stdlib, git, sh, curl, cache and project roots |
 | `cache dir` / `cache clean` | show or clear the shared git cache |
+| `cache gc [--dry-run]` | remove cached checkouts and clones no known project's `coil.lock` uses (see [Cache](#cache)) |
 
 Commands that compile (`build`, `run`, `check`, `test`, `infect`, `debug`,
 `dissect`) run `install` first when dependencies are declared but
@@ -724,6 +725,7 @@ then `[cache] dir` in `~/.config/coil/config.toml`.
 <cache_root>/git/
   <host>/<owner>/<repo>/     # bare clone
   checkouts/<tree-id>/       # detached worktree
+  projects/<hash>            # a project that uses the cache (its root)
 ```
 
 Checkouts are keyed by tree id: each version of a package gets its own, and
@@ -733,8 +735,17 @@ projects that lock the same content share one. Each project links
 Projects may install at the same time: spool holds `<repo>.lock` (a
 directory beside the bare clone) while it fetches or adds a checkout, and
 moves each checkout into place only once it is complete. A lock whose pid is
-gone is taken over; a waiter gives up after ten minutes. `spool cache clean`
-removes checkouts other projects link to; run `spool install` there again.
+gone is taken over; a waiter gives up after ten minutes.
+
+`spool cache gc` frees what no project needs any more. Every install and
+every compiling command records its project under `projects/`; gc keeps each
+checkout and bare clone a recorded project's `coil.lock` names, forgets
+projects whose `coil.lock` is gone, and removes the rest (`--dry-run` lists
+it). Anything fetched in the last hour (`SPOOL_CACHE_GC_GRACE_MIN`) and any
+clone whose lock is held is kept, so an install in progress is safe. A
+project spool has not run in since recording began is unknown to gc; if its
+checkouts go, `spool install` there fetches them again. `spool cache clean`
+removes everything, including checkouts other projects link to.
 
 ## Private git
 
