@@ -47,7 +47,8 @@ EOF
 done
 
 export COIL="$COIL_BIN"
-export COIL_CACHE_DIR="$CACHE"
+export XDG_CACHE_HOME="$CACHE"
+CACHE="$CACHE/coil"
 
 for round in $(seq 1 "$ROUNDS"); do
   rm -rf "$CACHE" "$BASE"/p*/coil.lock "$BASE"/p*/.spool

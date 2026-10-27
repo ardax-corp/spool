@@ -1,6 +1,6 @@
 // `spool download`: fetch direct FFI natives into
-// ~/.coil/natives/cache/<package>/<version>/<sha256_16>/<filename>
-// (root overridable with COIL_NATIVES_DIR). The pins come from
+// ~/.coil/natives/cache/<package>/<version>/<sha256_16>/<filename>,
+// where a packaged app looks for them. The pins come from
 // `coil natives dump --tsv` (package, version, filename, sha256, size); coil
 // carries no URLs, so each one comes from the project's `[[ffi.native]] url`.
 // In project mode a row whose local file is not there yet is dumped as
@@ -14,14 +14,10 @@ use text::{Searchable, Text};
 use string::format;
 use util::{join2, ensure_dir, path_exists, home_dir, lines_of, trim_or, tsv_field};
 use proc::{sh_capture, sh_run, first_line};
-use toolchain::{env_or, ffi_native_flags, abs_under};
+use toolchain::{ffi_native_flags, abs_under};
 use manifest::{manifest_body, ffi_natives_parse, native_name, native_package, native_version, native_url, native_path, native_sha256};
 
 fn natives_root() -> Result<string, string> {
-    let r = env_or("COIL_NATIVES_DIR", "");
-    if r.len() > 0 {
-        return r;
-    }
     let h = home_dir()?;
     return join2(h, ".coil/natives");
 }

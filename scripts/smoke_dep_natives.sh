@@ -172,8 +172,10 @@ WANT="sum 42"
 # 1. The native is built in the dependency's own checkout, as coil-tls's
 #    docs say (`make -C <checkout>/native artifact`). Nothing in the consumer
 #    names it.
-export COIL_CACHE_DIR="$S/cache_a"
-export COIL_NATIVES_DIR="$S/natives_a"
+export XDG_CACHE_HOME="$S/cache_a"
+export HOME="$S/home_a"
+mkdir -p "$HOME"
+NATIVES="$HOME/.coil/natives"
 APP="$S/app_checkout"
 write_consumer "$APP"
 export SPOOL_PROJECT="$APP"
@@ -196,7 +198,7 @@ GOT="$(cd "$APP" && "$SPOOL" run)"
 # it packaged into the natives cache.
 GOT="$(cd / && "$APP/target/app")"
 [[ "$GOT" == "$WANT" ]] || fail "target/app printed '$GOT'"
-ls "$COIL_NATIVES_DIR"/cache/nat/0.1.0/*/"$LIB" >/dev/null || fail "native not cached"
+ls "$NATIVES"/cache/nat/0.1.0/*/"$LIB" >/dev/null || fail "native not cached"
 # A second build finds the cache entry and leaves it alone.
 (cd "$APP" && "$SPOOL" build) >/dev/null || fail "rebuild"
 grep -q '.spool/deps' "$APP/coil.toml" && fail "coil.toml gained a .spool/deps path"
@@ -204,8 +206,10 @@ grep -q '.spool/deps' "$APP/coil.toml" && fail "coil.toml gained a .spool/deps p
 # 2. The documented layout before spool#38: the consumer points its own
 #    [ffi] search_paths at a sibling build. The dependency checkout (a fresh
 #    cache) has no native; that sibling file is what gets tested and packaged.
-export COIL_CACHE_DIR="$S/cache_b"
-export COIL_NATIVES_DIR="$S/natives_b"
+export XDG_CACHE_HOME="$S/cache_b"
+export HOME="$S/home_b"
+mkdir -p "$HOME"
+NATIVES="$HOME/.coil/natives"
 SIB="$S/sibling/native"
 mkdir -p "$SIB"
 build_native "$SIB"
