@@ -148,9 +148,17 @@ fn abs_under(string root, string p) -> string {
     return join2(root, p);
 }
 
+/// A module root that holds coil-stdlib (`text.hy` and `io/file.hy`).
+fn is_stdlib_root(string dir) -> bool {
+    return path_exists(join2(dir, "text.hy")) && path_exists(join3(dir, "io", "file.hy"));
+}
+
 /// Absolute `--root` dirs for a project: [module].roots, `.spool/deps`,
-/// the stdlib unless the manifest already lists a stdlib root, then each
-/// linked package's module root (<checkout>/src, spool#30).
+/// the stdlib, then each linked package's module root (<checkout>/src,
+/// spool#30). The stdlib is a manifest root that holds one, else a stdlib
+/// declared under [dependencies] (locked to a version like any package),
+/// else the global one (find_stdlib). Only one goes in: coil takes the
+/// first root that has a module, so a second stdlib would be shadowed.
 fn project_roots(string root) -> Result<Vec<string>, string> {
     let body = manifest_body(join2(root, "coil.toml"))?;
     let rel = module_roots_parse(body)?;
@@ -160,7 +168,7 @@ fn project_roots(string root) -> Result<Vec<string>, string> {
     while i < rel.len() {
         let r = abs_under(root, rel[i]);
         i = i + 1;
-        if path_exists(join2(r, "text.hy")) && path_exists(join3(r, "io", "file.hy")) {
+        if is_stdlib_root(r) {
             has_stdlib = true;
         }
         out.push(r);
@@ -168,6 +176,18 @@ fn project_roots(string root) -> Result<Vec<string>, string> {
     let deps = join2(root, ".spool/deps");
     if path_exists(deps) {
         out.push(deps);
+    }
+    let pkg_roots = dep_module_roots(root);
+    if has_stdlib == false {
+        i = 0;
+        while i < pkg_roots.len() {
+            if is_stdlib_root(pkg_roots[i]) {
+                out.push(pkg_roots[i]);
+                has_stdlib = true;
+                break;
+            }
+            i = i + 1;
+        }
     }
     if has_stdlib == false {
         let stdlib = find_stdlib();
@@ -177,7 +197,6 @@ fn project_roots(string root) -> Result<Vec<string>, string> {
     }
     // After the stdlib, so a dependency's top-level modules never shadow a
     // stdlib module (for the consumer or for the stdlib's own imports).
-    let pkg_roots = dep_module_roots(root);
     i = 0;
     while i < pkg_roots.len() {
         if vec_has(out, pkg_roots[i]) == false {
