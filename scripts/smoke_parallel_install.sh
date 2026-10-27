@@ -72,4 +72,17 @@ for round in $(seq 1 "$ROUNDS"); do
   test "$(ls "$CACHE/git/checkouts" | wc -l | tr -d ' ')" = 1
 done
 
+# A lock left by a spool that was killed (its pid is gone) is taken over.
+BARE="$(cd "$BASE/p1/.spool/deps/greet" && git rev-parse --path-format=absolute --git-common-dir)"
+test ! -e "$BARE.lock"
+sh -c 'exit 0' &
+dead=$!
+wait "$dead"
+mkdir "$BARE.lock"
+echo "$dead" > "$BARE.lock/pid"
+rm -rf "$CACHE/git/checkouts"
+SPOOL_PROJECT="$BASE/p1" "$SPOOL" install >/dev/null 2>&1
+test -d "$(cd "$BASE/p1/.spool/deps/greet" && pwd -P)"
+test ! -e "$BARE.lock"
+
 echo "smoke_parallel_install: ok"
