@@ -22,6 +22,7 @@ use git::ls_remote_tags;
 use tags::{parse_ls_remote, ls_remote_tag_names};
 use semver::has_version_tag;
 use setup::cmd_setup;
+use cachegc::{cache_gc, register_project};
 
 fn usage() -> string {
     return "spool " + spool_version() + " — Coil project and dependency manager
@@ -70,6 +71,7 @@ Tooling:
   setup [--channel stable|edge|TAG] fetch the coil toolchain into ~/.coil
   doctor                            check the toolchain and environment
   cache dir | cache clean           show or clear the shared git cache
+  cache gc [--dry-run]              remove cached checkouts no project's coil.lock uses
   version, --version                print the spool version
   help, --help                      show this help
 
@@ -173,6 +175,9 @@ fn has_deps(string root) -> Result<bool, string> {
 /// say so when the project has no stdlib to compile against.
 fn ensure_installed(string root) -> Result<int, string> {
     link_deps(root, hooks_are_off(env_or("SPOOL_IGNORE_SCRIPTS", "1")))?;
+    if path_exists(join2(root, "coil.lock")) {
+        register_project(root);
+    }
     if project_stdlib(root).len() == 0 {
         say("warning: " + no_stdlib_hint());
     }
@@ -976,17 +981,21 @@ fn cmd_doctor(Vec<string> rest) -> Result<int, string> {
 }
 
 fn cmd_cache(Vec<string> rest) -> Result<int, string> {
-    let p = parse_args(rest, no_strs(), no_strs())?;
+    let usage = "spool cache dir | spool cache gc [--dry-run] | spool cache clean";
+    let p = parse_args(rest, no_strs(), strs("--dry-run"))?;
     let pos = positionals(p);
     let sub = "dir";
     if pos.len() > 0 {
         sub = pos[0];
     }
-    at_most(pos, 1, "spool cache dir | spool cache clean")?;
+    at_most(pos, 1, usage)?;
     let cache = cache_root()?;
     if sub == "dir" {
         out(cache);
         return 0;
+    }
+    if sub == "gc" {
+        return cache_gc(has(p, "--dry-run"))?;
     }
     if sub == "clean" {
         remove_tree(join2(cache, "git"))?;
@@ -999,7 +1008,7 @@ fn cmd_cache(Vec<string> rest) -> Result<int, string> {
         say("cleared " + join2(cache, "git"));
         return 0;
     }
-    raise "usage: spool cache dir | spool cache clean";
+    raise "usage: " + usage;
 }
 
 fn dispatch(string cmd, Vec<string> rest) -> Result<int, string> {

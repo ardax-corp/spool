@@ -13,6 +13,7 @@ use util::{join2, path_exists, tsv_field, vec_has};
 use lock::{lock_read_or_empty, lock_write, lock_serialize, lock_pkg_name, lock_pkg_git, lock_pkg_rev, lock_pkg_hash};
 use manifest::{deps_read, manifest_body, manifest_validate, dep_name, dep_req};
 use scaffold::latest_stdlib_advice;
+use cachegc::register_project;
 use resolve::{collect, resolve_all, reachable_names, prune, link_rows, check_engine_all};
 use roots::link_all;
 use lifecycle::{run_project_script, run_include_hooks};
@@ -158,6 +159,8 @@ fn sync(
     link_all(root, rows)?;
     run_include_hooks(root, rows, hooks_off)?;
     run_project_script(root, post_slot, hooks_off)?;
+    // So `spool cache gc` keeps what this project's lock names.
+    register_project(root);
     warn_latest_stdlib(toml)?;
     return 0;
 }
