@@ -19,9 +19,16 @@ fn say(string msg) {
 }
 
 /// Target triple of the coil-lang release archives, or "" when there is no
-/// build for this host (macOS on Intel, musl, Windows, anything else).
+/// build for this host (macOS on Intel, musl on ARM64, Windows, anything
+/// else).
 fn release_triple(string os, string arch, bool musl) -> string {
-    if os == "linux" && !musl && (arch == "x86_64" || arch == "aarch64") {
+    if os == "linux" && musl {
+        if arch == "x86_64" {
+            return "x86_64-unknown-linux-musl";
+        }
+        return "";
+    }
+    if os == "linux" && (arch == "x86_64" || arch == "aarch64") {
         return arch + "-unknown-linux-gnu";
     }
     if os == "macos" && arch == "aarch64" {
@@ -136,8 +143,20 @@ fn fetch_coil(
     return 0;
 }
 
+/// Whether a release publishes a SHA256SUMS at `base` (every coil-lang
+/// release does, so a missing one means no such release).
+fn has_release(string tmp, string base) -> bool {
+    let probe = join2(tmp, "SHA256SUMS");
+    return match curl_to(probe, base + "/SHA256SUMS") {
+        Result::Ok(_) => true,
+        Result::Err(_) => false,
+    };
+}
+
 /// Download, verify and unpack `coil-<triple>.tar.gz` into `home/bin`.
-fn install_coil(string home, string channel) -> Result<int, string> {
+/// `fallback` (no channel was asked for): while coil-lang has no tagged
+/// release, `stable` falls back to the `edge` snapshot.
+fn install_coil(string home, string channel, bool fallback) -> Result<int, string> {
     let os = host_os();
     let arch = host_arch();
     let triple = release_triple(os, arch, os == "linux" && host_is_musl());
@@ -149,10 +168,14 @@ fn install_coil(string home, string channel) -> Result<int, string> {
         );
     }
     let repo = env_or("COIL_LANG_URL", "https://github.com/ardax-corp/coil-lang");
-    let base = release_base(repo, channel);
     let asset = "coil-" + triple + ".tar.gz";
     let tmp = scratch_file("setup")?;
     ensure_dir(tmp)?;
+    if fallback && channel == "stable" && !has_release(tmp, release_base(repo, channel)) {
+        say("note: coil-lang has no stable release yet; using the edge snapshot (`--channel edge`)");
+        channel = "edge";
+    }
+    let base = release_base(repo, channel);
     let done = fetch_coil(tmp, home, base, asset, channel);
     sh_run("rm -rf \"$1\"", strs(tmp))?;
     done?;
@@ -191,7 +214,11 @@ fn cmd_setup(Vec<string> rest) -> Result<int, string> {
     }
     let channel = opt(p, "--channel");
     if channel.len() == 0 {
-        channel = env_or("COIL_CHANNEL", "stable");
+        channel = env_or("COIL_CHANNEL", "");
+    }
+    let fallback = channel.len() == 0;
+    if fallback {
+        channel = "stable";
     }
     if !valid_channel(channel) {
         raise format("invalid channel `%s` (use stable, edge or a release tag)", channel);
@@ -204,7 +231,7 @@ fn cmd_setup(Vec<string> rest) -> Result<int, string> {
     let home = coil_home()?;
     ensure_dir(home)?;
     if !stdlib_only {
-        install_coil(home, channel)?;
+        install_coil(home, channel, fallback)?;
     }
     if !coil_only {
         install_stdlib(home)?;
