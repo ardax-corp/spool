@@ -12,14 +12,15 @@ executable.
 
 coil does not read `[module].roots` from `coil.toml`, so module roots come
 from `--root` flags. spool builds those flags from the manifest, the linked
-dependencies, and the stdlib, then runs `coil` for you.
+dependencies (the stdlib is one of them), then runs `coil` for you.
 
 ## Install
 
 Two ways: download the prebuilt `spool` from the `edge` release and let it
 fetch the rest with `spool setup`, or build from source with `bootstrap.sh`
-(the contributor path). Either way, spool needs a coil toolchain and the stdlib at
-run time; see [What spool needs](#what-spool-needs).
+(the contributor path). Either way, spool needs a coil toolchain at run time;
+see [What spool needs](#what-spool-needs). There is no global stdlib: each
+project declares it as a dependency (see [The stdlib](#the-stdlib)).
 
 ### From the edge release
 
@@ -53,8 +54,7 @@ grep " spool-$TRIPLE.tar.gz\$" SHA256SUMS | sha256sum -c -    # macOS: shasum -a
 tar xzf "spool-$TRIPLE.tar.gz" -C ~/.local/bin   # spool and libprocess
 ```
 
-**2. coil and the stdlib.** Let spool fetch them into `~/.coil`, where it
-looks for them:
+**2. coil.** Let spool fetch it into `~/.coil`, where it looks for it:
 
 ```bash
 ~/.local/bin/spool setup --channel edge   # or stable (default), or a release tag
@@ -69,12 +69,11 @@ musl host) from the coil-lang release of
 that channel, checks it against the release's `SHA256SUMS` (a release without
 one, or a mismatch, is refused), and unpacks the toolkit into `~/.coil/bin`
 with its helper binaries (`coil-fmt`, `coil-test`, `coil-lsp`, …) next to
-`coil`. It then clones coil-stdlib's default branch and puts its `src` at
-`~/.coil/stdlib`. Run it again to update; each piece is swapped in only once
-it is complete. `--coil-only` / `--stdlib-only` do one half.
-`COIL_HOME=DIR` installs into `DIR` instead; spool itself only looks in
-`~/.coil`, so then set `COIL` and `COIL_STDLIB_DIR` as it tells you.
-`COIL_LANG_URL` and `COIL_STDLIB_REPO` point it at other repositories.
+`coil`. Run it again to update; the toolkit is swapped in only once it is
+complete. `COIL_HOME=DIR` installs into `DIR` instead; spool itself only
+looks in `~/.coil`, so then set `COIL` as it tells you. `COIL_LANG_URL`
+points it at another repository. It does not install a stdlib: projects
+declare their own (an old `~/.coil/stdlib` is unused and can be deleted).
 
 **3. Check.** Put `~/.local/bin` (and, if you like, `~/.coil/bin`) on your
 `PATH` and run:
@@ -86,16 +85,15 @@ spool doctor
 To do step 2 by hand instead, unpack the coil-lang
 [`edge` release](https://github.com/ardax-corp/coil-lang/releases/tag/edge)
 archive into `~/.coil/bin` (verify it against `SHA256SUMS` the same way as
-spool) and `git clone https://github.com/ardax-corp/coil-stdlib.git ~/.coil/stdlib`.
+spool).
 
 ### What spool needs
 
 spool finds coil in this order: `$COIL`, `coil` on `PATH`, then
-`~/.coil/bin/coil`. It finds the stdlib through `COIL_STDLIB_DIR`,
-`COIL_STDLIB`, the `[stdlib] dir` setting in its config file, then
-`~/.coil/stdlib`. Plain `coil` does not look for the stdlib on its own;
-`--root` is how a compile is told where modules live, and spool passes it
-for you.
+`~/.coil/bin/coil`. The stdlib is not looked up anywhere: it is the
+`stdlib` dependency of the project, fetched and locked like any other.
+Plain `coil` does not look for modules on its own; `--root` is how a compile
+is told where modules live, and spool passes it for you.
 
 Runtime requirements: host `git` and `sh`. `curl` is needed for `download`.
 
@@ -107,8 +105,8 @@ else in one go. It needs `git`, `sh` and `curl`:
 ```bash
 git clone https://github.com/ardax-corp/spool.git && cd spool
 ./bootstrap.sh              # → target/spool
-./bootstrap.sh --install    # also: ~/.local/bin/spool, ~/.coil/stdlib,
-                            # and ~/.coil/bin/coil if bootstrap built or downloaded it
+./bootstrap.sh --install    # also: ~/.local/bin/spool, and ~/.coil/bin/coil
+                            # if bootstrap built or downloaded it
 ./bootstrap.sh --channel edge --install   # same, with coil from the edge snapshot
 ```
 
@@ -128,7 +126,7 @@ builds coil from source, which needs `cargo`, libffi and pcre2 dev files.
    When the release lists a `SHA256SUMS`, the archive is checked against it.
 3. If there is no release either, it builds coil-lang `main` from source into
    `.bootstrap/coil-lang` (needs `cargo`, libffi and pcre2 dev files).
-4. Fetches coil-stdlib (default branch), coil-toml and coil-json (at the `rev`s
+4. Fetches coil-stdlib, coil-toml and coil-json (at the `rev`s
    pinned in this repo's `coil.toml`) into `.bootstrap/`. Pass `--use-siblings`
    to build against `../coil-stdlib`, `../coil-toml` and `../coil-json` instead.
 5. Runs `coil package spool.hy -o target/spool`.
@@ -262,10 +260,9 @@ spool runs `coil` from the project root with:
 
 - `--root` for each `[module].roots` entry (default `./src`)
 - `--root .spool/deps` when dependencies are linked
-- `--root <stdlib>`: a manifest root that already is a stdlib, else a stdlib
-  declared under `[dependencies]` (see [Pinning the stdlib](#pinning-the-stdlib)),
-  else the global one found through `COIL_STDLIB_DIR`, `COIL_STDLIB`,
-  `[stdlib] dir` in `~/.config/coil/config.toml`, or `~/.coil/stdlib`
+- `--root <stdlib>`: a manifest root that already is a stdlib (coil-stdlib
+  itself), else the project's `stdlib` dependency (see [The stdlib](#the-stdlib)).
+  A project without one compiles with no stdlib, and spool warns
 - `--root <checkout>/src` for each linked dependency, after the stdlib (see
   [Linking](#linking))
 - grants the manifest records: `[permissions]` (`read`, `write`, `net`,
@@ -392,20 +389,29 @@ root, at its checkout root. `coil.toml` is never edited, and consumers do not
 add `.spool/deps/<name>` to `[module].roots` (an existing entry like that is
 harmless).
 
-### Pinning the stdlib
+### The stdlib
 
-Every project uses the one global stdlib unless it declares its own, like
-any other git dependency:
+There is no global stdlib. Each project declares it like any other git
+dependency, and `spool new` / `spool init` add it:
 
 ```toml
 [dependencies]
+stdlib = { git = "https://github.com/ardax-corp/coil-stdlib.git", version = "latest" }
+```
+
+`version = "latest"` follows coil-stdlib's tip (edge): `coil.lock` records
+the commit in use and `spool update` moves it. That is risky, so spool warns
+on `new` and on every install until it is pinned:
+
+```toml
 stdlib = { git = "https://github.com/ardax-corp/coil-stdlib.git", rev = "<full commit sha>" }
 ```
 
-It is locked in `coil.lock` and checked out into the shared cache like any
-package, and its checkout replaces the global stdlib for that project only.
-Projects pinning different versions each build against their own; projects
-on the same commit share one checkout.
+It is checked out into the shared cache like any package. Projects pinning
+different versions each build against their own; projects on the same commit
+share one checkout. A library that declares a stdlib requirement constrains
+its consumers' stdlib like any shared dependency (a conflict is a diamond
+error). `COIL_STDLIB_REPO` changes the URL `spool new` writes.
 
 ### Dependency natives
 
@@ -743,8 +749,7 @@ credential helpers, or `url.<base>.insteadOf`.
 export COIL="$(./bootstrap.sh --channel edge --coil-only)"   # newest edge coil
 ./bootstrap.sh    # → target/spool, built with that coil
 # To hack on coil-lang itself: ./bootstrap.sh --from-source (COIL_LANG_REF picks the ref)
-export COIL_STDLIB_DIR=$PWD/.bootstrap/coil-stdlib
-./target/spool install        # links coil-toml (pinned rev in coil.toml)
+./target/spool install        # links the stdlib, coil-toml, … (pinned revs in coil.toml)
 ./target/spool test           # unit tests
 ./scripts/smoke_all.sh        # end-to-end smoke tests against target/spool
 ```
@@ -761,7 +766,7 @@ export COIL_STDLIB_DIR=$PWD/.bootstrap/coil-stdlib
 | `lock`, `manifest` | `coil.lock` and `coil.toml` |
 | `roots` | `.spool/deps` links and each dependency's module root |
 | `lifecycle`, `hooks` | `[scripts]`, include-hooks, trust gate |
-| `toolchain` | coil/stdlib discovery, compile flags |
+| `toolchain` | coil discovery, compile flags |
 | `natives`, `report`, `scaffold` | `download`, `tree`/`outdated`, `new`/`init` |
 | `render` | `test`/`infect` reports from coil's `--json` events (uses coil-json) |
 
