@@ -108,7 +108,8 @@ echo "$HELP" | grep -q -- "--enable-scripts"
 echo "$HELP" | grep -q -- "--ignore-scripts"
 
 export COIL="$COIL_BIN"
-export COIL_CACHE_DIR="$CACHE"
+export XDG_CACHE_HOME="$CACHE"
+CACHE="$CACHE/coil"
 
 APP="$BASE/app"
 write_app "$APP" "app"

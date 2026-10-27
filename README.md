@@ -686,7 +686,7 @@ requires_hint = "apt install libpcre2-8-0"
 ~/.coil/natives/cache/<package>/<version>/<sha256_16>/<filename>
 ```
 
-Override the root with `COIL_NATIVES_DIR`. The sha256 and size come from
+A packaged exe looks there too. The sha256 and size come from
 `coil natives dump --tsv` (`package, version, filename, sha256, size`); coil
 carries no URLs, so each one is the `url` of the project's `[[ffi.native]]`
 row with that package and version (for a packaged exe too: run it from the
@@ -718,8 +718,8 @@ spool install --with-natives
 
 ## Cache
 
-Default root: `$XDG_CACHE_HOME/coil` or `~/.cache/coil`. `COIL_CACHE_DIR` wins,
-then `[cache] dir` in `~/.config/coil/config.toml`.
+Default root: `$XDG_CACHE_HOME/coil` or `~/.cache/coil` (the cache coil
+itself uses). `[cache] dir` in `~/.config/coil/config.toml` wins.
 
 ```text
 <cache_root>/git/

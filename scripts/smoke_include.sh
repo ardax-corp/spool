@@ -105,7 +105,8 @@ init_git() {
 }
 
 export COIL="$COIL_BIN"
-export COIL_CACHE_DIR="$CACHE"
+export XDG_CACHE_HOME="$CACHE"
+CACHE="$CACHE/coil"
 unset SPOOL_IGNORE_SCRIPTS
 
 LEAF="$BASE/leaf"

@@ -88,18 +88,9 @@ fn read_cache_dir_from_config() -> Result<string, string> {
     raise "cache.dir not set";
 }
 
-/// Cache root: `COIL_CACHE_DIR` > config.toml `[cache].dir` > XDG/default.
+/// Cache root: config.toml `[cache].dir` > `$XDG_CACHE_HOME/coil` >
+/// `~/.cache/coil`.
 fn cache_root() -> Result<string, string> {
-    match var("COIL_CACHE_DIR") {
-        Result::Ok(p) => {
-            let t = trim_str(p);
-            if t.len() > 0 {
-                return t;
-            }
-        },
-        Result::Err(_) => 0,
-    }
-
     match read_cache_dir_from_config() {
         Result::Ok(p) => {
             return p;

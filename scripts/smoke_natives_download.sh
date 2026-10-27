@@ -7,7 +7,6 @@ COIL_BIN="${COIL:-coil}"
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
-export COIL_NATIVES_DIR="$TMP/natives"
 export HOME="$TMP/home"
 mkdir -p "$HOME"
 

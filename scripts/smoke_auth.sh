@@ -20,7 +20,8 @@ EOF
 echo "// app" > "$PROJ/src/main.hy"
 
 export COIL="$COIL_BIN"
-export COIL_CACHE_DIR="$CACHE"
+export XDG_CACHE_HOME="$CACHE"
+CACHE="$CACHE/coil"
 export SPOOL_PROJECT="$PROJ"
 export GIT_TERMINAL_PROMPT=0
 export GIT_SSH_COMMAND=false

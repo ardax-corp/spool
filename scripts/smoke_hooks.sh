@@ -86,7 +86,8 @@ echo "$HELP" | grep -q -- "--ignore-scripts"
 echo "$HELP" | grep -q "allow-include"
 
 export COIL="$COIL_BIN"
-export COIL_CACHE_DIR="$CACHE"
+export XDG_CACHE_HOME="$CACHE"
+CACHE="$CACHE/coil"
 
 # Default install: hooks stay off, no sh.
 APP="$BASE/app"

@@ -143,7 +143,8 @@ assert_no_fetch() {
 }
 
 export COIL="$COIL_BIN"
-export COIL_CACHE_DIR="$CACHE"
+export XDG_CACHE_HOME="$CACHE"
+CACHE="$CACHE/coil"
 
 # Path lib with no engine constraint (success-path add).
 OKLIB="$BASE/oklib"

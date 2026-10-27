@@ -79,8 +79,8 @@ Lifecycle flags (install/add/update/remove):
   --enable-scripts    run [scripts] and allowlisted include-hooks
   --ignore-scripts    never run hooks (wins over --enable-scripts)
 
-Environment: COIL, COIL_STDLIB_REPO, COIL_CACHE_DIR, COIL_NATIVES_DIR,
-             SPOOL_PROJECT, SPOOL_IGNORE_SCRIPTS=0
+Environment: COIL, COIL_STDLIB_REPO, XDG_CACHE_HOME, SPOOL_PROJECT,
+             SPOOL_IGNORE_SCRIPTS=0
 ";
 }
 

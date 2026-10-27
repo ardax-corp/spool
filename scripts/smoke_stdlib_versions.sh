@@ -77,7 +77,8 @@ EOF
 }
 
 export COIL="$COIL_BIN"
-export COIL_CACHE_DIR="$CACHE"
+export XDG_CACHE_HOME="$CACHE"
+CACHE="$CACHE/coil"
 
 run_app() {
   local dir="$1"

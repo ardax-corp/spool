@@ -100,7 +100,8 @@ EOF
 }
 
 export COIL="$COIL_BIN"
-export COIL_CACHE_DIR="$CACHE"
+export XDG_CACHE_HOME="$CACHE"
+CACHE="$CACHE/coil"
 
 # 1. --version latest locks the default-branch tip like a branch pin.
 P1="$BASE/p1"
