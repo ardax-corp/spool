@@ -262,9 +262,10 @@ spool runs `coil` from the project root with:
 
 - `--root` for each `[module].roots` entry (default `./src`)
 - `--root .spool/deps` when dependencies are linked
-- `--root <stdlib>` unless a manifest root already is a stdlib. The stdlib is
-  found through `COIL_STDLIB_DIR`, `COIL_STDLIB`, `[stdlib] dir` in
-  `~/.config/coil/config.toml`, or `~/.coil/stdlib`
+- `--root <stdlib>`: a manifest root that already is a stdlib, else a stdlib
+  declared under `[dependencies]` (see [Pinning the stdlib](#pinning-the-stdlib)),
+  else the global one found through `COIL_STDLIB_DIR`, `COIL_STDLIB`,
+  `[stdlib] dir` in `~/.config/coil/config.toml`, or `~/.coil/stdlib`
 - `--root <checkout>/src` for each linked dependency, after the stdlib (see
   [Linking](#linking))
 - grants the manifest records: `[permissions]` (`read`, `write`, `net`,
@@ -390,6 +391,21 @@ shadows a stdlib module. A package without `src/` is linked, and used as a
 root, at its checkout root. `coil.toml` is never edited, and consumers do not
 add `.spool/deps/<name>` to `[module].roots` (an existing entry like that is
 harmless).
+
+### Pinning the stdlib
+
+Every project uses the one global stdlib unless it declares its own, like
+any other git dependency:
+
+```toml
+[dependencies]
+stdlib = { git = "https://github.com/ardax-corp/coil-stdlib.git", rev = "<full commit sha>" }
+```
+
+It is locked in `coil.lock` and checked out into the shared cache like any
+package, and its checkout replaces the global stdlib for that project only.
+Projects pinning different versions each build against their own; projects
+on the same commit share one checkout.
 
 ### Dependency natives
 
@@ -703,6 +719,16 @@ then `[cache] dir` in `~/.config/coil/config.toml`.
   <host>/<owner>/<repo>/     # bare clone
   checkouts/<tree-id>/       # detached worktree
 ```
+
+Checkouts are keyed by tree id: each version of a package gets its own, and
+projects that lock the same content share one. Each project links
+`.spool/deps/<name>` to the checkout its `coil.lock` names.
+
+Projects may install at the same time: spool holds `<repo>.lock` (a
+directory beside the bare clone) while it fetches or adds a checkout, and
+moves each checkout into place only once it is complete. A lock whose pid is
+gone is taken over; a waiter gives up after ten minutes. `spool cache clean`
+removes checkouts other projects link to; run `spool install` there again.
 
 ## Private git
 

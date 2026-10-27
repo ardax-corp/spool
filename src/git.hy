@@ -117,8 +117,27 @@ fn checkout_path(string tree) -> Result<string, string> {
     return join2(d, tree);
 }
 
+/// Hold `<bare>.lock` (a directory, so taking it is one atomic mkdir) for
+/// the rest of the script: projects that install at the same time share the
+/// bare clone and its worktree list, and git does not serialise `clone`,
+/// `fetch` and `worktree` against each other. A lock whose owner is gone
+/// (spool killed) is taken over; after ten minutes the waiter gives up
+/// (exit 5).
+fn bare_lock_script() -> string {
+    return "lock=\"$1.lock\"; n=0; " +
+           "while ! mkdir \"$lock\" 2>/dev/null; do " +
+           "pid=$(cat \"$lock/pid\" 2>/dev/null); " +
+           "if [ -n \"$pid\" ] && ! kill -0 \"$pid\" 2>/dev/null; then rm -rf \"$lock\"; continue; fi; " +
+           "n=$((n+1)); if [ \"$n\" -ge 6000 ]; then exit 5; fi; sleep 0.1; " +
+           "done; echo $$ > \"$lock/pid\"; trap 'rm -rf \"$lock\"' EXIT; ";
+}
+
+fn lock_timeout(string bare) -> string {
+    return format("timed out waiting for %s.lock; remove it if no spool is running", bare);
+}
+
 fn bare_sync_script() -> string {
-    return git_env_prefix() + "if [ -d \"$1\" ]; then git -C \"$1\" fetch -q --tags --force origin \"+refs/heads/*:refs/heads/*\" || exit 3; " +
+    return bare_lock_script() + git_env_prefix() + "if [ -d \"$1\" ]; then git -C \"$1\" fetch -q --tags --force origin \"+refs/heads/*:refs/heads/*\" || exit 3; " +
            "else git clone -q --bare -- \"$2\" \"$1\" || exit 3; fi; ";
 }
 
@@ -146,6 +165,9 @@ fn fetch_rev(string url, string rev) -> Result<string, string> {
     if code == 3 {
         raise git_failed("fetch", url);
     }
+    if code == 5 {
+        raise lock_timeout(bare);
+    }
     if code != 0 {
         raise format("git checkout of %s at %s failed (exit %i)", url, rev, code);
     }
@@ -157,6 +179,8 @@ fn fetch_rev(string url, string rev) -> Result<string, string> {
 }
 
 /// Make sure <checkouts>/<tree> exists for a locked package (rev + hash).
+/// The checkout is made beside it and moved into place whole, so another
+/// project never links (or verifies) a half-written one.
 fn ensure_checkout(string url, string rev, string tree) -> Result<string, string> {
     let dest = checkout_path(tree)?;
     if path_exists(dest) {
@@ -165,16 +189,25 @@ fn ensure_checkout(string url, string rev, string tree) -> Result<string, string
     check_git_url(url)?;
     let bare = bare_dir(url)?;
     ensure_dir(path_dirname(bare))?;
+    let checkouts = checkouts_dir()?;
     let a: Vec<string> = Vec::new();
     a.push(bare);
     a.push(url);
     a.push(rev);
     a.push(dest);
-    let script = bare_sync_script() + "git -C \"$1\" worktree prune; " + "rm -rf \"$4\"; " +
-                 "git -C \"$1\" worktree add -q --detach \"$4\" \"$3\" >&2 || exit 4";
+    a.push(join2(checkouts, format(".tmp-%i", wall_nanos())));
+    let script = bare_sync_script() + "git -C \"$1\" worktree prune; " +
+                 "if [ -d \"$4\" ]; then exit 0; fi; " +
+                 "git -C \"$1\" worktree add -q --detach \"$5\" \"$3\" >&2 || exit 4; " +
+                 "git -C \"$1\" worktree move \"$5\" \"$4\" 2>/dev/null && exit 0; " +
+                 "git -C \"$1\" worktree remove --force \"$5\" || rm -rf \"$5\"; " +
+                 "[ -d \"$4\" ] || exit 4";
     let code = sh_run(script, a)?;
     if code == 3 {
         raise git_failed("fetch", url);
+    }
+    if code == 5 {
+        raise lock_timeout(bare);
     }
     if code != 0 {
         raise format("git checkout of %s at %s failed (exit %i)", url, rev, code);
