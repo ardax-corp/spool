@@ -80,7 +80,10 @@ jobs:
             set -eu
             apk add --no-cache bash build-base curl git libffi pcre2-dev tar
             git config --global --add safe.directory "*"
-            ./bootstrap.sh --channel edge
+            # As in the gnu job: doctor needs coil and the stdlib bootstrap fetched.
+            export COIL="$(./bootstrap.sh --channel edge --coil-only)"
+            ./bootstrap.sh
+            export COIL_STDLIB_DIR="$PWD/.bootstrap/coil-stdlib"
             ./target/spool --version
             ./target/spool doctor
           '
