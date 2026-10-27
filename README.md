@@ -31,23 +31,26 @@ stable release. It currently has:
 |---|---|
 | Linux x86-64 (glibc) | `spool-x86_64-unknown-linux-gnu.tar.gz` |
 | Linux ARM64 (glibc) | `spool-aarch64-unknown-linux-gnu.tar.gz` |
+| Linux x86-64 (musl) | `spool-x86_64-unknown-linux-musl.tar.gz` |
 | macOS, Apple silicon | `spool-aarch64-apple-darwin.tar.gz` |
 
-plus a `SHA256SUMS` file. There is no build for macOS on Intel, for musl
-Linux or for Windows; on those, use `bootstrap.sh` below (where the platform
-is supported) or build from source. Each archive holds a single `spool`
-executable.
+plus a `SHA256SUMS` file. A pushed `v*` tag publishes the same archives in a
+release of its own. There is no build for macOS on Intel or for Windows
+(spool needs a POSIX `sh`; use WSL); on those, use `bootstrap.sh` below
+where the platform is supported. Each archive holds the `spool` executable
+and `libprocess` (`.so`, or `.dylib` on macOS), which spool loads from
+beside itself: keep the two in one directory.
 
 **1. spool.** Download, verify and install it (set `TRIPLE` to your row
 above):
 
 ```bash
-TRIPLE=x86_64-unknown-linux-gnu    # or aarch64-unknown-linux-gnu, aarch64-apple-darwin
+TRIPLE=x86_64-unknown-linux-gnu    # or aarch64-unknown-linux-gnu, x86_64-unknown-linux-musl, aarch64-apple-darwin
 BASE=https://github.com/ardax-corp/spool/releases/download/edge
 mkdir -p ~/.local/bin && cd "$(mktemp -d)"
 curl -fLO "$BASE/spool-$TRIPLE.tar.gz" -O "$BASE/SHA256SUMS"
 grep " spool-$TRIPLE.tar.gz\$" SHA256SUMS | sha256sum -c -    # macOS: shasum -a 256 -c -
-tar xzf "spool-$TRIPLE.tar.gz" -C ~/.local/bin spool
+tar xzf "spool-$TRIPLE.tar.gz" -C ~/.local/bin   # spool and libprocess
 ```
 
 **2. coil and the stdlib.** Let spool fetch them into `~/.coil`, where it
@@ -57,7 +60,12 @@ looks for them:
 ~/.local/bin/spool setup --channel edge   # or stable (default), or a release tag
 ```
 
-`spool setup` downloads `coil-<triple>.tar.gz` from the coil-lang release of
+Without `--channel` (or `COIL_CHANNEL`), `stable` falls back to `edge`
+with a note while coil-lang has no tagged release; an explicit
+`--channel stable` does not.
+
+`spool setup` downloads `coil-<triple>.tar.gz` (the musl archive on a
+musl host) from the coil-lang release of
 that channel, checks it against the release's `SHA256SUMS` (a release without
 one, or a mismatch, is refused), and unpacks the toolkit into `~/.coil/bin`
 with its helper binaries (`coil-fmt`, `coil-test`, `coil-lsp`, …) next to

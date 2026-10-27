@@ -86,4 +86,7 @@ jobs:
             export COIL_STDLIB_DIR="$PWD/.bootstrap/coil-stdlib"
             ./target/spool --version
             ./target/spool doctor
+            # spool setup picks the musl coil archive (spool#63).
+            COIL_HOME=/tmp/coil-home ./target/spool setup --channel edge --coil-only
+            /tmp/coil-home/bin/coil --version
           '
