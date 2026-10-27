@@ -1,9 +1,9 @@
-// `spool setup`: fetch a coil toolkit and the stdlib into ~/.coil (or
-// $COIL_HOME), where spool looks for them. It is what
-// `bootstrap.sh --install` does for coil and the stdlib, driven by the
-// downloaded spool binary. The coil archive comes from a coil-lang GitHub
-// release (`stable`, `edge` or a tag) and must match the release's
-// SHA256SUMS; the stdlib is a shallow clone of coil-stdlib's default branch.
+// `spool setup`: fetch a coil toolkit into ~/.coil (or $COIL_HOME), where
+// spool looks for it. It is what `bootstrap.sh --install` does for coil,
+// driven by the downloaded spool binary. The coil archive comes from a
+// coil-lang GitHub release (`stable`, `edge` or a tag) and must match the
+// release's SHA256SUMS. There is no global stdlib: every project declares
+// its own under [dependencies].
 use term::eprintln;
 use text::{Searchable, Text};
 use string::format;
@@ -185,23 +185,6 @@ fn install_coil(string home, string channel, bool fallback) -> Result<int, strin
     return 0;
 }
 
-/// Shallow-clone coil-stdlib and put its `src` at `home/stdlib/src`.
-fn install_stdlib(string home) -> Result<int, string> {
-    let repo = env_or("COIL_STDLIB_REPO", "https://github.com/ardax-corp/coil-stdlib.git");
-    let tmp = scratch_file("stdlib")?;
-    say("fetching " + repo);
-    let code = sh_run(
-        "set -e; git clone -q --depth 1 \"$1\" \"$2\"; rm -rf \"$3/stdlib.new\"; mkdir -p \"$3/stdlib.new\"; cp -R \"$2/src\" \"$3/stdlib.new/src\"; rm -rf \"$3/stdlib\"; mv \"$3/stdlib.new\" \"$3/stdlib\"",
-        strs3(repo, tmp, home),
-    )?;
-    sh_run("rm -rf \"$1\"", strs(tmp))?;
-    if code != 0 {
-        raise "could not fetch coil-stdlib from " + repo;
-    }
-    say("installed " + join2(home, "stdlib"));
-    return 0;
-}
-
 fn read_or_raise(string p) -> Result<string, string> {
     return match read_text(p) {
         Result::Ok(s) => s,
@@ -210,9 +193,13 @@ fn read_or_raise(string p) -> Result<string, string> {
 }
 
 fn cmd_setup(Vec<string> rest) -> Result<int, string> {
+    // --coil-only is what setup always does now; kept so scripts still run.
     let p = parse_args(rest, strs("--channel"), strs2("--coil-only", "--stdlib-only"))?;
     if positionals(p).len() > 0 {
-        raise "usage: spool setup [--channel stable|edge|TAG] [--coil-only | --stdlib-only]";
+        raise "usage: spool setup [--channel stable|edge|TAG]";
+    }
+    if has(p, "--stdlib-only") {
+        raise "there is no global stdlib any more: each project declares `stdlib` under [dependencies] (spool new adds it)";
     }
     let channel = opt(p, "--channel");
     if channel.len() == 0 {
@@ -225,34 +212,17 @@ fn cmd_setup(Vec<string> rest) -> Result<int, string> {
     if !valid_channel(channel) {
         raise format("invalid channel `%s` (use stable, edge or a release tag)", channel);
     }
-    let coil_only = has(p, "--coil-only");
-    let stdlib_only = has(p, "--stdlib-only");
-    if coil_only && stdlib_only {
-        raise "--coil-only and --stdlib-only exclude each other";
-    }
     let home = coil_home()?;
     ensure_dir(home)?;
-    if !stdlib_only {
-        install_coil(home, channel, fallback)?;
-    }
-    if !coil_only {
-        install_stdlib(home)?;
-    }
+    install_coil(home, channel, fallback)?;
     let default_home = match home_dir() {
         Result::Ok(h) => join2(h, ".coil"),
         Result::Err(_) => "",
     };
     if home != default_home {
         // spool itself only looks in ~/.coil.
-        say(
-            format(
-                "note: set COIL=%s and COIL_STDLIB_DIR=%s so spool finds them",
-                join2(home, "bin/coil"),
-                join2(home, "stdlib"),
-            ),
-        );
-    } else if !stdlib_only &&
-              !(":" + env_or("PATH", "") + ":").contains(":" + join2(home, "bin") + ":") {
+        say(format("note: set COIL=%s so spool finds it", join2(home, "bin/coil")));
+    } else if !(":" + env_or("PATH", "") + ":").contains(":" + join2(home, "bin") + ":") {
         say(format("note: %s is not on PATH; spool still finds coil there", join2(home, "bin")));
     }
     say("done; `spool doctor` checks the result");

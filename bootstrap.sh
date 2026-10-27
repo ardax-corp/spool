@@ -10,7 +10,7 @@
 #   4. Fetch coil-stdlib, coil-toml, coil-json and coil-process into .bootstrap/
 #      (or use siblings) and build coil-process's native library (needs `cc`).
 #   5. `coil package spool.hy` → target/spool, with libprocess beside it.
-#   6. --install: spool and libprocess → DIR (default ~/.local/bin), stdlib → ~/.coil/stdlib,
+#   6. --install: spool and libprocess → DIR (default ~/.local/bin),
 #      and a bootstrap-built coil with its tools (coil-test, coil-fmt, …) and
 #      coil-embed → ~/.coil/bin.
 #
@@ -25,14 +25,13 @@ OUT="$OUT_DIR/spool"
 COIL_MIN_VERSION="${COIL_MIN_VERSION:-0.1.0}"
 COIL_LANG_REPO="${COIL_LANG_REPO:-https://github.com/ardax-corp/coil-lang.git}"
 COIL_LANG_REF="${COIL_LANG_REF:-main}"
-COIL_STDLIB_REPO="${COIL_STDLIB_REPO:-https://github.com/ardax-corp/coil-stdlib.git}"
-# Empty ref = the repository's default branch.
-COIL_STDLIB_REF="${COIL_STDLIB_REF:-}"
 # `pinned DEP KEY`: the `git` or `rev` value of DEP in spool's coil.toml.
 pinned() {
   sed -n "s/^$1 = .*$2 = \"\\([^\"]*\\)\".*/\\1/p" "$ROOT/coil.toml"
 }
 # Defaults: the url and rev spool pins in its own coil.toml.
+COIL_STDLIB_REPO="${COIL_STDLIB_REPO:-$(pinned stdlib git)}"
+COIL_STDLIB_REF="${COIL_STDLIB_REF:-$(pinned stdlib rev)}"
 COIL_TOML_REPO="${COIL_TOML_REPO:-$(pinned toml git)}"
 COIL_TOML_REF="${COIL_TOML_REF:-$(pinned toml rev)}"
 COIL_JSON_REPO="${COIL_JSON_REPO:-$(pinned json git)}"
@@ -542,12 +541,6 @@ if [[ -n "$INSTALL_DIR" ]]; then
       say "installed $COIL_HOME/bin/coil"
       ;;
   esac
-  rm -rf "$COIL_HOME/stdlib.new"
-  mkdir -p "$COIL_HOME/stdlib.new"
-  cp -R "$STDLIB_DIR/src" "$COIL_HOME/stdlib.new/src"
-  rm -rf "$COIL_HOME/stdlib"
-  mv "$COIL_HOME/stdlib.new" "$COIL_HOME/stdlib"
-  say "installed $COIL_HOME/stdlib"
 
   case ":$PATH:" in
     *":$INSTALL_DIR:"*) ;;
