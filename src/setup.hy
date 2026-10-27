@@ -172,7 +172,9 @@ fn install_coil(string home, string channel, bool fallback) -> Result<int, strin
     let tmp = scratch_file("setup")?;
     ensure_dir(tmp)?;
     if fallback && channel == "stable" && !has_release(tmp, release_base(repo, channel)) {
-        say("note: coil-lang has no stable release yet; using the edge snapshot (`--channel edge`)");
+        say(
+            "note: coil-lang has no stable release yet; using the edge snapshot (`--channel edge`)",
+        );
         channel = "edge";
     }
     let base = release_base(repo, channel);
