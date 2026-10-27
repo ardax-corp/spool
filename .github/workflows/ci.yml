@@ -50,9 +50,6 @@ jobs:
       - name: Bootstrap spool
         run: ./bootstrap.sh
 
-      - name: Environment
-        run: echo "COIL_STDLIB_DIR=$PWD/.bootstrap/coil-stdlib" >> "$GITHUB_ENV"
-
       - name: Doctor
         run: ./target/spool doctor
 
@@ -80,10 +77,9 @@ jobs:
             set -eu
             apk add --no-cache bash build-base curl git libffi pcre2-dev tar
             git config --global --add safe.directory "*"
-            # As in the gnu job: doctor needs coil and the stdlib bootstrap fetched.
+            # As in the gnu job: doctor needs the coil bootstrap fetched.
             export COIL="$(./bootstrap.sh --channel edge --coil-only)"
             ./bootstrap.sh
-            export COIL_STDLIB_DIR="$PWD/.bootstrap/coil-stdlib"
             ./target/spool --version
             ./target/spool doctor
             # spool setup picks the musl coil archive (spool#63).

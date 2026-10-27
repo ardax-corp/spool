@@ -4,6 +4,7 @@ use string::{format};
 use text::{Searchable};
 use util::{join2, ensure_dir, path_exists, check_pkg_name};
 use proc::{run_in};
+use toolchain::env_or;
 
 fn write_new(string path, string body) -> Result<int, string> {
     if path_exists(path) {
@@ -15,12 +16,32 @@ fn write_new(string path, string body) -> Result<int, string> {
     };
 }
 
-fn manifest_template(string name, bool lib) -> string {
+/// Where new projects take the stdlib from (`COIL_STDLIB_REPO` overrides).
+fn stdlib_repo() -> string {
+    return env_or("COIL_STDLIB_REPO", "https://github.com/ardax-corp/coil-stdlib.git");
+}
+
+/// The stdlib is an ordinary dependency (there is no global one). New
+/// projects follow its tip (`latest`, locked to a commit in coil.lock) until
+/// they pin a version; see latest_stdlib_advice.
+fn manifest_template(string name, bool lib, string stdlib_git) -> string {
     let body = "[package]\nname = \"" + name + "\"\nversion = \"0.1.0\"\n\n[module]\nroots = [\"./src\"]\n";
     if lib == false {
         body = body + "\n[entry]\nfile = \"src/main.hy\"\n";
     }
+    body = body + "\n[dependencies]\n# Follows coil-stdlib's tip (edge). Pin it: version = \"...\" or rev = \"<commit>\".\n" +
+           "stdlib = { git = \"" + stdlib_git + "\", version = \"latest\" }\n";
     return body;
+}
+
+/// For a project with no stdlib dependency (there is no global stdlib).
+fn no_stdlib_hint() -> string {
+    return "no stdlib: declare it under [dependencies], e.g. `spool add stdlib --git " + stdlib_repo() + " --rev <commit>`, then `spool install`";
+}
+
+/// Printed whenever a project's stdlib follows the tip.
+fn latest_stdlib_advice() -> string {
+    return "warning: the stdlib dependency follows coil-stdlib's tip (version = \"latest\"); `spool update` can pull in breaking changes. Pin it as soon as you can: version = \"<range>\" or rev = \"<commit>\" (coil.lock has the commit in use)";
 }
 
 fn main_template(string name) -> string {
@@ -85,7 +106,7 @@ fn scaffold(string dir, string name, bool lib, bool vcs) -> Result<int, string> 
     }
     ensure_dir(join2(dir, "src"))?;
     ensure_dir(join2(dir, "tests"))?;
-    match write_text(manifest, manifest_template(name, lib)) {
+    match write_text(manifest, manifest_template(name, lib, stdlib_repo())) {
         Result::Ok(_) => 0,
         Result::Err(_) => raise format("failed to write %s", manifest),
     };

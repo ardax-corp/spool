@@ -8,14 +8,14 @@ use util::{join2, path_exists, path_dirname, path_is_absolute, ensure_dir, home_
 use cli::{parse_args, opt, has, positionals, raw_args, at_most, strs, strs2, strs3, strs4, no_strs};
 use version::spool_version;
 use proc::{run_in, spawn, sh_run, sh_capture, which};
-use toolchain::{find_coil, require_coil, coil_version_output, find_stdlib, compile_flags, project_roots, env_or, package_native_flags, package_native_rows};
+use toolchain::{find_coil, require_coil, coil_version_output, project_stdlib, compile_flags, project_roots, env_or, package_native_flags, package_native_rows};
 use manifest::{deps_read, dep_kind, dep_name, make_git_rev_dep, make_path_dep, deps_append, deps_remove, manifest_body, section_string, package_name_read};
 use lock::{lock_read_or_empty, lock_pkg_name, lock_add_allow_include, lock_add_allow_comptime};
 use hooks::hooks_are_off;
 use sync::{sync, snapshot, restore};
 use report::{print_tree, print_outdated};
 use natives::{download_natives, cache_packaged_natives};
-use scaffold::scaffold;
+use scaffold::{scaffold, latest_stdlib_advice, no_stdlib_hint};
 use render::render_events;
 use config::cache_root;
 use git::ls_remote_tags;
@@ -67,8 +67,7 @@ Dependencies:
   allow-comptime <name>             give a dependency the compile-time grants it asks for
 
 Tooling:
-  setup [--channel stable|edge|TAG] [--coil-only | --stdlib-only]
-                                    fetch coil and the stdlib into ~/.coil
+  setup [--channel stable|edge|TAG] fetch the coil toolchain into ~/.coil
   doctor                            check the toolchain and environment
   cache dir | cache clean           show or clear the shared git cache
   version, --version                print the spool version
@@ -78,7 +77,7 @@ Lifecycle flags (install/add/update/remove):
   --enable-scripts    run [scripts] and allowlisted include-hooks
   --ignore-scripts    never run hooks (wins over --enable-scripts)
 
-Environment: COIL, COIL_STDLIB_DIR, COIL_CACHE_DIR, COIL_NATIVES_DIR,
+Environment: COIL, COIL_STDLIB_REPO, COIL_CACHE_DIR, COIL_NATIVES_DIR,
              SPOOL_PROJECT, SPOOL_IGNORE_SCRIPTS=0
 ";
 }
@@ -170,9 +169,14 @@ fn has_deps(string root) -> Result<bool, string> {
     return deps.len() > 0;
 }
 
-/// Install first when dependencies are declared but never linked.
+/// Install first when dependencies are declared but never linked; then
+/// say so when the project has no stdlib to compile against.
 fn ensure_installed(string root) -> Result<int, string> {
-    return link_deps(root, hooks_are_off(env_or("SPOOL_IGNORE_SCRIPTS", "1")))?;
+    link_deps(root, hooks_are_off(env_or("SPOOL_IGNORE_SCRIPTS", "1")))?;
+    if project_stdlib(root).len() == 0 {
+        say("warning: " + no_stdlib_hint());
+    }
+    return 0;
 }
 
 /// Install when the project has dependencies but none are linked yet.
@@ -679,9 +683,7 @@ fn cmd_new(Vec<string> rest, bool here) -> Result<int, string> {
         kind = "library";
     }
     say(format("created %s package `%s` in %s", kind, name, dir));
-    if find_stdlib().len() == 0 {
-        say("note: coil-stdlib not found; set COIL_STDLIB_DIR or run ./bootstrap.sh --install");
-    }
+    say(latest_stdlib_advice());
     return 0;
 }
 
@@ -923,11 +925,13 @@ fn cmd_doctor(Vec<string> rest) -> Result<int, string> {
     } else {
         good = doctor_line("coil", "(spool setup, or set COIL)", false) && good;
     }
-    let stdlib = find_stdlib();
-    if stdlib.len() > 0 {
-        doctor_line("coil-stdlib", stdlib, true);
-    } else {
-        good = doctor_line("coil-stdlib", "(spool setup, or set COIL_STDLIB_DIR)", false) && good;
+    match home_dir() {
+        Result::Ok(h) => {
+            if path_exists(join2(h, ".coil/stdlib")) {
+                out("  note: " + join2(h, ".coil/stdlib") + " is no longer used (each project declares its stdlib); you can delete it");
+            }
+        },
+        Result::Err(_) => {},
     }
     let tools = strs4("git", "sh", "curl", "tar");
     let i = 0;
@@ -946,6 +950,12 @@ fn cmd_doctor(Vec<string> rest) -> Result<int, string> {
     match find_project() {
         Result::Ok(root) => {
             doctor_line("project", root, true);
+            let stdlib = project_stdlib(root);
+            if stdlib.len() > 0 {
+                doctor_line("stdlib", stdlib, true);
+            } else {
+                doctor_line("stdlib", no_stdlib_hint(), false);
+            }
             match project_roots(root) {
                 Result::Ok(roots) => {
                     out("  roots: " + roots.join(", "));

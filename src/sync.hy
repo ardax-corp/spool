@@ -11,7 +11,8 @@ use string::format;
 use text::Joined;
 use util::{join2, path_exists, tsv_field, vec_has};
 use lock::{lock_read_or_empty, lock_write, lock_serialize, lock_pkg_name, lock_pkg_git, lock_pkg_rev, lock_pkg_hash};
-use manifest::{deps_read, manifest_body, manifest_validate};
+use manifest::{deps_read, manifest_body, manifest_validate, dep_name, dep_req};
+use scaffold::latest_stdlib_advice;
 use resolve::{collect, resolve_all, reachable_names, prune, link_rows, check_engine_all};
 use roots::link_all;
 use lifecycle::{run_project_script, run_include_hooks};
@@ -84,6 +85,19 @@ fn dropped_names(Vec<string> before, Vec<string> after) -> string {
     return gone.join(", ");
 }
 
+/// Warn while the project's stdlib follows the tip (`version = "latest"`).
+fn warn_latest_stdlib(string toml) -> Result<int, string> {
+    let deps = deps_read(toml)?;
+    let i = 0;
+    while i < deps.len() {
+        if dep_name(deps[i]) == "stdlib" && dep_req(deps[i]) == "latest" {
+            eprintln("spool: " + latest_stdlib_advice());
+        }
+        i = i + 1;
+    }
+    return 0;
+}
+
 /// Run the shared pipeline. `force` names are re-resolved (update).
 fn sync(
     string root,
@@ -144,6 +158,7 @@ fn sync(
     link_all(root, rows)?;
     run_include_hooks(root, rows, hooks_off)?;
     run_project_script(root, post_slot, hooks_off)?;
+    warn_latest_stdlib(toml)?;
     return 0;
 }
 

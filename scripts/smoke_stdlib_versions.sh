@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Two projects on one machine pin different stdlib versions: each must build
-# against its own pick, not the one global stdlib, while projects on the same
-# version share one cached checkout.
+# Two projects on one machine pin different stdlib versions: each builds
+# against its own pick, while projects on the same version share one cached
+# checkout.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SPOOL="${SPOOL_BIN:-$ROOT/target/spool}"
@@ -16,22 +16,15 @@ if [[ ! -x "$COIL_BIN" ]]; then
   fi
 fi
 
-# The global stdlib the fixture copies: COIL_STDLIB_DIR, else ~/.coil/stdlib.
-GLOBAL="${COIL_STDLIB_DIR:-$HOME/.coil/stdlib}"
-[[ -f "$GLOBAL/src/text.hy" ]] && GLOBAL="$GLOBAL/src"
-if [[ ! -f "$GLOBAL/text.hy" ]]; then
-  echo "smoke_stdlib_versions: no global stdlib (set COIL_STDLIB_DIR)" >&2
-  exit 1
-fi
+. "$ROOT/scripts/smoke_stdlib.sh.inc"
 
 rm -rf "$BASE"
 mkdir -p "$BASE"
 
-# A stdlib repo with v0.1.0 and v0.2.0; `num::stdlib_marker()` tells them apart
-# and is missing from the global stdlib.
+# A stdlib repo with v0.1.0 and v0.2.0; `num::stdlib_marker()` tells them apart.
 STD="$BASE/stdlib"
 mkdir -p "$STD"
-cp -R "$GLOBAL" "$STD/src"
+cp -R "$SMOKE_STDLIB/src" "$STD/src"
 cat > "$STD/coil.toml" <<'EOF'
 [package]
 name = "stdlib"

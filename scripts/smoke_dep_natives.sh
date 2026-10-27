@@ -35,6 +35,8 @@ fail() {
   exit 1
 }
 
+. "$ROOT/scripts/smoke_stdlib.sh.inc"
+
 rm -rf "$S"
 mkdir -p "$S/nat/src" "$S/nat/native" "$S/mid/src"
 
@@ -139,6 +141,7 @@ allow = ["nat"]
 $extra
 
 [dependencies]
+$SMOKE_STDLIB_DEP
 mid = { git = "file://$S/mid", version = "^0.1" }
 nat = { git = "file://$S/nat", version = "^0.1", trusted = true }
 EOF
