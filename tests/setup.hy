@@ -2,10 +2,11 @@ use tests::assert;
 use setup::{release_triple, valid_channel, release_base, listed_sum};
 
 test("release triples exist only for the published builds") {
+    assert!(release_triple("linux", "x86_64", true) == "x86_64-unknown-linux-musl");
     assert!(release_triple("linux", "x86_64", false) == "x86_64-unknown-linux-gnu");
     assert!(release_triple("linux", "aarch64", false) == "aarch64-unknown-linux-gnu");
     assert!(release_triple("macos", "aarch64", false) == "aarch64-apple-darwin");
-    assert!(release_triple("linux", "x86_64", true) == "");
+    assert!(release_triple("linux", "aarch64", true) == "");
     assert!(release_triple("macos", "x86_64", false) == "");
     assert!(release_triple("windows", "x86_64", false) == "");
     assert!(release_triple("linux", "riscv64", false) == "");
