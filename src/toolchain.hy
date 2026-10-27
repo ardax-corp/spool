@@ -71,67 +71,6 @@ fn coil_version_output(string coil) -> string {
     };
 }
 
-fn stdlib_from_config() -> string {
-    let path = match config_path() {
-        Result::Ok(p) => p,
-        Result::Err(_) => {
-            return "";
-        },
-    };
-    if path_exists(path) == false {
-        return "";
-    }
-    let body = match read_text(path) {
-        Result::Ok(s) => s,
-        Result::Err(_) => {
-            return "";
-        },
-    };
-    return match section_string(body, "stdlib", "dir") {
-        Result::Ok(s) => s,
-        Result::Err(_) => "",
-    };
-}
-
-/// A stdlib checkout dir (with src/) or a src dir itself → the src dir.
-fn stdlib_src_of(string dir) -> string {
-    if dir.len() == 0 {
-        return "";
-    }
-    let src = join2(dir, "src");
-    if path_exists(join2(src, "text.hy")) {
-        return src;
-    }
-    if path_exists(join2(dir, "text.hy")) {
-        return dir;
-    }
-    return "";
-}
-
-/// coil-stdlib `src`: COIL_STDLIB_DIR, COIL_STDLIB, config `[stdlib] dir`,
-/// then ~/.coil/stdlib. "" when none is found.
-fn find_stdlib() -> string {
-    let s = stdlib_src_of(env_or("COIL_STDLIB_DIR", ""));
-    if s.len() > 0 {
-        return s;
-    }
-    s = stdlib_src_of(env_or("COIL_STDLIB", ""));
-    if s.len() > 0 {
-        return s;
-    }
-    s = stdlib_src_of(stdlib_from_config());
-    if s.len() > 0 {
-        return s;
-    }
-    match home_dir() {
-        Result::Ok(h) => {
-            return stdlib_src_of(join2(h, ".coil/stdlib"));
-        },
-        Result::Err(_) => {},
-    }
-    return "";
-}
-
 fn abs_under(string root, string p) -> string {
     if path_is_absolute(p) {
         return p;
@@ -153,12 +92,24 @@ fn is_stdlib_root(string dir) -> bool {
     return path_exists(join2(dir, "text.hy")) && path_exists(join3(dir, "io", "file.hy"));
 }
 
+/// The first of `roots` that holds the stdlib, or "".
+fn dep_stdlib_root(Vec<string> roots) -> string {
+    let i = 0;
+    while i < roots.len() {
+        if is_stdlib_root(roots[i]) {
+            return roots[i];
+        }
+        i = i + 1;
+    }
+    return "";
+}
+
 /// Absolute `--root` dirs for a project: [module].roots, `.spool/deps`,
 /// the stdlib, then each linked package's module root (<checkout>/src,
-/// spool#30). The stdlib is a manifest root that holds one, else a stdlib
-/// declared under [dependencies] (locked to a version like any package),
-/// else the global one (find_stdlib). Only one goes in: coil takes the
-/// first root that has a module, so a second stdlib would be shadowed.
+/// spool#30). There is no global stdlib: it is a manifest root that holds
+/// one (coil-stdlib itself), else the stdlib the project declares under
+/// [dependencies], locked to a version like any package. Only one goes in:
+/// coil takes the first root that has a module.
 fn project_roots(string root) -> Result<Vec<string>, string> {
     let body = manifest_body(join2(root, "coil.toml"))?;
     let rel = module_roots_parse(body)?;
@@ -179,18 +130,7 @@ fn project_roots(string root) -> Result<Vec<string>, string> {
     }
     let pkg_roots = dep_module_roots(root);
     if has_stdlib == false {
-        i = 0;
-        while i < pkg_roots.len() {
-            if is_stdlib_root(pkg_roots[i]) {
-                out.push(pkg_roots[i]);
-                has_stdlib = true;
-                break;
-            }
-            i = i + 1;
-        }
-    }
-    if has_stdlib == false {
-        let stdlib = find_stdlib();
+        let stdlib = dep_stdlib_root(pkg_roots);
         if stdlib.len() > 0 {
             out.push(stdlib);
         }
@@ -205,6 +145,18 @@ fn project_roots(string root) -> Result<Vec<string>, string> {
         i = i + 1;
     }
     return out;
+}
+
+/// The stdlib a project compiles against: a manifest root or a linked
+/// dependency that is one, or "" when it has none.
+fn project_stdlib(string root) -> string {
+    let roots = match project_roots(root) {
+        Result::Ok(r) => r,
+        Result::Err(_) => {
+            return "";
+        },
+    };
+    return dep_stdlib_root(roots);
 }
 
 /// The `dload` stem for a lock package: the native row's `stem` / `lib`, else
