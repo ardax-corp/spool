@@ -19,6 +19,8 @@ if [[ ! -x "$COIL_BIN" ]]; then
   fi
 fi
 
+. "$ROOT/scripts/smoke_stdlib.sh.inc"
+
 rm -rf "$FIX" "$CACHE" "$GIT_PROJ" "$PATH_PROJ" "$OLD_PROJ"
 mkdir -p "$FIX/src/nest" "$GIT_PROJ/src" "$PATH_PROJ/src" "$OLD_PROJ/src"
 
@@ -72,6 +74,9 @@ roots = [$roots]
 
 [entry]
 file = "src/main.hy"
+
+[dependencies]
+$SMOKE_STDLIB_DEP
 EOF
   cat > "$dest/src/main.hy" <<'EOF'
 use nest::{shout};

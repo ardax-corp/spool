@@ -17,6 +17,8 @@ if [[ ! -x "$COIL_BIN" ]]; then
   fi
 fi
 
+. "$ROOT/scripts/smoke_stdlib.sh.inc"
+
 rm -rf "$FIX" "$CACHE" "$GIT_PROJ" "$PATH_PROJ"
 mkdir -p "$FIX" "$GIT_PROJ/src" "$PATH_PROJ/src"
 
@@ -41,6 +43,9 @@ roots = ["./src"]
 
 [entry]
 file = "src/main.hy"
+
+[dependencies]
+$SMOKE_STDLIB_DEP
 EOF
   cat > "$dest/src/main.hy" <<'EOF'
 use greet::hello;
