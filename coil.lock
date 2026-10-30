@@ -13,26 +13,18 @@ rev = 'b39175852e270c0bd3cd0c0a48b50de0b08c9f61'
 content_hash = '8e8e9268b91c42c1807d7b35f286f14f8ed0caa3'
 
 [[package]]
-name = 'process'
-git = 'https://github.com/ardax-corp/coil-process.git'
-tag = ''
-ref = '6efd3a42a8676effb5a977186b29038799fe3094'
-rev = '6efd3a42a8676effb5a977186b29038799fe3094'
-content_hash = '599424fd95fcc389c5daec123f126a600548392a'
-
-[[package]]
 name = 'stdlib'
 git = 'https://github.com/ardax-corp/coil-stdlib.git'
 tag = ''
-ref = 'edf4e26572d2962daee0a3b691b3c7b4979900c4'
-rev = 'edf4e26572d2962daee0a3b691b3c7b4979900c4'
-content_hash = '53fe704661dd65344c49e43702c066c085cdb0e4'
+ref = '861c7aeb486ced606d1bcfb819f42cb6f6934441'
+rev = '861c7aeb486ced606d1bcfb819f42cb6f6934441'
+content_hash = 'fac29e6fbf9d561656bfaac0c64b8d9f7c8b5f4b'
 
 [[package]]
 name = 'toml'
 git = 'https://github.com/ardax-corp/coil-toml.git'
 tag = ''
-ref = '3286add4c8286627146cb300c23ff026b4d9a042'
-rev = '3286add4c8286627146cb300c23ff026b4d9a042'
-content_hash = '852f2e1a0ef0c6b47e10ff7b8f2d89405693a0a4'
+ref = '5a78481a2ac2fee18f0738b3fc88b43e44b20c2b'
+rev = '5a78481a2ac2fee18f0738b3fc88b43e44b20c2b'
+content_hash = '713630e65dfeb975e4f3c6eafb6f3724efeffc03'
 

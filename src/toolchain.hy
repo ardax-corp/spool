@@ -528,7 +528,7 @@ fn grant_flags(string root) -> Result<Vec<string>, string> {
     if section_bool(body, "permissions", "all")? {
         out.push("--allow-all");
     }
-    let caps = ["read", "write", "net", "env", "exit", "attach"];
+    let caps = ["read", "write", "net", "env", "exec", "exit", "attach"];
     let c = 0;
     while c < caps.len() {
         if section_bool(body, "permissions", caps[c])? {

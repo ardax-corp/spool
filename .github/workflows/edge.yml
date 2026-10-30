@@ -126,8 +126,7 @@ jobs:
         run: |
           mkdir -p dist
           archive="spool-${{ matrix.triple }}.tar.gz"
-          lib="$(cd target && ls libprocess.so libprocess.dylib 2>/dev/null | head -n 1)"
-          tar -C target -czf "dist/$archive" spool "$lib"
+          tar -C target -czf "dist/$archive" spool
           (cd dist && shasum -a 256 "$archive" > "$archive.sha256")
 
       - uses: actions/upload-artifact@v4
@@ -173,7 +172,7 @@ jobs:
           Built: $(date -u '+%Y-%m-%d %H:%M UTC')
 
           Not a stable release: the binaries and this tag are replaced on every build.
-          Each archive holds the \`spool\` executable and \`libprocess\` (keep them in one directory); \`SHA256SUMS\` lists their checksums."
+          Each archive holds a single \`spool\` executable; \`SHA256SUMS\` lists their checksums."
           if gh release view edge >/dev/null 2>&1; then
             gh release edit edge --prerelease --title "edge" --notes "$notes"
           else
@@ -193,6 +192,6 @@ jobs:
           tag="$GITHUB_REF_NAME"
           if ! gh release view "$tag" >/dev/null 2>&1; then
             gh release create "$tag" --verify-tag --title "$tag" \
-              --notes "spool $tag. Each archive holds the \`spool\` executable and \`libprocess\` (keep them in one directory); \`SHA256SUMS\` lists their checksums."
+              --notes "spool $tag. Each archive holds a single \`spool\` executable; \`SHA256SUMS\` lists their checksums."
           fi
           gh release upload "$tag" dist/* --clobber

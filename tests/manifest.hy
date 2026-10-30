@@ -256,7 +256,7 @@ allow_exce = true
 ").contains("unknown key env.allow_exce"));
     assert!(validate_err("[env]
 allow_exec = true
-").contains("env.allow_exec was removed"));
+").contains("env.allow_exec was removed: running programs is granted by [permissions] exec"));
     assert!(validate_err("[comptime]
 exec = [\"git\"]
 ").contains("comptime.exec was removed"));
