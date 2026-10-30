@@ -79,9 +79,6 @@ fn toml_err(TomlError e) -> string {
         TomlError::Invalid { line, column } => {
             return format("invalid toml at %i:%i", line, column);
         },
-        TomlError::Io { line, column } => {
-            return format("toml io at %i:%i", line, column);
-        },
         TomlError::Utf8 { line, column } => {
             return format("toml utf8 at %i:%i", line, column);
         },
@@ -629,7 +626,7 @@ fn manifest_section_keys(string section) -> string {
         return ",file,";
     }
     if section == "permissions" {
-        return ",read,write,net,env,exit,attach,all,";
+        return ",read,write,net,env,exec,exit,attach,all,";
     }
     if section == "env" {
         return ",allow_exit,allow_ffi_exec,";
@@ -677,7 +674,7 @@ fn manifest_validate(string body) -> Result<int, string> {
             if keys.contains("," + k + ",") == false {
                 if k == "exec" || k == "allow_exec" {
                     raise format(
-                        "%s.%s was removed: coil has no env::exec; run programs with the coil-process package",
+                        "%s.%s was removed: running programs is granted by [permissions] exec",
                         section,
                         k,
                     );
