@@ -38,9 +38,8 @@ stable release. It currently has:
 plus a `SHA256SUMS` file. A pushed `v*` tag publishes the same archives in a
 release of its own. There is no build for macOS on Intel or for Windows
 (spool needs a POSIX `sh`; use WSL); on those, use `bootstrap.sh` below
-where the platform is supported. Each archive holds the `spool` executable
-and `libprocess` (`.so`, or `.dylib` on macOS), which spool loads from
-beside itself: keep the two in one directory.
+where the platform is supported. Each archive holds a single `spool`
+executable.
 
 **1. spool.** Download, verify and install it (set `TRIPLE` to your row
 above):
@@ -51,7 +50,7 @@ BASE=https://github.com/ardax-corp/spool/releases/download/edge
 mkdir -p ~/.local/bin && cd "$(mktemp -d)"
 curl -fLO "$BASE/spool-$TRIPLE.tar.gz" -O "$BASE/SHA256SUMS"
 grep " spool-$TRIPLE.tar.gz\$" SHA256SUMS | sha256sum -c -    # macOS: shasum -a 256 -c -
-tar xzf "spool-$TRIPLE.tar.gz" -C ~/.local/bin   # spool and libprocess
+tar xzf "spool-$TRIPLE.tar.gz" -C ~/.local/bin
 ```
 
 **2. coil.** Let spool fetch it into `~/.coil`, where it looks for it:
@@ -267,7 +266,7 @@ spool runs `coil` from the project root with:
 - `--root <checkout>/src` for each linked dependency, after the stdlib (see
   [Linking](#linking))
 - grants the manifest records: `[permissions]` (`read`, `write`, `net`,
-  `env`, `exit`, `attach` set to `true` give `--allow-<name>`, and
+  `env`, `exec`, `exit`, `attach` set to `true` give `--allow-<name>`, and
   `all = true` gives `--allow-all`), the older `[env]
   allow_exit/allow_ffi_exec` and `[ffi] allow_attach`, `[ffi]
   allow` (`--allow-dload`), and `[ffi] search_paths` (`--ffi-search-path`)
@@ -297,7 +296,8 @@ spool runs `coil` from the project root with:
 
 A program needs a grant for each capability its `main` (or a test) can
 reach: reading or writing files, the network, environment variables,
-running programs. coil names the missing flag when one is not granted:
+running programs (`exec`, for the built-in `process` module). coil names the
+missing flag when one is not granted:
 
 ```toml
 [permissions]

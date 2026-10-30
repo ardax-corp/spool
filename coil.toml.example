@@ -42,6 +42,7 @@ roots = ["./src"]
 # write = true
 # net = true
 # env = true
+# exec = true      # run programs with the built-in `process` module
 # exit = true
 # attach = true
 #
@@ -178,7 +179,7 @@ roots = ["./src"]
 #   [package]       name, version, coil, include
 #   [module]        roots
 #   [entry]         file
-#   [permissions]   read, write, net, env, exit, attach, all
+#   [permissions]   read, write, net, env, exec, exit, attach, all
 #   [env]           allow_exit, allow_ffi_exec
 #   [ffi]           search_paths, allow, allow_attach
 #   [[ffi.native]]  name, version, path, package, url, requires, requires_hint
