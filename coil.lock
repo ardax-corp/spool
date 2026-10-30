@@ -16,9 +16,9 @@ content_hash = '8e8e9268b91c42c1807d7b35f286f14f8ed0caa3'
 name = 'stdlib'
 git = 'https://github.com/ardax-corp/coil-stdlib.git'
 tag = ''
-ref = 'edf4e26572d2962daee0a3b691b3c7b4979900c4'
-rev = 'edf4e26572d2962daee0a3b691b3c7b4979900c4'
-content_hash = '53fe704661dd65344c49e43702c066c085cdb0e4'
+ref = '861c7aeb486ced606d1bcfb819f42cb6f6934441'
+rev = '861c7aeb486ced606d1bcfb819f42cb6f6934441'
+content_hash = 'fac29e6fbf9d561656bfaac0c64b8d9f7c8b5f4b'
 
 [[package]]
 name = 'toml'

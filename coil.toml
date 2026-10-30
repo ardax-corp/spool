@@ -21,7 +21,7 @@ exec = true
 
 [dependencies]
 # There is no global stdlib: spool builds against this pin (bootstrap.sh too).
-stdlib = { git = "https://github.com/ardax-corp/coil-stdlib.git", rev = "edf4e26572d2962daee0a3b691b3c7b4979900c4" }
+stdlib = { git = "https://github.com/ardax-corp/coil-stdlib.git", rev = "861c7aeb486ced606d1bcfb819f42cb6f6934441" }
 # coil-toml has no release tags yet; pin a commit that builds without prelude::math floats (coil-toml#13).
 toml = { git = "https://github.com/ardax-corp/coil-toml.git", rev = "5a78481a2ac2fee18f0738b3fc88b43e44b20c2b" }
 # Read API (get/at/as_*) for coil test/mutate --json events: ardax-corp/coil-json#10.
