@@ -794,4 +794,4 @@ export COIL="$(./bootstrap.sh --channel edge --coil-only)"   # newest edge coil
 - coil-toml `main` predates field-visibility enforcement. Spool pins the
   default-branch commit with the fix.
 - Records are tab-joined strings, from when userland class types could not
-  cross module boundaries (COI-12).
+  cross module boundaries.
