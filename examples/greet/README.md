@@ -1,6 +1,6 @@
 # greet
 
-Demo Coil library for [spool](https://github.com/ardax-corp/spool). Function-style on purpose: userland classes are not importable across modules yet (COI-12).
+Demo Coil library for [spool](https://github.com/ardax-corp/spool). Function-style on purpose, to keep the demo small.
 
 ## Layout
 
