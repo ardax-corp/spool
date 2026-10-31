@@ -109,6 +109,38 @@ fn path_exists(string p) -> bool {
     };
 }
 
+/// `name` without its source extension (`.coil`, or the pre-rename `.hy`
+/// that coil still reads), or "" when it has neither.
+fn source_stem(string name) -> string {
+    let n = 0;
+    if name.ends_with(".coil") {
+        n = 5;
+    } else if name.ends_with(".hy") {
+        n = 3;
+    }
+    if n == 0 || name.len() <= n {
+        return "";
+    }
+    return match name.slice(0, name.len() - n) {
+        Result::Ok(x) => x,
+        Result::Err(_) => "",
+    };
+}
+
+/// `<dir>/<stem>.coil`, else the pre-rename `<dir>/<stem>.hy`, else "":
+/// the file coil's `use` picks for that module.
+fn source_file(string dir, string stem) -> string {
+    let current = join2(dir, stem + ".coil");
+    if path_exists(current) {
+        return current;
+    }
+    let legacy = join2(dir, stem + ".hy");
+    if path_exists(legacy) {
+        return legacy;
+    }
+    return "";
+}
+
 fn read_or_empty(string p) -> string {
     if path_exists(p) == false {
         return "";

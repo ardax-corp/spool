@@ -1,5 +1,7 @@
 /target/
+*.ccoil
 *.hyc
+out.ccoil
 out.hyc
 .spool/
 /tmp/

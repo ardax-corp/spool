@@ -24,7 +24,7 @@ fi
 rm -rf "$FIX" "$CACHE" "$GIT_PROJ" "$PATH_PROJ" "$OLD_PROJ"
 mkdir -p "$FIX/src/nest" "$GIT_PROJ/src" "$PATH_PROJ/src" "$OLD_PROJ/src"
 
-# Layout of coil-tls / coil-sdl: src/<name>.hy, src/<name>/*.hy and a second
+# Layout of coil-tls / coil-sdl: src/<name>.coil, src/<name>/*.coil and a second
 # top-level module, all resolved through the package's own ./src root.
 cat > "$FIX/coil.toml" <<'EOF'
 [package]
@@ -34,19 +34,19 @@ version = "0.1.0"
 [module]
 roots = ["./src"]
 EOF
-cat > "$FIX/src/nest.hy" <<'EOF'
+cat > "$FIX/src/nest.coil" <<'EOF'
 use nest::inner::{twice};
 
 fn shout(string s) -> string {
     return twice(s) + "!";
 }
 EOF
-cat > "$FIX/src/nest/inner.hy" <<'EOF'
+cat > "$FIX/src/nest/inner.coil" <<'EOF'
 fn twice(string s) -> string {
     return s + s;
 }
 EOF
-cat > "$FIX/src/extra.hy" <<'EOF'
+cat > "$FIX/src/extra.coil" <<'EOF'
 use nest::{shout};
 
 fn loud(string s) -> string {
@@ -73,12 +73,12 @@ version = "0.0.1"
 roots = [$roots]
 
 [entry]
-file = "src/main.hy"
+file = "src/main.coil"
 
 [dependencies]
 $SMOKE_STDLIB_DEP
 EOF
-  cat > "$dest/src/main.hy" <<'EOF'
+  cat > "$dest/src/main.coil" <<'EOF'
 use nest::{shout};
 use nest::inner::{twice};
 use extra::{loud};

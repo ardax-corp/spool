@@ -15,7 +15,7 @@ git -C "$FIX" config user.email "spool@test"
 git -C "$FIX" config user.name "spool"
 echo "hello from fixture" > "$FIX/README.md"
 mkdir -p "$FIX/src"
-echo "// fixture lib" > "$FIX/src/lib.hy"
+echo "// fixture lib" > "$FIX/src/lib.coil"
 git -C "$FIX" add -A
 git -C "$FIX" commit -q -m "init"
 git -C "$FIX" tag v1.0.0
@@ -36,7 +36,7 @@ roots = ["./src"]
 [dependencies]
 fixture = { git = "$URL", version = "^1" }
 EOF
-echo "// consumer" > "$PROJ/src/main.hy"
+echo "// consumer" > "$PROJ/src/main.coil"
 
 cat > "$PROJ/coil.lock" <<EOF
 # spool lockfile v1
@@ -58,7 +58,7 @@ export SPOOL_PROJECT="$PROJ"
 "$SPOOL" install --locked
 
 test -L "$PROJ/.spool/deps/fixture"
-test -f "$PROJ/.spool/deps/fixture/lib.hy"
+test -f "$PROJ/.spool/deps/fixture/lib.coil"
 # The lock was already exact: --locked leaves it alone.
 grep -q "content_hash = '$TREE'" "$PROJ/coil.lock"
 

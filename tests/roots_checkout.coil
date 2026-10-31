@@ -1,7 +1,7 @@
 use tests::assert;
 use roots::{checkout_module_root, link_all};
 use toolchain::{project_roots, project_stdlib};
-use util::{join2, ensure_dir, vec_has};
+use util::{join2, ensure_dir, vec_has, path_exists};
 use env::{cwd};
 use io::file::{write_text};
 use text::{Searchable};
@@ -38,9 +38,9 @@ test("project_roots adds each linked package's module root") {
     ensure_dir(join2(base, "nest/src/nest"))?;
     ensure_dir(join2(base, "one/src"))?;
     ensure_dir(join2(base, "proj/src"))?;
-    write_file(join2(base, "nest/src/nest.hy"), "use nest::inner::{twice};\n")?;
-    write_file(join2(base, "nest/src/nest/inner.hy"), "fn twice() -> int { return 2; }\n")?;
-    write_file(join2(base, "one/src/one.hy"), "fn one() -> int { return 1; }\n")?;
+    write_file(join2(base, "nest/src/nest.coil"), "use nest::inner::{twice};\n")?;
+    write_file(join2(base, "nest/src/nest/inner.coil"), "fn twice() -> int { return 2; }\n")?;
+    write_file(join2(base, "one/src/one.coil"), "fn one() -> int { return 1; }\n")?;
     write_file(join2(base, "proj/coil.toml"), "[package]\nname = \"proj\"\nversion = \"0.0.1\"\n")?;
     let proj = join2(base, "proj");
     let rows: Vec<string> = Vec::new();
@@ -56,8 +56,8 @@ test("project_roots adds each linked package's module root") {
     assert!(vec_has(roots, join2(base, "nest/src")));
     assert!(vec_has(roots, join2(base, "one/src")));
     assert!(vec_has(roots, join2(proj, ".spool/deps/nest")) == false);
-    // `.hy` file links are modules, not roots.
-    assert!(vec_has(roots, join2(proj, ".spool/deps/one.hy")) == false);
+    // `.coil` file links are modules, not roots.
+    assert!(vec_has(roots, join2(proj, ".spool/deps/one.coil")) == false);
 }
 
 fn index_of(Vec<string> v, string x) -> int {
@@ -78,9 +78,9 @@ test("project_roots puts the stdlib dependency first") {
     ensure_dir(join2(base, "std/src/io"))?;
     ensure_dir(join2(base, "one/src"))?;
     ensure_dir(join2(base, "proj/src"))?;
-    write_file(join2(base, "std/src/text.hy"), "fn t() -> int { return 0; }\n")?;
-    write_file(join2(base, "std/src/io/file.hy"), "fn f() -> int { return 0; }\n")?;
-    write_file(join2(base, "one/src/one.hy"), "fn one() -> int { return 1; }\n")?;
+    write_file(join2(base, "std/src/text.coil"), "fn t() -> int { return 0; }\n")?;
+    write_file(join2(base, "std/src/io/file.coil"), "fn f() -> int { return 0; }\n")?;
+    write_file(join2(base, "one/src/one.coil"), "fn one() -> int { return 1; }\n")?;
     write_file(join2(base, "proj/coil.toml"), "[package]\nname = \"proj\"\nversion = \"0.0.1\"\n")?;
     let proj = join2(base, "proj");
     let rows: Vec<string> = Vec::new();
@@ -103,7 +103,7 @@ test("project_roots has no stdlib without a stdlib dependency") {
     let base = join2(here()?, "scratch/roots_no_stdlib");
     ensure_dir(join2(base, "one/src"))?;
     ensure_dir(join2(base, "proj/src"))?;
-    write_file(join2(base, "one/src/one.hy"), "fn one() -> int { return 1; }\n")?;
+    write_file(join2(base, "one/src/one.coil"), "fn one() -> int { return 1; }\n")?;
     write_file(join2(base, "proj/coil.toml"), "[package]\nname = \"proj\"\nversion = \"0.0.1\"\n")?;
     let proj = join2(base, "proj");
     let rows: Vec<string> = Vec::new();
@@ -114,4 +114,31 @@ test("project_roots has no stdlib without a stdlib dependency") {
     assert!(roots.len() == deps_at + 2);
     assert!(roots[deps_at + 1] == join2(base, "one/src"));
     assert!(project_stdlib(proj) == "");
+}
+
+// A package (or stdlib) that still has the pre-rename `.hy` files links
+// under that extension, and an old stdlib is still found as the stdlib.
+test("link_all and project_stdlib take a package still on .hy") {
+    let base = join2(here()?, "scratch/roots_legacy_hy");
+    ensure_dir(join2(base, "std/src/io"))?;
+    ensure_dir(join2(base, "old/src"))?;
+    ensure_dir(join2(base, "proj/src"))?;
+    write_file(join2(base, "std/src/text.hy"), "fn t() -> int { return 0; }\n")?;
+    write_file(join2(base, "std/src/io/file.hy"), "fn f() -> int { return 0; }\n")?;
+    write_file(join2(base, "old/src/old.hy"), "fn old() -> int { return 1; }\n")?;
+    write_file(join2(base, "proj/coil.toml"), "[package]\nname = \"proj\"\nversion = \"0.0.1\"\n")?;
+    let proj = join2(base, "proj");
+    let rows: Vec<string> = Vec::new();
+    rows.push("old\t" + join2(base, "old"));
+    rows.push("stdlib\t" + join2(base, "std"));
+    link_all(proj, rows)?;
+    assert!(path_exists(join2(proj, ".spool/deps/old.hy")));
+    assert!(path_exists(join2(proj, ".spool/deps/old.coil")) == false);
+    assert!(project_stdlib(proj) == join2(base, "std/src"));
+    let roots = project_roots(proj)?;
+    assert!(vec_has(roots, join2(proj, ".spool/deps/old.hy")) == false);
+    assert!(vec_has(roots, join2(base, "old/src")));
+    // Relinking keeps one file link per package.
+    link_all(proj, rows)?;
+    assert!(path_exists(join2(proj, ".spool/deps/old.hy")));
 }

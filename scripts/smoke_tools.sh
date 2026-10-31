@@ -39,7 +39,7 @@ if grep -q "NDJSON events" <<<"$coil_help"; then
   # A reader that goes away must not hang the renderer.
   timeout 60 "$SPOOL" test | head -n 1 >/dev/null || [[ ${PIPESTATUS[0]} -ne 124 ]] || fail "test | head hung"
   mkdir -p tests/red
-  printf '%s\n' 'test("always red") {' '    assert(1 == 2, "one is not two")?;' '}' > tests/red/red.hy
+  printf '%s\n' 'test("always red") {' '    assert(1 == 2, "one is not two")?;' '}' > tests/red/red.coil
   set +e
   out="$("$SPOOL" test 2>/dev/null)"
   rc=$?
@@ -81,16 +81,16 @@ grep -q '"capabilities"' <<<"$reply" || fail "lsp did not answer initialize"
 # the type error behind it is reported (single-file checking misses it).
 lsp_msg() { printf 'Content-Length: %d\r\n\r\n%s' "${#1}" "$1"; }
 if "$SPOOL" coil lsp --help 2>&1 | grep -q -- "--workspace"; then
-  printf '%s\n' 'fn helper(int a) -> int {' '    return a;' '}' > src/util.hy
+  printf '%s\n' 'fn helper(int a) -> int {' '    return a;' '}' > src/util.coil
   main_text='use util::{helper};\n\nfn main() {\n    let s: string = helper(1);\n}\n'
-  main_uri="file://$PWD/src/lsp_main.hy"
-  printf "$main_text" > src/lsp_main.hy
+  main_uri="file://$PWD/src/lsp_main.coil"
+  printf "$main_text" > src/lsp_main.coil
   open='{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"'"$main_uri"'","languageId":"coil","version":1,"text":"'"$main_text"'"}}}'
   reply="$(cd src && { lsp_msg "$body"; lsp_msg '{"jsonrpc":"2.0","method":"initialized","params":{}}'; lsp_msg "$open"; sleep 5; } \
     | timeout 30 "$SPOOL" lsp 2>/dev/null || true)"
   grep -F "\"$main_uri\"" <<<"$reply" | grep -q 'expected `string`, found `int`' \
     || fail "lsp did not resolve a project module from a subdirectory: $reply"
-  rm -f src/util.hy src/lsp_main.hy
+  rm -f src/util.coil src/lsp_main.coil
 else
   echo "smoke_tools: coil lsp has no --workspace; skipping the project-root check"
 fi

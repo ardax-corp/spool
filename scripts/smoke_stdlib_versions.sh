@@ -30,10 +30,10 @@ cat > "$STD/coil.toml" <<'EOF'
 name = "stdlib"
 version = "0.1.0"
 EOF
-cp "$STD/src/num.hy" "$BASE/num.hy.orig"
+cp "$STD/src/num.coil" "$BASE/num.coil.orig"
 mark() {
-  cp "$BASE/num.hy.orig" "$STD/src/num.hy"
-  printf '\nfn stdlib_marker() -> string {\n    return "%s";\n}\n' "$1" >> "$STD/src/num.hy"
+  cp "$BASE/num.coil.orig" "$STD/src/num.coil"
+  printf '\nfn stdlib_marker() -> string {\n    return "%s";\n}\n' "$1" >> "$STD/src/num.coil"
 }
 git init -q "$STD"
 git -C "$STD" config user.email "spool@test"
@@ -61,9 +61,9 @@ version = "0.0.1"
 roots = ["./src"]
 
 [entry]
-file = "src/main.hy"
+file = "src/main.coil"
 EOF
-  cat > "$dest/src/main.hy" <<'EOF'
+  cat > "$dest/src/main.coil" <<'EOF'
 use num::{stdlib_marker};
 use io::sync::{print};
 

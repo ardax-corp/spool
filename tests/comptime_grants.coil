@@ -25,15 +25,15 @@ fn here() -> Result<string, string> {
     };
 }
 
-/// Fixture under scratch/<tag>: `gen` (src/gen.hy, src/gen/, src/util.hy, its
+/// Fixture under scratch/<tag>: `gen` (src/gen.coil, src/gen/, src/util.coil, its
 /// own `[comptime]` grants) and `proj` linking it.
 fn fixture(string tag, string proj_toml) -> Result<string, string> {
     let base = join2(here()?, "scratch/" + tag);
     ensure_dir(join2(base, "gen/src/gen"))?;
     ensure_dir(join2(base, "proj/src"))?;
-    write_file(join2(base, "gen/src/gen.hy"), "fn one() -> int { return 1; }\n")?;
-    write_file(join2(base, "gen/src/gen/schema.hy"), "fn two() -> int { return 2; }\n")?;
-    write_file(join2(base, "gen/src/util.hy"), "fn three() -> int { return 3; }\n")?;
+    write_file(join2(base, "gen/src/gen.coil"), "fn one() -> int { return 1; }\n")?;
+    write_file(join2(base, "gen/src/gen/schema.coil"), "fn two() -> int { return 2; }\n")?;
+    write_file(join2(base, "gen/src/util.coil"), "fn three() -> int { return 3; }\n")?;
     write_file(
         join2(base, "gen/coil.toml"),
         "[package]\nname = \"gen\"\nversion = \"0.1.0\"\n\n[comptime]\nread = [\"./schemas\"]\nenv = [\"GEN_TOKEN\"]\n",
@@ -77,7 +77,7 @@ test("a dependency's top-level modules are its files and directories") {
     let base = fixture("comptime_modules", proj_toml())?;
     let modules = dep_top_modules(join2(base, "gen"));
     assert!(vec_has(modules, "gen") && vec_has(modules, "util"));
-    assert!(modules.len() == 2, "gen.hy and gen/ are one module");
+    assert!(modules.len() == 2, "gen.coil and gen/ are one module");
 }
 
 test("[comptime] cache moves the result cache") {

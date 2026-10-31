@@ -3,7 +3,7 @@
 # dependency's own coil.toml, works for `spool test`, `spool build` and
 # `spool run` of a consumer that ships no native of its own.
 #
-#   nat  (coil-tls shape): src/nat.hy calls dload("nat"); native/ holds the C
+#   nat  (coil-tls shape): src/nat.coil calls dload("nat"); native/ holds the C
 #        source and, once built in the checkout, libnat.so; coil.toml has
 #        [ffi] search_paths = ["./native"] and a [[ffi.native]] row.
 #   mid  (coil-http shape): uses nat, and its coil.toml keeps the old
@@ -56,7 +56,7 @@ name = "nat"
 version = "0.1.0"
 path = "./native"
 EOF
-cat > "$S/nat/src/nat.hy" <<'EOF'
+cat > "$S/nat/src/nat.coil" <<'EOF'
 use ffi::{declare, dload, invoke};
 use ffi::types::{Int};
 
@@ -99,7 +99,7 @@ roots = ["./src"]
 [ffi]
 search_paths = ["./.spool/deps/nat/native"]
 EOF
-cat > "$S/mid/src/mid.hy" <<'EOF'
+cat > "$S/mid/src/mid.coil" <<'EOF'
 use nat::{add};
 use string::{format};
 
@@ -134,7 +134,7 @@ version = "0.0.1"
 roots = ["./src"]
 
 [entry]
-file = "src/main.hy"
+file = "src/main.coil"
 
 [ffi]
 allow = ["nat"]
@@ -145,7 +145,7 @@ $SMOKE_STDLIB_DEP
 mid = { git = "file://$S/mid", version = "^0.1" }
 nat = { git = "file://$S/nat", version = "^0.1", trusted = true }
 EOF
-  cat > "$dest/src/main.hy" <<'EOF'
+  cat > "$dest/src/main.coil" <<'EOF'
 use mid::{sum_text};
 use io::sync::{print};
 
@@ -156,7 +156,7 @@ fn main() {
     };
 }
 EOF
-  cat > "$dest/tests/sum.hy" <<'EOF'
+  cat > "$dest/tests/sum.coil" <<'EOF'
 use tests::assert;
 use mid::{sum_text};
 

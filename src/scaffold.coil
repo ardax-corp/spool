@@ -27,7 +27,7 @@ fn stdlib_repo() -> string {
 fn manifest_template(string name, bool lib, string stdlib_git) -> string {
     let body = "[package]\nname = \"" + name + "\"\nversion = \"0.1.0\"\n\n[module]\nroots = [\"./src\"]\n";
     if lib == false {
-        body = body + "\n[entry]\nfile = \"src/main.hy\"\n";
+        body = body + "\n[entry]\nfile = \"src/main.coil\"\n";
     }
     body = body + "\n[dependencies]\n# Follows coil-stdlib's tip (edge). Pin it: version = \"...\" or rev = \"<commit>\".\n" +
            "stdlib = { git = \"" + stdlib_git + "\", version = \"latest\" }\n";
@@ -111,11 +111,11 @@ fn scaffold(string dir, string name, bool lib, bool vcs) -> Result<int, string> 
         Result::Err(_) => raise format("failed to write %s", manifest),
     };
     if lib {
-        write_new(join2(dir, "src/" + name + ".hy"), lib_template())?;
-        write_new(join2(dir, "tests/" + name + ".hy"), lib_test_template(name))?;
+        write_new(join2(dir, "src/" + name + ".coil"), lib_template())?;
+        write_new(join2(dir, "tests/" + name + ".coil"), lib_test_template(name))?;
     } else {
-        write_new(join2(dir, "src/main.hy"), main_template(name))?;
-        write_new(join2(dir, "tests/main.hy"), bin_test_template())?;
+        write_new(join2(dir, "src/main.coil"), main_template(name))?;
+        write_new(join2(dir, "tests/main.coil"), bin_test_template())?;
     }
     ensure_gitignore(dir)?;
     if vcs && path_exists(join2(dir, ".git")) == false {

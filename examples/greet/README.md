@@ -6,10 +6,10 @@ Demo Coil library for [spool](https://github.com/ardax-corp/spool). Function-sty
 
 ```text
 coil.toml
-src/hello.hy    # use greet::hello
+src/hello.coil    # use greet::hello
 ```
 
-`spool` links `.spool/deps/greet` at this package's `src/` directory so `use greet::hello` resolves to `hello.hy`.
+`spool` links `.spool/deps/greet` at this package's `src/` directory so `use greet::hello` resolves to `hello.coil`.
 
 ## Consume
 

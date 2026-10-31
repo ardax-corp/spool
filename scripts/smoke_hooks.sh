@@ -53,7 +53,7 @@ post_install = "./hooks/preinstall.sh"
 pre_update = "./hooks/preinstall.sh"
 post_update = "./hooks/preinstall.sh"
 EOF
-  echo "// app" > "$dest/src/main.hy"
+  echo "// app" > "$dest/src/main.coil"
 }
 
 write_lib() {
@@ -70,7 +70,7 @@ include = "./hooks/include.sh"
 [module]
 roots = ["./src"]
 EOF
-  echo "// lib" > "$dest/src/lib.hy"
+  echo "// lib" > "$dest/src/lib.coil"
 }
 
 assert_hooks_idle() {

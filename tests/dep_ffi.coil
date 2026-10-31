@@ -45,13 +45,13 @@ fn fixture(string tag, string proj_toml) -> Result<string, string> {
     ensure_dir(join2(base, "mid"))?;
     ensure_dir(join2(base, "proj/src"))?;
     ensure_dir(join2(base, "proj/vendor"))?;
-    write_file(join2(base, "nat/src/nat.hy"), "fn one() -> int { return 1; }\n")?;
+    write_file(join2(base, "nat/src/nat.coil"), "fn one() -> int { return 1; }\n")?;
     write_file(join2(base, "nat/native/libnat.so"), "not really a library\n")?;
     write_file(
         join2(base, "nat/coil.toml"),
         "[package]\nname = \"nat\"\nversion = \"0.1.0\"\n\n[ffi]\nsearch_paths = [\"./native\", \"./missing\", \"../escape\", \"/abs/native\"]\n\n[[ffi.native]]\nname = \"nat\"\nversion = \"0.1.0\"\npath = \"./native\"\n\n[[ffi.native]]\nname = \"outside\"\nversion = \"0.1.0\"\npath = \"../elsewhere\"\n",
     )?;
-    write_file(join2(base, "mid/mid.hy"), "fn two() -> int { return 2; }\n")?;
+    write_file(join2(base, "mid/mid.coil"), "fn two() -> int { return 2; }\n")?;
     write_file(
         join2(base, "mid/coil.toml"),
         "[package]\nname = \"mid\"\nversion = \"0.1.0\"\n\n[ffi]\nsearch_paths = [\"./.spool/deps/nat/native\"]\n",

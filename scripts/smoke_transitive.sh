@@ -43,7 +43,7 @@ version = "1.0.0"
 [module]
 roots = ["./src"]
 EOF
-echo "// c" > "$C/src/lib.hy"
+echo "// c" > "$C/src/lib.coil"
 init_git "$C"
 commit_tag "$C" "c 1.0.0" v1.0.0
 sed -i 's/1.0.0/1.2.0/' "$C/coil.toml"
@@ -64,7 +64,7 @@ roots = ["./src"]
 [dependencies]
 c = { git = "$C_URL", version = "^1.0" }
 EOF
-echo "// a" > "$A/src/lib.hy"
+echo "// a" > "$A/src/lib.coil"
 init_git "$A"
 commit_tag "$A" "a 0.1.0" v0.1.0
 A_URL="file://$A"
@@ -81,7 +81,7 @@ roots = ["./src"]
 [dependencies]
 c = { git = "$C_URL", version = "^1.2" }
 EOF
-echo "// b" > "$B/src/lib.hy"
+echo "// b" > "$B/src/lib.coil"
 init_git "$B"
 commit_tag "$B" "b 0.1.0" v0.1.0
 B_URL="file://$B"
@@ -98,7 +98,7 @@ roots = ["./src"]
 [dependencies]
 c = { git = "$C_URL", version = "^2.0" }
 EOF
-echo "// d" > "$D/src/lib.hy"
+echo "// d" > "$D/src/lib.coil"
 init_git "$D"
 commit_tag "$D" "d 0.1.0" v0.1.0
 D_URL="file://$D"
@@ -114,7 +114,7 @@ version = "0.0.1"
 roots = ["./src"]
 [env]
 EOF
-  echo "// app" > "$dest/src/main.hy"
+  echo "// app" > "$dest/src/main.coil"
 }
 
 export COIL="$COIL_BIN"

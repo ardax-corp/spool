@@ -160,10 +160,14 @@ fn entry_of(string root) -> Result<string, string> {
     if e.len() > 0 {
         return e;
     }
+    if path_exists(join2(root, "src/main.coil")) {
+        return "src/main.coil";
+    }
+    // A project that still has the pre-rename name.
     if path_exists(join2(root, "src/main.hy")) {
         return "src/main.hy";
     }
-    raise "nothing to build: set [entry] file in coil.toml (or add src/main.hy)";
+    raise "nothing to build: set [entry] file in coil.toml (or add src/main.coil)";
 }
 
 fn has_deps(string root) -> Result<bool, string> {
@@ -282,7 +286,7 @@ fn cmd_check(Vec<string> rest) -> Result<int, string> {
     let argv = strs("compile");
     argv = push_all(argv, compile_flags(root)?);
     argv.push("-o");
-    argv.push(join2(dir, project_name(root) + ".hyc"));
+    argv.push(join2(dir, project_name(root) + ".ccoil"));
     argv.push(entry);
     let code = coil_in(root, argv)?;
     if code != 0 {
@@ -443,7 +447,7 @@ fn self_exe() -> string {
     }
     let a = argv[0];
     let parts = a.split("/");
-    // Run in memory (`coil spool.hy`), argv[0] is coil itself.
+    // Run in memory (`coil spool.coil`), argv[0] is coil itself.
     if parts[parts.len() - 1] == "coil" {
         return "";
     }

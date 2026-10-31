@@ -57,7 +57,7 @@ post_install = "./scripts/post-install.sh"
 pre_update = "./scripts/pre-update.sh"
 post_update = "./scripts/post-update.sh"
 EOF
-  echo "// app" > "$dest/src/main.hy"
+  echo "// app" > "$dest/src/main.coil"
   write_marker_script "$dest/scripts/pre-install.sh" "pre_install"
   write_marker_script "$dest/scripts/post-install.sh" "post_install"
   write_marker_script "$dest/scripts/pre-update.sh" "pre_update"
@@ -81,7 +81,7 @@ roots = ["./src"]
 pre_install = "./scripts/pre-install.sh"
 post_install = "./scripts/post-install.sh"
 EOF
-  echo "// lib" > "$dest/src/lib.hy"
+  echo "// lib" > "$dest/src/lib.coil"
   cat > "$dest/scripts/pre-install.sh" <<'EOS'
 #!/bin/sh
 touch "${SPOOL_PROJECT:-.}/DEP_SCRIPT_RAN"

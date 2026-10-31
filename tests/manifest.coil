@@ -217,7 +217,7 @@ include = \"./hooks/include.sh\"
 roots = [\"./src\"]
 
 [entry]
-file = \"./src/main.hy\"
+file = \"./src/main.coil\"
 
 [permissions]
 read = true

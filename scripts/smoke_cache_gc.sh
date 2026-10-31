@@ -23,7 +23,7 @@ make_repo() {
   local dir="$1" name="$2"
   mkdir -p "$dir/src"
   printf '[package]\nname = "%s"\nversion = "0.1.0"\n' "$name" > "$dir/coil.toml"
-  echo "fn v() -> int { return 1; }" > "$dir/src/$name.hy"
+  echo "fn v() -> int { return 1; }" > "$dir/src/$name.coil"
   git init -q "$dir"
   git -C "$dir" config user.email "spool@test"
   git -C "$dir" config user.name "spool"
@@ -32,7 +32,7 @@ make_repo() {
   git -C "$dir" tag v0.1.0
 }
 make_repo "$BASE/lib" lib
-echo "fn v() -> int { return 2; }" > "$BASE/lib/src/lib.hy"
+echo "fn v() -> int { return 2; }" > "$BASE/lib/src/lib.coil"
 git -C "$BASE/lib" commit -q -am "lib 0.2.0"
 git -C "$BASE/lib" tag v0.2.0
 make_repo "$BASE/other" other
@@ -83,7 +83,7 @@ test -d "$NEW"
 test -d "$CACHE/git/checkouts"
 # Projects still build against what is left.
 test "$(real "$A/.spool/deps/lib")" = "$(real "$B/.spool/deps/lib")"
-test -f "$B/.spool/deps/lib/lib.hy"
+test -f "$B/.spool/deps/lib/lib.coil"
 # The deleted project is forgotten: a second gc has nothing to do.
 AGAIN="$(SPOOL_PROJECT="$A" "$SPOOL" cache gc 2>&1)"
 echo "$AGAIN" | grep -q "nothing to remove"

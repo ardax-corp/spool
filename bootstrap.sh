@@ -8,7 +8,7 @@
 #      edge snapshot of coil-lang main instead.
 #   3. If there is no release, build coil-lang from source (default: main).
 #   4. Fetch coil-stdlib, coil-toml and coil-json into .bootstrap/ (or use siblings).
-#   5. `coil package spool.hy` → target/spool.
+#   5. `coil package spool.coil` → target/spool.
 #   6. --install: spool → DIR (default ~/.local/bin),
 #      and a bootstrap-built coil with its tools (coil-test, coil-fmt, …) and
 #      coil-embed → ~/.coil/bin.
@@ -179,9 +179,14 @@ coil_is_valid() {
   fi
   local probe_dir
   probe_dir="$(mktemp -d)"
-  cat > "$probe_dir/probe.hy" <<'EOF'
+  # spool's modules are `.coil` files: a coil from before the `.hy` rename
+  # cannot find src/probe_mod.coil and is not usable.
+  mkdir -p "$probe_dir/src"
+  printf 'fn probe_rc() -> int {\n    return 0;\n}\n' > "$probe_dir/src/probe_mod.coil"
+  cat > "$probe_dir/probe.coil" <<'EOF'
 use env::{args, exit, set_cwd};
 use process::{exec};
+use probe_mod::{probe_rc};
 fn main() {
     let a = match args() {
         Result::Ok(v) => v.len(),
@@ -194,15 +199,15 @@ fn main() {
             Result::Err(_) => 0,
         };
     }
-    exit(rc);
+    exit(rc + probe_rc());
 }
 EOF
   local ok=0
   # shellcheck disable=SC2046
-  if ( cd "$probe_dir" && "$bin" --allow-exec --allow-exit $(cap_flags "$bin") probe.hy ) >/dev/null 2>"$probe_dir/err"; then
+  if ( cd "$probe_dir" && "$bin" --allow-exec --allow-exit $(cap_flags "$bin") probe.coil ) >/dev/null 2>"$probe_dir/err"; then
     ok=1
   else
-    say "  $bin: coil $ver failed the host-API probe:"
+    say "  $bin: coil $ver failed the host-API / .coil module probe:"
     sed 's/^/    /' "$probe_dir/err" | head -n 8 >&2
   fi
   rm -rf "$probe_dir"
@@ -488,7 +493,7 @@ say "packaging $OUT"
     --root "$TOML_DIR/src" \
     --root "$JSON_DIR/src" \
     --allow-exec --allow-exit $(cap_flags "$COIL_BIN") \
-    -o "$OUT" spool.hy ) \
+    -o "$OUT" spool.coil ) \
   || die "coil package failed"
 
 "$OUT" --version >/dev/null || die "packaged spool does not run"

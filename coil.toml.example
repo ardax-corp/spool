@@ -7,7 +7,7 @@
 #
 # Naming:
 #   spool          — the project tool: deps (install / add / update), build, run, test
-#   coil package   — embed a .hyc into a runner executable (`spool build`)
+#   coil package   — embed a .ccoil into a runner executable (`spool build`)
 
 # Optional package identity (required keys when the section is present).
 # [package]
@@ -27,7 +27,7 @@ roots = ["./src"]
 [entry]
 # Optional: the entry-point file (relative to the project root). `spool
 # build` / `run` / `check` / `debug` use it when no file is given.
-# file = "./src/main.hy"
+# file = "./src/main.coil"
 
 # --------------------------------------------------------------------------
 # Permissions
