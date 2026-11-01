@@ -30,10 +30,13 @@ cat > "$STD/coil.toml" <<'EOF'
 name = "stdlib"
 version = "0.1.0"
 EOF
-cp "$STD/src/num.coil" "$BASE/num.coil.orig"
+# The pinned stdlib may still name its sources `.hy`.
+NUM="$STD/src/num.coil"
+[[ -f "$NUM" ]] || NUM="$STD/src/num.hy"
+cp "$NUM" "$BASE/num.orig"
 mark() {
-  cp "$BASE/num.coil.orig" "$STD/src/num.coil"
-  printf '\nfn stdlib_marker() -> string {\n    return "%s";\n}\n' "$1" >> "$STD/src/num.coil"
+  cp "$BASE/num.orig" "$NUM"
+  printf '\nfn stdlib_marker() -> string {\n    return "%s";\n}\n' "$1" >> "$NUM"
 }
 git init -q "$STD"
 git -C "$STD" config user.email "spool@test"
