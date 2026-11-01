@@ -17,7 +17,7 @@ version = "0.0.1"
 roots = ["./src"]
 [env]
 EOF
-echo "// app" > "$PROJ/src/main.hy"
+echo "// app" > "$PROJ/src/main.coil"
 
 export COIL="$COIL_BIN"
 export XDG_CACHE_HOME="$CACHE"

@@ -42,12 +42,12 @@ EOF
 L="$BASE/l"
 mkdir -p "$L/src"
 lib_toml "$L" l ""
-echo "// l 1" > "$L/src/lib.hy"
+echo "// l 1" > "$L/src/lib.coil"
 init_git "$L"
 git -C "$L" checkout -q -b master
 commit "$L" "l 1"
 git -C "$L" checkout -q -b topic
-echo "// l topic" > "$L/src/lib.hy"
+echo "// l topic" > "$L/src/lib.coil"
 commit "$L" "l topic"
 TOPIC_SHA="$(git -C "$L" rev-parse HEAD)"
 git -C "$L" checkout -q master
@@ -58,7 +58,7 @@ L_URL="file://$L"
 T="$BASE/t"
 mkdir -p "$T/src"
 lib_toml "$T" t ""
-echo "// t" > "$T/src/lib.hy"
+echo "// t" > "$T/src/lib.coil"
 init_git "$T"
 commit "$T" "t 1.0.0"
 git -C "$T" tag v1.0.0
@@ -69,7 +69,7 @@ A="$BASE/a"
 mkdir -p "$A/src"
 lib_toml "$A" a "[dependencies]
 l = { git = \"$L_URL\", version = \"latest\" }"
-echo "// a" > "$A/src/lib.hy"
+echo "// a" > "$A/src/lib.coil"
 init_git "$A"
 commit "$A" "a 0.1.0"
 git -C "$A" tag v0.1.0
@@ -80,7 +80,7 @@ D="$BASE/d"
 mkdir -p "$D/src"
 lib_toml "$D" d "[dependencies]
 l = { git = \"$L_URL\", version = \"^1.0\" }"
-echo "// d" > "$D/src/lib.hy"
+echo "// d" > "$D/src/lib.coil"
 init_git "$D"
 commit "$D" "d 0.1.0"
 git -C "$D" tag v0.1.0
@@ -96,7 +96,7 @@ version = "0.0.1"
 roots = ["./src"]
 [env]
 EOF
-  echo "// app" > "$1/src/main.hy"
+  echo "// app" > "$1/src/main.coil"
 }
 
 export COIL="$COIL_BIN"
@@ -117,7 +117,7 @@ test -L "$P1/.spool/deps/l" || fail "l not linked"
 (cd "$P1" && "$SPOOL" tree) | grep -q "l latest @ ${L1:0:10}" || fail "tree does not show latest"
 
 # 2. install keeps the locked sha; update moves it.
-echo "// l 2" > "$L/src/lib.hy"
+echo "// l 2" > "$L/src/lib.coil"
 commit "$L" "l 2"
 L2="$(git -C "$L" rev-parse HEAD)"
 "$SPOOL" install

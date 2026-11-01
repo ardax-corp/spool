@@ -5,9 +5,9 @@ version = "0.2.0"
 [module]
 roots = ["./src"]
 
-# spool is a standalone binary: ./bootstrap.sh packages spool.hy.
+# spool is a standalone binary: ./bootstrap.sh packages spool.coil.
 [entry]
-file = "spool.hy"
+file = "spool.coil"
 
 [env]
 allow_exit = true

@@ -16,7 +16,7 @@ git -C "$FIX" config user.email "spool@test"
 git -C "$FIX" config user.name "spool"
 echo "v1" > "$FIX/README.md"
 mkdir -p "$FIX/src"
-echo "// fixture lib" > "$FIX/src/lib.hy"
+echo "// fixture lib" > "$FIX/src/lib.coil"
 git -C "$FIX" add -A
 git -C "$FIX" commit -q -m "v1"
 git -C "$FIX" tag v1.0.0
@@ -36,9 +36,9 @@ roots = ["./src"]
 
 [env]
 EOF
-echo "// consumer" > "$PROJ/src/main.hy"
+echo "// consumer" > "$PROJ/src/main.coil"
 
-echo "// path lib" > "$PATHLIB/src/lib.hy"
+echo "// path lib" > "$PATHLIB/src/lib.coil"
 
 export COIL="$COIL_BIN"
 export XDG_CACHE_HOME="$CACHE"
@@ -59,7 +59,7 @@ fi
 "$SPOOL" add local_lib --path "$PATHLIB"
 test -L "$PROJ/.spool/deps/local_lib"
 grep -q 'local_lib = { path =' "$PROJ/coil.toml"
-test -f "$PROJ/.spool/deps/local_lib/lib.hy"
+test -f "$PROJ/.spool/deps/local_lib/lib.coil"
 
 echo "v1.2" > "$FIX/README.md"
 git -C "$FIX" add -A

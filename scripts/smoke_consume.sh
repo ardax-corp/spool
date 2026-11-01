@@ -42,12 +42,12 @@ version = "0.0.1"
 roots = ["./src"]
 
 [entry]
-file = "src/main.hy"
+file = "src/main.coil"
 
 [dependencies]
 $SMOKE_STDLIB_DEP
 EOF
-  cat > "$dest/src/main.hy" <<'EOF'
+  cat > "$dest/src/main.coil" <<'EOF'
 use greet::hello;
 use io::sync::{print};
 
@@ -68,7 +68,7 @@ write_consumer "$GIT_PROJ"
 export SPOOL_PROJECT="$GIT_PROJ"
 "$SPOOL" add greet --git "$URL" --version "^0.1"
 test -L "$GIT_PROJ/.spool/deps/greet"
-test -f "$GIT_PROJ/.spool/deps/greet/hello.hy"
+test -f "$GIT_PROJ/.spool/deps/greet/hello.coil"
 GOT="$(cd "$GIT_PROJ" && "$SPOOL" run 2>/dev/null)"
 test "$GOT" = "hello, spool"
 
@@ -76,7 +76,7 @@ write_consumer "$PATH_PROJ"
 export SPOOL_PROJECT="$PATH_PROJ"
 "$SPOOL" add greet --path "$GREET_SRC"
 test -L "$PATH_PROJ/.spool/deps/greet"
-test -f "$PATH_PROJ/.spool/deps/greet/hello.hy"
+test -f "$PATH_PROJ/.spool/deps/greet/hello.coil"
 GOT="$(cd "$PATH_PROJ" && "$SPOOL" run 2>/dev/null)"
 test "$GOT" = "hello, spool"
 

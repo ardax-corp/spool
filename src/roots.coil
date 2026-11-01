@@ -4,9 +4,11 @@
 //
 //   .spool/deps/<name>     -> <checkout>/src   (`use name::module`; its
 //                             real path is a root too, for `use name::sub`
-//                             from src/<name>/sub.hy and sibling modules)
-//   .spool/deps/<name>.hy  -> <checkout>/src/<name>.hy when present
-//                             (`use name::{Item}` for single-file libraries)
+//                             from src/<name>/sub.coil and sibling modules)
+//   .spool/deps/<name>.coil  -> <checkout>/src/<name>.coil when present
+//                             (`use name::{Item}` for single-file libraries;
+//                             `<name>.hy` for a package still on the
+//                             pre-rename extension)
 //
 // dep_checkouts maps the links back to each checkout, whose own coil.toml
 // `[ffi]` paths resolve against it (spool#38).
@@ -14,7 +16,7 @@ use io::fs::{is_dir, is_symlink, remove_file, symlink, list_dir, realpath};
 use collections::sort;
 use text::{Searchable, Text};
 use string::format;
-use util::{join2, ensure_dir, path_exists, path_dirname, tsv_field, vec_has, check_pkg_name};
+use util::{join2, ensure_dir, path_exists, path_dirname, tsv_field, vec_has, check_pkg_name, source_stem, source_file};
 
 fn spool_deps_dir(string project_root) -> string {
     return join2(project_root, ".spool/deps");
@@ -72,21 +74,27 @@ fn link_dep(string project_root, string name, string checkout_path) -> Result<in
     let link = join2(deps, name);
     remove_link(link)?;
     make_link(target, link)?;
-    let file_link = link + ".hy";
-    remove_link(file_link)?;
-    let lib_file = join2(target, name + ".hy");
-    if path_exists(lib_file) {
-        make_link(lib_file, file_link)?;
+    remove_link(link + ".coil")?;
+    remove_link(link + ".hy")?;
+    // The link keeps the file's extension: coil looks for `.coil`, then the
+    // pre-rename `.hy` a package that has not renamed its files still has.
+    let lib_file = source_file(target, name);
+    if lib_file.len() > 0 {
+        let ext = ".hy";
+        if lib_file.ends_with(".coil") {
+            ext = ".coil";
+        }
+        make_link(lib_file, link + ext)?;
     }
     return 0;
 }
 
-fn strip_hy(string entry) -> string {
-    if entry.ends_with(".hy") && entry.len() > 3 {
-        return match entry.slice(0, entry.len() - 3) {
-            Result::Ok(x) => x,
-            Result::Err(_) => entry,
-        };
+/// The package a `.spool/deps` entry belongs to: `<name>`, `<name>.coil`
+/// or `<name>.hy` are all `<name>`.
+fn link_name(string entry) -> string {
+    let stem = source_stem(entry);
+    if stem.len() > 0 {
+        return stem;
     }
     return entry;
 }
@@ -94,12 +102,12 @@ fn strip_hy(string entry) -> string {
 /// The real path of every `.spool/deps/<name>` directory link, sorted: each
 /// package's own module root (<checkout>/src), so it resolves its modules for
 /// the consumer the way it does in its own repo (`use tls::client` ->
-/// src/tls/client.hy, coil-sdl's `use simd` -> src/simd.hy).
+/// src/tls/client.coil, coil-sdl's `use simd` -> src/simd.coil).
 ///
 /// The real path, not the link: coil names a module after the innermost root
 /// holding its path, so `.spool/deps/greet` as a root would rename
-/// `.spool/deps/greet/hello.hy` from `greet::hello` to `hello`. The `<name>.hy`
-/// file links are modules, not roots.
+/// `.spool/deps/greet/hello.coil` from `greet::hello` to `hello`. The `<name>.coil`
+/// file links (and `.hy` ones) are modules, not roots.
 fn dep_module_roots(string project_root) -> Vec<string> {
     let out: Vec<string> = Vec::new();
     let deps = spool_deps_dir(project_root);
@@ -114,7 +122,7 @@ fn dep_module_roots(string project_root) -> Vec<string> {
     while i < entries.len() {
         let p = join2(deps, entries[i]);
         i = i + 1;
-        if p.ends_with(".hy") || is_link(p) == false {
+        if source_stem(p).len() > 0 || is_link(p) == false {
             continue;
         }
         let dir = match is_dir(p) {
@@ -165,7 +173,7 @@ fn dep_checkouts(string project_root) -> Vec<string> {
         let name = entries[i];
         let p = join2(deps, name);
         i = i + 1;
-        if p.ends_with(".hy") || is_link(p) == false {
+        if source_stem(p).len() > 0 || is_link(p) == false {
             continue;
         }
         let dir = match is_dir(p) {
@@ -203,7 +211,7 @@ fn link_all(string project_root, Vec<string> rows) -> Result<int, string> {
     while i < entries.len() {
         let e = entries[i];
         i = i + 1;
-        if vec_has(names, strip_hy(e)) == false {
+        if vec_has(names, link_name(e)) == false {
             remove_link(join2(deps, e))?;
         }
     }

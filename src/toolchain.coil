@@ -1,7 +1,7 @@
 // Locate the coil toolchain and turn a project manifest into coil flags.
 use env::var;
 use string::format;
-use util::{join2, join3, path_exists, path_is_absolute, home_dir, trim_or, vec_has, tsv_field};
+use util::{join2, join3, path_exists, path_is_absolute, home_dir, trim_or, vec_has, tsv_field, source_stem, source_file};
 use roots::{dep_module_roots, dep_checkouts, checkout_module_root};
 use proc::{which, sh_capture, first_line};
 use manifest::{manifest_body, manifest_validate, module_roots_parse, section_string, section_bool, section_strings, trusted_deps_parse, ffi_natives_parse, native_name, native_package, native_version, native_path, native_requires, native_requires_hint};
@@ -87,9 +87,10 @@ fn abs_under(string root, string p) -> string {
     return join2(root, p);
 }
 
-/// A module root that holds coil-stdlib (`text.hy` and `io/file.hy`).
+/// A module root that holds coil-stdlib (`text.coil` and `io/file.coil`, or
+/// the pre-rename `.hy` files of an older stdlib).
 fn is_stdlib_root(string dir) -> bool {
-    return path_exists(join2(dir, "text.hy")) && path_exists(join3(dir, "io", "file.hy"));
+    return source_file(dir, "text").len() > 0 && source_file(join2(dir, "io"), "file").len() > 0;
 }
 
 /// The first of `roots` that holds the stdlib, or "".
@@ -430,7 +431,7 @@ fn dir_has_lib(string dir, string name) -> bool {
            path_exists(join2(dir, name + ".dll"));
 }
 
-/// `r` with its path field replaced (record layout in manifest.hy).
+/// `r` with its path field replaced (record layout in manifest.coil).
 fn with_native_path(string r, string path) -> string {
     return native_name(r) + "\t" + native_package(r) + "\t" + native_version(r) + "\t" + path + "\t" +
            tsv_field(r, 4) + "\t" + native_requires(r) + "\t" + native_requires_hint(r) + "\t" +
@@ -605,8 +606,9 @@ fn comptime_grants(string body, string base, string scope) -> Result<Vec<string>
     return out;
 }
 
-/// The top-level modules a dependency provides: the `.hy` files and the
-/// directories in its module root (`json.hy` and `json/` are `json`).
+/// The top-level modules a dependency provides: the `.coil` (or pre-rename
+/// `.hy`) files and the directories in its module root (`json.coil` and
+/// `json/` are `json`).
 fn dep_top_modules(string checkout) -> Vec<string> {
     let out: Vec<string> = Vec::new();
     let dir = checkout_module_root(checkout);
@@ -623,11 +625,9 @@ fn dep_top_modules(string checkout) -> Vec<string> {
         if name.starts_with(".") {
             continue;
         }
-        if name.ends_with(".hy") {
-            name = match name.slice(0, name.len() - 3) {
-                Result::Ok(s) => s,
-                Result::Err(_) => name,
-            };
+        let stem = source_stem(name);
+        if stem.len() > 0 {
+            name = stem;
         } else {
             let sub = match is_dir(join2(dir, name)) {
                 Result::Ok(d) => d,

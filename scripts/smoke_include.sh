@@ -44,7 +44,7 @@ include = "./hooks/include.sh"
 roots = ["./src"]
 ${extra_dep}
 EOF
-  echo "// lib" > "$dest/src/lib.hy"
+  echo "// lib" > "$dest/src/lib.coil"
   cat > "$dest/scripts/pre-install.sh" <<'EOS'
 #!/bin/sh
 touch "${SPOOL_PROJECT:-.}/DEP_SCRIPT_RAN"
@@ -72,7 +72,7 @@ roots = ["./src"]
 pre_install = "./scripts/pre-install.sh"
 post_install = "./scripts/post-install.sh"
 EOF
-  echo "// app" > "$dest/src/main.hy"
+  echo "// app" > "$dest/src/main.coil"
   cat > "$dest/scripts/pre-install.sh" <<'EOS'
 #!/bin/sh
 echo pre_install >> "${SPOOL_PROJECT:-.}/SCRIPT_RAN"
@@ -271,7 +271,7 @@ version = "1.0.0"
 [module]
 roots = ["./src"]
 EOF
-echo "// plain" > "$PLAIN/src/lib.hy"
+echo "// plain" > "$PLAIN/src/lib.coil"
 init_git "$PLAIN"
 PLAINAPP="$BASE/plainapp"
 write_app "$PLAINAPP" "plainapp"
