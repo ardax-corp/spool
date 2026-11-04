@@ -74,7 +74,7 @@ Tooling:
   setup [--channel stable|edge|TAG] fetch the coil toolchain into ~/.coil
   doctor                            check the toolchain and environment
   cache dir | cache clean           show or clear the shared git cache
-  cache gc [--dry-run]              remove cached checkouts no project's coil.lock uses
+  cache gc [--dry-run]              remove cached checkouts and static natives no project uses
   version, --version                print the spool version
   help, --help                      show this help
 

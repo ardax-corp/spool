@@ -3,6 +3,11 @@
 //   <cache>/git/projects/<git hash of the root>   one file per project, holding
 //                                                 its absolute root
 //
+// It also prunes prebuilt static natives (`static_url`), cached at
+// ~/.coil/natives/static/<package>/<version>/<sha256_16>/: an entry no recorded
+// project or its dependencies declare goes. When a project's natives cannot
+// be read, no static entry is removed.
+//
 // Every install and every compiling command records its project. gc keeps
 // each checkout and bare clone some recorded project's coil.lock names, drops
 // the records of projects whose coil.lock is gone, and removes the rest. A
@@ -17,7 +22,9 @@ use proc::{sh_run, sh_capture};
 use config::cache_root;
 use lock::{lock_read_or_empty, lock_pkg_git, lock_pkg_hash};
 use git::bare_dir;
-use toolchain::env_or;
+use toolchain::{env_or, package_native_rows};
+use manifest::{native_static_url};
+use natives::{natives_root, static_entry};
 
 fn projects_dir() -> Result<string, string> {
     return join3(cache_root()?, "git", "projects");
@@ -71,6 +78,39 @@ fn gc_candidates(string git_dir) -> Result<Vec<string>, string> {
     return lines_of(body);
 }
 
+/// `<package>/<version>/<sha256_16>` of each static entry older than the
+/// grace period.
+fn static_candidates(string dir) -> Result<Vec<string>, string> {
+    let a: Vec<string> = Vec::new();
+    a.push(dir);
+    a.push(grace_minutes());
+    let script = "cd \"$1\" 2>/dev/null || exit 0; " +
+                 "find . -mindepth 3 -maxdepth 3 -type d | while IFS= read -r d; do d=\"${d#./}\"; " +
+                 "[ \"$2\" -gt 0 ] && [ -n \"$(find \"$d\" -maxdepth 0 -mmin -\"$2\" 2>/dev/null)\" ] && continue; " +
+                 "printf '%s\\n' \"$d\"; done";
+    let res = sh_capture(script, a)?;
+    let (code, body) = res;
+    if code != 0 {
+        raise format("cannot list %s", dir);
+    }
+    return lines_of(body);
+}
+
+/// The static entries project `root` declares (its own rows and its
+/// dependencies'), or an error when they cannot be read.
+fn project_static_entries(string root) -> Result<Vec<string>, string> {
+    let out: Vec<string> = Vec::new();
+    let rows = package_native_rows(root)?;
+    let i = 0;
+    while i < rows.len() {
+        if native_static_url(rows[i]).len() > 0 {
+            out.push(static_entry(rows[i])?);
+        }
+        i = i + 1;
+    }
+    return out;
+}
+
 /// The last path segment.
 fn base_name(string p) -> string {
     let parts = p.split("/");
@@ -87,6 +127,8 @@ fn cache_gc(bool dry) -> Result<int, string> {
     let pdir = projects_dir()?;
     let trees: Vec<string> = Vec::new();
     let bares: Vec<string> = Vec::new();
+    let statics: Vec<string> = Vec::new();
+    let statics_unknown = "";
     let forget: Vec<string> = Vec::new();
     let records: Vec<string> = Vec::new();
     if path_exists(pdir) {
@@ -117,6 +159,27 @@ fn cache_gc(bool dry) -> Result<int, string> {
             trees.push(lock_pkg_hash(pkgs[k]));
             bares.push(bare_dir(lock_pkg_git(pkgs[k]))?);
             k = k + 1;
+        }
+        if pkgs.len() > 0 && path_exists(join2(root, ".spool/deps")) == false {
+            // Its dependencies are not linked, so their rows cannot be read.
+            if statics_unknown.len() == 0 {
+                statics_unknown = root + " (dependencies not installed)";
+            }
+            continue;
+        }
+        match project_static_entries(root) {
+            Result::Ok(v) => {
+                k = 0;
+                while k < v.len() {
+                    statics.push(v[k]);
+                    k = k + 1;
+                }
+            },
+            Result::Err(e) => {
+                if statics_unknown.len() == 0 {
+                    statics_unknown = format("%s (%s)", root, e);
+                }
+            },
         }
     }
     let verb = "removed";
@@ -179,10 +242,50 @@ fn cache_gc(bool dry) -> Result<int, string> {
         sh_run("cd \"$1\" 2>/dev/null || exit 0; find . -mindepth 3 -maxdepth 3 -type d ! -path './checkouts/*' ! -path './projects/*' | " +
                "while IFS= read -r d; do [ -f \"$d/HEAD\" ] && git -C \"$d\" worktree prune 2>/dev/null; done; exit 0", a)?;
     }
-    if checkouts + clones + forget.len() == 0 {
+    let archives = 0;
+    let static_dir = join2(natives_root()?, "static");
+    if statics_unknown.len() > 0 {
+        say("cache gc: kept every static native: cannot read the natives of " + statics_unknown);
+    } else {
+        let entries = static_candidates(static_dir)?;
+        i = 0;
+        while i < entries.len() {
+            let rel = entries[i];
+            i = i + 1;
+            if vec_has(statics, rel) {
+                continue;
+            }
+            say(format("%s static native %s", verb, rel));
+            archives = archives + 1;
+            if dry {
+                continue;
+            }
+            let path = join2(static_dir, rel);
+            match remove_dir_all(path) {
+                Result::Ok(_) => 0,
+                Result::Err(_) => raise format("cannot remove %s", path),
+            };
+        }
+        if dry == false && archives > 0 {
+            // Drop version and package dirs the removals left empty.
+            let a: Vec<string> = Vec::new();
+            a.push(static_dir);
+            sh_run("cd \"$1\" 2>/dev/null || exit 0; find . -mindepth 1 -maxdepth 2 -type d -empty -delete 2>/dev/null; find . -mindepth 1 -maxdepth 1 -type d -empty -delete 2>/dev/null; exit 0", a)?;
+        }
+    }
+    if checkouts + clones + forget.len() + archives == 0 {
         say("cache gc: nothing to remove");
         return 0;
     }
-    say(format("cache gc: %s %i checkouts and %i clones; %i projects forgotten", verb, checkouts, clones, forget.len()));
+    say(
+        format(
+            "cache gc: %s %i checkouts, %i clones and %i static natives; %i projects forgotten",
+            verb,
+            checkouts,
+            clones,
+            archives,
+            forget.len(),
+        ),
+    );
     return 0;
 }
