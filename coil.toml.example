@@ -153,7 +153,14 @@ roots = ["./src"]
 #
 #   name           # required; the dload stem
 #   version        # required
-#   path           # required; directory holding the library, relative to this file
+#   path           # directory holding the shared library, relative to this file
+#                  # (required unless `static` is given)
+#   static         # optional; a lib<name>.a native builds link instead (see [build])
+#   link_args      # optional; linker arguments after `static` (["-lm"])
+#   static_url     # optional; https URL of a prebuilt .a (`{target}` = host triple),
+#                  # fetched into ~/.coil/natives/static; wins over `static`
+#   static_sha256  # required with static_url
+#   sha256         # optional; checks a `spool download` fetch
 #   package        # optional; cache / package name (default: name)
 #   url            # optional; https:// URL `spool download` fetches (spool only)
 #   requires       # optional; sonames the OS must provide (diagnostics only)
@@ -173,6 +180,17 @@ roots = ["./src"]
 # requires_hint = "apt install libpcre2-8-0"
 
 # --------------------------------------------------------------------------
+# [build] packaging mode
+# --------------------------------------------------------------------------
+# `spool build` / `run` make a native executable ("native", the default:
+# `[[ffi.native]]` rows with `static` are linked in) or the VM runner ("vm",
+# `coil package --no-aot`: shared libraries only). `--vm` / `--native`
+# override it for one build.
+#
+# [build]
+# mode = "native"
+
+# --------------------------------------------------------------------------
 # Accepted keys
 # --------------------------------------------------------------------------
 #
@@ -182,7 +200,9 @@ roots = ["./src"]
 #   [permissions]   read, write, net, env, exec, exit, attach, all
 #   [env]           allow_exit, allow_ffi_exec
 #   [ffi]           search_paths, allow, allow_attach
-#   [[ffi.native]]  name, version, path, package, url, requires, requires_hint
+#   [[ffi.native]]  name, version, path, static, static_url, static_sha256, link_args,
+#                   package, url, sha256, requires, requires_hint
+#   [build]         mode
 #   [scripts]       pre_install, post_install, pre_update, post_update
 #   [dependencies]  name = { git = "…", version = "…" | "latest", rev = "…" } | { path = "…" },
 #                   each with an optional `trusted = true`
