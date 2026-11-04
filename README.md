@@ -203,12 +203,12 @@ way the library resolves them itself.
 | `update [name]` | re-resolve to the newest allowed versions (moves `rev` branches and `latest`) |
 | `tree` | print the dependency graph |
 | `outdated` | locked vs newest compatible vs newest tag (`latest`: locked sha vs the current tip) |
-| `download [EXE]` | fetch FFI natives for the project or a packaged EXE |
+| `download [EXE]` | fetch FFI natives for the project (shared libraries and prebuilt static archives) or a packaged EXE |
 | `allow-include <name>` | allow a dependency's include-hook |
 | `allow-comptime <name>` | let a dependency's compile-time code use its own `[comptime]` grants |
 | `doctor` | check coil, its native runtime (`libcoil_rt.a`), `cc`, stdlib, git, sh, curl, cache and project roots |
 | `cache dir` / `cache clean` | show or clear the shared git cache |
-| `cache gc [--dry-run]` | remove cached checkouts and clones no known project's `coil.lock` uses (see [Cache](#cache)) |
+| `cache gc [--dry-run]` | remove cached checkouts and clones no known project's `coil.lock` uses, and prebuilt static natives none declares (see [Cache](#cache)) |
 
 Commands that compile (`build`, `run`, `check`, `test`, `infect`, `debug`,
 `dissect`) run `install` first when dependencies are declared but
@@ -510,7 +510,12 @@ link_args = ["-lSDL2", "-lm"]    # the archive's own libraries, after it
     `{target}` is the host triple (`x86_64-unknown-linux-gnu`,
     `x86_64-unknown-linux-musl`, `aarch64-apple-darwin`, …). spool fetches it
     once into `~/.coil/natives/static/<package>/<version>/<sha256_16>/lib<name>.a`
-    and links it from there.
+    and links it from there. `spool download` (and `spool install
+    --with-natives`) fetches every one the project and its dependencies
+    declare ahead of time, so the build needs no network; otherwise the
+    build fetches it. An entry whose sha256 no longer matches is fetched
+    again, never linked. `spool cache gc` removes the ones no project declares
+    (see [Cache](#cache)).
   - `static`, a file in the declaring checkout that its build script (or
     `make`) produces, as for shared natives below. spool checks it exists
     before running coil.
@@ -804,6 +809,13 @@ clone whose lock is held is kept, so an install in progress is safe. A
 project spool has not run in since recording began is unknown to gc; if its
 checkouts go, `spool install` there fetches them again. `spool cache clean`
 removes everything, including checkouts other projects link to.
+
+gc also prunes prebuilt static natives (`~/.coil/natives/static`, see
+[Static natives](#static-natives)): it keeps each entry a recorded project or
+its linked dependencies declare with `static_url`, plus anything inside the
+grace period, and removes the rest. When a recorded project's natives cannot
+be read (a broken `coil.toml`, or dependencies not installed), it keeps every
+static entry and says which project stopped it.
 
 ## Private git
 
