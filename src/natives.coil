@@ -410,6 +410,13 @@ fn download_natives(string coil, string project_root, string exe) -> Result<int,
             skipped = skipped + 1;
         }
     }
+    if exe.len() == 0 {
+        // Static archives are linked at build time; a packaged exe has them
+        // inside already.
+        let (got, had) = prefetch_static(project_root)?;
+        installed = installed + got;
+        skipped = skipped + had;
+    }
     if installed == 0 && skipped == 0 && no_url == 0 {
         println("spool download: nothing to download");
     } else {
@@ -554,38 +561,33 @@ fn static_cache_dir(string root, string package, string version, string hash16) 
     return join2(join2(join2(join2(root, "static"), package), version), hash16);
 }
 
-/// The archive to link for package row `r` (package_native_rows: paths
-/// absolute): its `static_url` download (fetched into the cache when not
-/// there with the right sha256), else its `static` file, which must exist.
-fn static_archive(string r) -> Result<string, string> {
-    let name = native_name(r);
-    let url = native_static_url(r);
-    if url.len() == 0 {
-        let a = native_static(r);
-        if path_exists(a) == false {
-            raise format(
-                "native %s: static library %s does not exist (build it first, e.g. with the package's build script, or give the row a static_url)",
-                name,
-                a,
-            );
-        }
-        return a;
-    }
-    url = url.replace_all("{target}", host_triple());
-    let sha = native_static_sha256(r);
+/// The cache entry for a `static_url` row: `<package>/<version>/<sha256_16>`
+/// under ~/.coil/natives/static (what `spool cache gc` keeps for it).
+fn static_entry(string r) -> Result<string, string> {
     let package = native_package(r);
     let version = native_version(r);
     safe_segment("package", package)?;
     safe_segment("version", version)?;
-    safe_segment("name", name)?;
+    let sha = native_static_sha256(r);
     let hash16 = match sha.slice(0, 16) {
         Result::Ok(x) => x,
         Result::Err(_) => sha,
     };
-    let dir = static_cache_dir(natives_root()?, package, version, hash16);
+    return join2(join2(package, version), hash16);
+}
+
+/// The cached archive for `static_url` row `r`, fetched (https) and checked
+/// against `static_sha256` unless the cache already holds it with that hash.
+/// Returns the path and whether it was fetched now.
+fn fetch_static(string r) -> Result<(string, bool), string> {
+    let name = native_name(r);
+    safe_segment("name", name)?;
+    let url = native_static_url(r).replace_all("{target}", host_triple());
+    let sha = native_static_sha256(r);
+    let dir = join2(join2(natives_root()?, "static"), static_entry(r)?);
     let dest = join2(dir, "lib" + name + ".a");
     if path_exists(dest) && sha256_of(dest)? == sha {
-        return dest;
+        return (dest, false);
     }
     ensure_dir(dir)?;
     let part = dest + ".part";
@@ -599,8 +601,51 @@ fn static_archive(string r) -> Result<string, string> {
         Result::Ok(_) => 0,
         Result::Err(_) => raise format("cannot move %s into place", dest),
     }
-    println(format("spool: fetched static %s %s -> %s (sha256 %s verified)", package, version, dest, sha));
-    return dest;
+    println(format("spool: fetched static %s %s -> %s (sha256 %s verified)", native_package(r), native_version(r), dest, sha));
+    return (dest, true);
+}
+
+/// The archive to link for package row `r` (package_native_rows: paths
+/// absolute): its `static_url` download (see fetch_static), else its
+/// `static` file, which must exist.
+fn static_archive(string r) -> Result<string, string> {
+    if native_static_url(r).len() == 0 {
+        let a = native_static(r);
+        if path_exists(a) == false {
+            raise format(
+                "native %s: static library %s does not exist (build it first, e.g. with the package's build script, or give the row a static_url)",
+                native_name(r),
+                a,
+            );
+        }
+        return a;
+    }
+    let (path, _) = fetch_static(r)?;
+    return path;
+}
+
+/// `spool download` / `install --with-natives` in project mode: fetch every
+/// `static_url` archive the project and its dependencies declare, so a
+/// later native build needs no network. Returns (fetched, already cached).
+fn prefetch_static(string project_root) -> Result<(int, int), string> {
+    let rows = package_native_rows(project_root)?;
+    let fetched = 0;
+    let cached = 0;
+    let i = 0;
+    while i < rows.len() {
+        let r = rows[i];
+        i = i + 1;
+        if native_static_url(r).len() == 0 {
+            continue;
+        }
+        let (_, now) = fetch_static(r)?;
+        if now {
+            fetched = fetched + 1;
+        } else {
+            cached = cached + 1;
+        }
+    }
+    return (fetched, cached);
 }
 
 /// `--link-static STEM=PATH` and `--link-arg ARG` for each static row of a
