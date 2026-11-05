@@ -35,7 +35,7 @@ Project:
                                     create a project in the current directory
   build [-o PATH] [-O LEVEL] [--vm | --native]
                                     package [entry].file into target/<name>
-                                    (a native executable; --vm: the VM runner)
+                                    (a native executable; --vm: the JIT runner)
   run [-O LEVEL] [--vm | --native] [-- ARGS...]
                                     build, then run target/<name> ARGS
   check                             compile without packaging
@@ -218,7 +218,7 @@ fn push_all(Vec<string> dst, Vec<string> src) -> Vec<string> {
 }
 
 /// `coil package` the project into `output`; `mode` is "native" (an AOT
-/// executable) or "vm" (the VM runner, `--no-aot`), see package_mode.
+/// executable) or "vm" (the JIT runner, `--no-aot`), see package_mode.
 fn build_to(string root, string output, string opt_level, string mode) -> Result<int, string> {
     ensure_installed(root)?;
     let entry = entry_of(root)?;
@@ -947,7 +947,7 @@ fn cmd_doctor(Vec<string> rest) -> Result<int, string> {
     if coil.len() > 0 {
         good = doctor_line("coil", coil + " (" + coil_version_output(coil) + ")", true) && good;
         // Native packages (spool build without --vm) link with the runtime
-        // and the host C compiler; without them coil packages the VM runner.
+        // and the host C compiler; without them coil packages the JIT runner.
         let rt = coil_runtime_lib(coil);
         if rt.len() > 0 {
             doctor_line("coil runtime", rt, true);

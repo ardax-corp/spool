@@ -520,11 +520,11 @@ fn package_native_rows(string root) -> Result<Vec<string>, string> {
     return out;
 }
 
-// ---- packaging mode (native AOT or the VM runner) --------------------------
-// `coil package` builds a native executable by default and the VM runner
+// ---- packaging mode (native AOT or the JIT runner) --------------------------
+// `coil package` builds a native executable by default and the JIT runner
 // with `--no-aot`. A native package links each row's `static` archive
 // (`--link-static STEM=PATH`, its `link_args` as `--link-arg`) and loads
-// only the other rows' shared libraries; a VM package loads every row's
+// only the other rows' shared libraries; a vm package loads every row's
 // shared library and links nothing.
 
 /// "native" or "vm": `cli` (from `--vm` / `--native`) when set, else
@@ -559,7 +559,7 @@ fn packaged_shared_rows(string root, string mode) -> Result<Vec<string>, string>
         }
         if native_path(r).len() == 0 {
             raise format(
-                "native %s has only a static library; VM packaging loads shared libraries, so give its [[ffi.native]] row a path, or build natively",
+                "native %s has only a static library; the JIT runner loads shared libraries, so give its [[ffi.native]] row a path, or build natively",
                 native_name(r),
             );
         }
