@@ -1,7 +1,7 @@
 // Native packaging (feature/native): `coil package` builds a native
-// executable by default and the VM runner with `--no-aot`. A native package
+// executable by default and the JIT runner with `--no-aot`. A native package
 // links each `[[ffi.native]]` row's `static` archive (`--link-static`) and
-// loads the other rows' shared libraries; a VM package loads only shared
+// loads the other rows' shared libraries; a vm package loads only shared
 // libraries and links nothing.
 use tests::assert;
 use roots::link_all;
@@ -127,7 +127,7 @@ test("a native package links static rows and loads only the shared ones") {
     assert!(f.contains("--link-arg -lm"));
 }
 
-test("a VM package passes --no-aot, the shared libraries and no static links") {
+test("a vm package passes --no-aot, the shared libraries and no static links") {
     let base = fixture("natpkg_vm", head())?;
     let proj = join2(base, "proj");
     let flags = package_native_flags(proj, "vm")?;
@@ -140,7 +140,7 @@ test("a VM package passes --no-aot, the shared libraries and no static links") {
     assert!((packaged_shared_rows(proj, "vm")?).len() == 1);
 }
 
-test("a VM package refuses a native that has only a static library") {
+test("a vm package refuses a native that has only a static library") {
     let base = fixture("natpkg_vm_static_only", static_only())?;
     let e = match package_native_flags(join2(base, "proj"), "vm") {
         Result::Ok(_) => "",

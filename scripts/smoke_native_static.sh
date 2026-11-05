@@ -2,7 +2,7 @@
 # Native packaging: a dependency's `[[ffi.native]]` row with a shared library
 # (`path`) and a static archive (`static`). `spool build` links the archive
 # into a native executable that runs with no shared library anywhere;
-# `spool build --vm` packages the VM runner, which loads the shared one.
+# `spool build --vm` packages the JIT runner, which loads the shared one.
 #
 #   stat: src/stat.coil declares `extern "stat" { fn stat_add(...) }`;
 #         native/ holds the C source, built in the checkout into

@@ -183,7 +183,7 @@ roots = ["./src"]
 # [build] packaging mode
 # --------------------------------------------------------------------------
 # `spool build` / `run` make a native executable ("native", the default:
-# `[[ffi.native]]` rows with `static` are linked in) or the VM runner ("vm",
+# `[[ffi.native]]` rows with `static` are linked in) or the JIT runner ("vm",
 # `coil package --no-aot`: shared libraries only). `--vm` / `--native`
 # override it for one build.
 #
