@@ -1,10 +1,10 @@
 // Locate the coil toolchain and turn a project manifest into coil flags.
 use env::var;
 use string::format;
-use util::{join2, join3, path_exists, path_is_absolute, home_dir, trim_or, vec_has, tsv_field, source_stem, source_file};
+use util::{join2, join3, path_exists, path_dirname, path_is_absolute, home_dir, trim_or, vec_has, tsv_field, source_stem, source_file};
 use roots::{dep_module_roots, dep_checkouts, checkout_module_root};
 use proc::{which, sh_capture, first_line};
-use manifest::{manifest_body, manifest_validate, module_roots_parse, section_string, section_bool, section_strings, trusted_deps_parse, ffi_natives_parse, native_name, native_package, native_version, native_path, native_requires, native_requires_hint};
+use manifest::{manifest_body, manifest_validate, module_roots_parse, section_string, section_bool, section_strings, trusted_deps_parse, ffi_natives_parse, native_name, native_package, native_version, native_path, native_requires, native_requires_hint, native_static, native_is_static};
 use lock::{lock_native_parse, lock_native_pkg, lock_native_stem, lock_native_sha, lock_allow_comptime};
 use config::config_path;
 use io::file::read_text;
@@ -290,7 +290,10 @@ fn ffi_native_specs(string root, string manifest) -> Result<Vec<string>, string>
     let out: Vec<string> = Vec::new();
     let i = 0;
     while i < rows.len() {
-        out.push(native_spec(root, rows[i]));
+        // A static-only row has no shared library to dump or download.
+        if native_path(rows[i]).len() > 0 {
+            out.push(native_spec(root, rows[i]));
+        }
         i = i + 1;
     }
     return out;
@@ -431,11 +434,21 @@ fn dir_has_lib(string dir, string name) -> bool {
            path_exists(join2(dir, name + ".dll"));
 }
 
-/// `r` with its path field replaced (record layout in manifest.coil).
-fn with_native_path(string r, string path) -> string {
+/// `r` with its path and static fields replaced (record layout in
+/// manifest.coil).
+fn with_native_paths(string r, string path, string static_lib) -> string {
     return native_name(r) + "\t" + native_package(r) + "\t" + native_version(r) + "\t" + path + "\t" +
            tsv_field(r, 4) + "\t" + native_requires(r) + "\t" + native_requires_hint(r) + "\t" +
-           tsv_field(r, 7);
+           tsv_field(r, 7) + "\t" + static_lib + "\t" + tsv_field(r, 9) + "\t" + tsv_field(r, 10) + "\t" +
+           tsv_field(r, 11);
+}
+
+/// `p` resolved against `base`, or "" when `p` is "".
+fn abs_or_empty(string base, string p) -> string {
+    if p.len() == 0 {
+        return "";
+    }
+    return abs_under(base, p);
 }
 
 /// The `[[ffi.native]]` rows `coil package` gets, every path absolute: the
@@ -452,7 +465,8 @@ fn package_native_rows(string root) -> Result<Vec<string>, string> {
     let names: Vec<string> = Vec::new();
     let i = 0;
     while i < own.len() {
-        out.push(with_native_path(own[i], abs_under(root, native_path(own[i]))));
+        let r = own[i];
+        out.push(with_native_paths(r, abs_or_empty(root, native_path(r)), abs_or_empty(root, native_static(r))));
         names = push_unique(names, native_name(own[i]));
         i = i + 1;
     }
@@ -475,10 +489,22 @@ fn package_native_rows(string root) -> Result<Vec<string>, string> {
         while j < rows.len() {
             let r = rows[j];
             j = j + 1;
-            if vec_has(names, native_name(r)) || inside_checkout(native_path(r)) == false {
+            if vec_has(names, native_name(r)) {
+                continue;
+            }
+            let has_path = native_path(r).len() > 0;
+            let has_static = native_static(r).len() > 0;
+            // static_url is fetched into the natives cache, not the checkout.
+            if (has_path && inside_checkout(native_path(r)) == false) ||
+               (has_static && inside_checkout(native_static(r)) == false) {
                 continue;
             }
             names.push(native_name(r));
+            let static_lib = abs_or_empty(checkout, native_static(r));
+            if has_path == false {
+                out.push(with_native_paths(r, "", static_lib));
+                continue;
+            }
             let dir = abs_under(checkout, native_path(r));
             let k = 0;
             while k < search.len() {
@@ -488,23 +514,82 @@ fn package_native_rows(string root) -> Result<Vec<string>, string> {
                 }
                 k = k + 1;
             }
-            out.push(with_native_path(r, dir));
+            out.push(with_native_paths(r, dir, static_lib));
         }
     }
     return out;
 }
 
-/// `--ffi-native SPEC` pairs for `coil package` (`spool build` / `run`): the
-/// project's rows and its dependencies' (package_native_rows).
-fn package_native_flags(string root) -> Result<Vec<string>, string> {
+// ---- packaging mode (native AOT or the JIT runner) --------------------------
+// `coil package` builds a native executable by default and the JIT runner
+// with `--no-aot`. A native package links each row's `static` archive
+// (`--link-static STEM=PATH`, its `link_args` as `--link-arg`) and loads
+// only the other rows' shared libraries; a jit package loads every row's
+// shared library and links nothing.
+
+/// "native" or "jit": `cli` (from `--jit` / `--native`) when set, else
+/// `[build] mode`, else "native".
+fn package_mode(string root, string cli) -> Result<string, string> {
+    if cli.len() > 0 {
+        return cli;
+    }
+    let body = manifest_body(join2(root, "coil.toml"))?;
+    let m = section_string(body, "build", "mode")?;
+    if m.len() == 0 {
+        return "native";
+    }
+    if m != "native" && m != "jit" {
+        raise format("[build] mode must be \"native\" or \"jit\", got \"%s\"", m);
+    }
+    return m;
+}
+
+/// The package_native_rows a `mode` package loads at run time: in native
+/// mode the rows without a static archive; in jit mode every row, which
+/// then needs a shared library `path`.
+fn packaged_shared_rows(string root, string mode) -> Result<Vec<string>, string> {
     let rows = package_native_rows(root)?;
+    let out: Vec<string> = Vec::new();
+    let i = 0;
+    while i < rows.len() {
+        let r = rows[i];
+        i = i + 1;
+        if mode == "native" && native_is_static(r) {
+            continue;
+        }
+        if native_path(r).len() == 0 {
+            raise format(
+                "native %s has only a static library; the JIT runner loads shared libraries, so give its [[ffi.native]] row a path, or build natively",
+                native_name(r),
+            );
+        }
+        out.push(r);
+    }
+    return out;
+}
+
+/// The `coil package` flags for shared natives in `mode`: `--no-aot` for
+/// jit and `--ffi-native SPEC` for each shared row (the static link flags
+/// come from natives::package_link_flags).
+fn package_native_flags(string root, string mode) -> Result<Vec<string>, string> {
+    let out: Vec<string> = Vec::new();
+    if mode == "jit" {
+        out.push("--no-aot");
+    }
+    let rows = packaged_shared_rows(root, mode)?;
     let specs: Vec<string> = Vec::new();
     let i = 0;
     while i < rows.len() {
         specs.push(native_spec(root, rows[i]));
         i = i + 1;
     }
-    return flag_pairs("--ffi-native", specs);
+    let pairs = flag_pairs("--ffi-native", specs);
+    i = 0;
+    while i < pairs.len() {
+        out.push(pairs[i]);
+        i = i + 1;
+    }
+    return out;
 }
 
 /// coil.lock text, or "" when the project has none.
@@ -716,4 +801,32 @@ fn compile_flags(string root) -> Result<Vec<string>, string> {
         i = i + 1;
     }
     return out;
+}
+
+/// The native runtime `coil package` links into a native executable:
+/// `COIL_RT_LIB`, else `libcoil_rt.a` beside the real `coil` binary
+/// (symlinks resolved, as coil does). "" when none is found.
+fn coil_runtime_lib(string coil) -> string {
+    let env = env_or("COIL_RT_LIB", "");
+    if env.len() > 0 {
+        return env;
+    }
+    let a: Vec<string> = Vec::new();
+    a.push(coil);
+    let real = coil;
+    match sh_capture("readlink -f \"$1\" 2>/dev/null || printf '%s' \"$1\"", a) {
+        Result::Ok(r) => {
+            let (code, text) = r;
+            let t = trim_or(text);
+            if code == 0 && t.len() > 0 {
+                real = t;
+            }
+        },
+        Result::Err(_) => {},
+    }
+    let lib = join2(path_dirname(real), "libcoil_rt.a");
+    if path_exists(lib) {
+        return lib;
+    }
+    return "";
 }

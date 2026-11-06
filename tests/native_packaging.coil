@@ -1,0 +1,202 @@
+// Native packaging (feature/native): `coil package` builds a native
+// executable by default and the JIT runner with `--no-aot`. A native package
+// links each `[[ffi.native]]` row's `static` archive (`--link-static`) and
+// loads the other rows' shared libraries; a jit package loads only shared
+// libraries and links nothing.
+use tests::assert;
+use roots::link_all;
+use manifest::{ffi_natives_parse, native_static, native_link_args, native_path, native_static_url, native_static_sha256, manifest_validate};
+use toolchain::{package_native_flags, packaged_shared_rows, package_mode, ffi_native_flags};
+use natives::{package_link_flags, host_triple};
+use util::{join2, ensure_dir, vec_has};
+use env::cwd;
+use io::file::write_text;
+use text::{Joined, Searchable, Text};
+
+fn write_file(string path, string body) -> Result<int, string> {
+    return match write_text(path, body) {
+        Result::Ok(_) => 0,
+        Result::Err(_) => raise "cannot write " + path,
+    };
+}
+
+fn here() -> Result<string, string> {
+    return match cwd() {
+        Result::Ok(d) => d,
+        Result::Err(_) => raise "no cwd",
+    };
+}
+
+fn head() -> string {
+    return "[package]\nname = \"proj\"\nversion = \"0.0.1\"\n";
+}
+
+/// scratch/<tag>: `proj` with `proj_toml` (vendor/libfast.a present) linking
+/// the dependency `nat`, whose row has a shared library and a static archive.
+fn fixture(string tag, string proj_toml) -> Result<string, string> {
+    let base = join2(here()?, "scratch/" + tag);
+    ensure_dir(join2(base, "nat/src"))?;
+    ensure_dir(join2(base, "nat/native"))?;
+    ensure_dir(join2(base, "proj/src"))?;
+    ensure_dir(join2(base, "proj/vendor"))?;
+    write_file(join2(base, "nat/src/nat.coil"), "fn one() -> int { return 1; }\n")?;
+    write_file(join2(base, "nat/native/libnat.so"), "shared\n")?;
+    write_file(join2(base, "nat/native/libnat.a"), "static\n")?;
+    write_file(
+        join2(base, "nat/coil.toml"),
+        "[package]\nname = \"nat\"\nversion = \"0.1.0\"\n\n[[ffi.native]]\nname = \"nat\"\nversion = \"0.1.0\"\npath = \"./native\"\nstatic = \"./native/libnat.a\"\nlink_args = [\"-lm\"]\n",
+    )?;
+    write_file(join2(base, "proj/vendor/libfast.a"), "static\n")?;
+    let proj = join2(base, "proj");
+    write_file(join2(proj, "coil.toml"), proj_toml)?;
+    let rows: Vec<string> = Vec::new();
+    rows.push("nat\t" + join2(base, "nat"));
+    link_all(proj, rows)?;
+    return base;
+}
+
+fn static_only() -> string {
+    return head() + "\n[[ffi.native]]\nname = \"fast\"\nversion = \"1.0.0\"\nstatic = \"./vendor/libfast.a\"\nlink_args = [\"-lstdc++\", \"-L/opt/x\"]\n";
+}
+
+fn index_of(Vec<string> xs, string x) -> int {
+    let i = 0;
+    while i < xs.len() {
+        if xs[i] == x {
+            return i;
+        }
+        i = i + 1;
+    }
+    return -1;
+}
+
+test("[[ffi.native]] static and link_args parse; path is optional with static") {
+    let rows = ffi_natives_parse(static_only())?;
+    assert!(rows.len() == 1);
+    assert!(native_static(rows[0]) == "./vendor/libfast.a");
+    assert!(native_path(rows[0]) == "");
+    let args = native_link_args(rows[0]);
+    assert!(args.len() == 2 && args[0] == "-lstdc++" && args[1] == "-L/opt/x");
+}
+
+test("[[ffi.native]] needs path or static, and link_args only with static") {
+    let neither = head() + "\n[[ffi.native]]\nname = \"x\"\nversion = \"1\"\n";
+    let e1 = match ffi_natives_parse(neither) {
+        Result::Ok(_) => "",
+        Result::Err(e) => e,
+    };
+    assert!(e1.contains("needs path"));
+    let stray = head() + "\n[[ffi.native]]\nname = \"x\"\nversion = \"1\"\npath = \"./n\"\nlink_args = [\"-lm\"]\n";
+    let e2 = match ffi_natives_parse(stray) {
+        Result::Ok(_) => "",
+        Result::Err(e) => e,
+    };
+    assert!(e2.contains("link_args needs static"));
+}
+
+test("[build] mode picks the packaging; flags override it") {
+    let base = fixture("natpkg_mode", head() + "\n[build]\nmode = \"jit\"\n")?;
+    let proj = join2(base, "proj");
+    manifest_validate(head() + "\n[build]\nmode = \"jit\"\n")?;
+    assert!((package_mode(proj, "")?) == "jit");
+    assert!((package_mode(proj, "native")?) == "native");
+    let other = fixture("natpkg_mode_default", head())?;
+    assert!((package_mode(join2(other, "proj"), "")?) == "native");
+    let bad = fixture("natpkg_mode_bad", head() + "\n[build]\nmode = \"vm\"\n")?;
+    let e = match package_mode(join2(bad, "proj"), "") {
+        Result::Ok(_) => "",
+        Result::Err(e) => e,
+    };
+    assert!(e.contains("[build] mode"));
+}
+
+test("a native package links static rows and loads only the shared ones") {
+    let base = fixture("natpkg_native", static_only())?;
+    let proj = join2(base, "proj");
+    let flags = package_native_flags(proj, "native")?;
+    assert!(vec_has(flags, "--no-aot") == false);
+    // A linked stem gets no --ffi-native row and needs no natives cache entry.
+    assert!(flags.len() == 0);
+    assert!((packaged_shared_rows(proj, "native")?).len() == 0);
+    let f = (package_link_flags(proj, "native")?).join(" ");
+    // The project's static-only row and the dependency's row (static wins
+    // over its shared library in a native build).
+    assert!(f.contains("--link-static fast=" + join2(proj, "vendor/libfast.a")));
+    assert!(f.contains("--link-static nat=" + join2(base, "nat/native/libnat.a")));
+    assert!(f.contains("--link-arg -lstdc++ --link-arg -L/opt/x"));
+    assert!(f.contains("--link-arg -lm"));
+}
+
+test("a jit package passes --no-aot, the shared libraries and no static links") {
+    let base = fixture("natpkg_vm", head())?;
+    let proj = join2(base, "proj");
+    let flags = package_native_flags(proj, "jit")?;
+    assert!(flags[0] == "--no-aot");
+    let f = flags.join(" ");
+    assert!(f.contains("--ffi-native name=nat,version=0.1.0,path=" + join2(base, "nat/native")));
+    assert!(f.contains("--link-static") == false);
+    assert!(f.contains("--link-arg") == false);
+    assert!((package_link_flags(proj, "jit")?).len() == 0);
+    assert!((packaged_shared_rows(proj, "jit")?).len() == 1);
+}
+
+test("a jit package refuses a native that has only a static library") {
+    let base = fixture("natpkg_vm_static_only", static_only())?;
+    let e = match package_native_flags(join2(base, "proj"), "jit") {
+        Result::Ok(_) => "",
+        Result::Err(e) => e,
+    };
+    assert!(e.contains("native fast has only a static library"));
+}
+
+test("a missing static archive is reported before coil runs") {
+    let toml = head() + "\n[[ffi.native]]\nname = \"gone\"\nversion = \"1\"\nstatic = \"./vendor/libgone.a\"\n";
+    let base = fixture("natpkg_missing", toml)?;
+    let e = match package_link_flags(join2(base, "proj"), "native") {
+        Result::Ok(_) => "",
+        Result::Err(e) => e,
+    };
+    assert!(e.contains("static library " + join2(base, "proj/vendor/libgone.a") + " does not exist"));
+}
+
+test("the project's own row wins over a dependency's, static or not") {
+    // The project re-declares `nat` as shared-only: no static link for it.
+    let toml = head() + "\n[[ffi.native]]\nname = \"nat\"\nversion = \"2.0.0\"\npath = \"./vendor\"\n";
+    let base = fixture("natpkg_own", toml)?;
+    let proj = join2(base, "proj");
+    let flags = package_native_flags(proj, "native")?;
+    let f = flags.join(" ");
+    assert!((package_link_flags(proj, "native")?).len() == 0);
+    assert!(f.contains("name=nat,version=2.0.0,path=" + join2(proj, "vendor")));
+    assert!(index_of(flags, "--ffi-native") >= 0);
+}
+
+test("spool download skips static-only rows") {
+    let base = fixture("natpkg_download", static_only())?;
+    assert!((ffi_native_flags(join2(base, "proj"))?).len() == 0);
+}
+
+test("static_url needs https and a static_sha256") {
+    let sha = "ab".repeat(32);
+    let ok = head() + "\n[[ffi.native]]\nname = \"z\"\nversion = \"1\"\nstatic_url = \"https://x/{target}/libz.a\"\nstatic_sha256 = \"" + sha.to_upper() + "\"\n";
+    let rows = ffi_natives_parse(ok)?;
+    assert!(native_static_url(rows[0]) == "https://x/{target}/libz.a");
+    assert!(native_static_sha256(rows[0]) == sha);
+    let nohash = head() + "\n[[ffi.native]]\nname = \"z\"\nversion = \"1\"\nstatic_url = \"https://x/libz.a\"\n";
+    let e1 = match ffi_natives_parse(nohash) {
+        Result::Ok(_) => "",
+        Result::Err(e) => e,
+    };
+    assert!(e1.contains("static_url needs static_sha256"));
+    let http = head() + "\n[[ffi.native]]\nname = \"z\"\nversion = \"1\"\nstatic_url = \"http://x/libz.a\"\nstatic_sha256 = \"" + sha + "\"\n";
+    let e2 = match ffi_natives_parse(http) {
+        Result::Ok(_) => "",
+        Result::Err(e) => e,
+    };
+    assert!(e2.contains("must be https://"));
+}
+
+test("the host triple names os and arch") {
+    let t = host_triple();
+    assert!(t.contains("-linux-") || t.contains("-apple-darwin"));
+}

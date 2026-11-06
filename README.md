@@ -184,8 +184,8 @@ way the library resolves them itself.
 | Command | What it does |
 |---|---|
 | `new <name> [--lib] [--no-git]` / `init` | scaffold `coil.toml`, `src/`, `tests/`, `.gitignore` (and `git init`) |
-| `build [-o PATH] [-O LEVEL]` | `coil package` of `[entry].file` (default `src/main.coil`) into `target/<name>`; the natives it pins go into the natives cache |
-| `run [-O LEVEL] [-- ARGS]` | build, then exec `target/<name>` with ARGS and its exit code |
+| `build [-o PATH] [-O LEVEL] [--jit \| --native]` | `coil package` of `[entry].file` (default `src/main.coil`) into `target/<name>`: a native executable, or the JIT runner with `--jit` (see [Packaging mode](#packaging-mode)); the shared natives it pins go into the natives cache |
+| `run [-O LEVEL] [--jit \| --native] [-- ARGS]` | build, then exec `target/<name>` with ARGS and its exit code |
 | `check` | `coil compile` without packaging |
 | `clean [--all]` | remove `target/` (`--all`: also `.spool/`) |
 | `test [PATH] [FLAGS]` | `coil test` (default `./tests`): `--coverage`, `--seed N`, `-j N`, `--fail-fast`, … |
@@ -193,7 +193,7 @@ way the library resolves them itself.
 | `infect [PATH] [FLAGS]` | mutation testing (`coil mutate`): `--files GLOB`, `--operators`, `--min-score P`, `--json`, … |
 | `fmt [--check] [PATHS]` | `coil fmt` (default `src tests`) |
 | `debug [FILE] [FLAGS]` | `coil debug` on `[entry].file` (`--dap` for an IDE adapter) |
-| `dissect [FILE] [FLAGS]` | `coil dissect` of `[entry].file` (`--fn`, `--il`, `--ast`, …) |
+| `dissect [FILE] [FLAGS]` | `coil dissect` of `[entry].file` (`--fn`, `--hir`, `--ast`, …) |
 | `lsp` | `coil lsp` on stdio, started from the project root |
 | `coil [ARGS]` | plain `coil ARGS` from the project root (no flags added) |
 | `install [--locked] [--with-natives]` | fetch, resolve, prune and link dependencies |
@@ -203,12 +203,12 @@ way the library resolves them itself.
 | `update [name]` | re-resolve to the newest allowed versions (moves `rev` branches and `latest`) |
 | `tree` | print the dependency graph |
 | `outdated` | locked vs newest compatible vs newest tag (`latest`: locked sha vs the current tip) |
-| `download [EXE]` | fetch FFI natives for the project or a packaged EXE |
+| `download [EXE]` | fetch FFI natives for the project (shared libraries and prebuilt static archives) or a packaged EXE |
 | `allow-include <name>` | allow a dependency's include-hook |
 | `allow-comptime <name>` | let a dependency's compile-time code use its own `[comptime]` grants |
-| `doctor` | check coil, stdlib, git, sh, curl, cache and project roots |
+| `doctor` | check coil, its native runtime (`libcoil_rt.a`), `cc`, stdlib, git, sh, curl, cache and project roots |
 | `cache dir` / `cache clean` | show or clear the shared git cache |
-| `cache gc [--dry-run]` | remove cached checkouts and clones no known project's `coil.lock` uses (see [Cache](#cache)) |
+| `cache gc [--dry-run]` | remove cached checkouts and clones no known project's `coil.lock` uses, and prebuilt static natives none declares (see [Cache](#cache)) |
 
 Commands that compile (`build`, `run`, `check`, `test`, `infect`, `debug`,
 `dissect`) run `install` first when dependencies are declared but
@@ -287,10 +287,13 @@ spool runs `coil` from the project root with:
   modules (`--comptime-env gen=TOKEN`)
 - `coil package` (`spool build` / `run`) and `coil natives dump` also get
   one `--ffi-native name=…,version=…,path=…[,package=…][,requires=a;b][,requires-hint=…]`
-  per `[[ffi.native]]` row (`path` made absolute, `,` in a value escaped as
-  `\,`). `coil package` also gets each linked dependency's rows (see
+  per `[[ffi.native]]` row with a `path` (made absolute, `,` in a value
+  escaped as `\,`). `coil package` also gets each linked dependency's rows (see
   [Dependency natives](#dependency-natives)); `coil natives dump` gets the
-  project's only
+  project's only. A native build passes a row with `static` as
+  `--link-static STEM=PATH` (plus one `--link-arg` per `link_args` item)
+  instead of `--ffi-native`; a `jit` build passes `--no-aot` (see
+  [Packaging mode](#packaging-mode))
 
 `coil.toml.example` lists every key spool reads.
 
@@ -458,6 +461,66 @@ tree id ignores untracked files (`make -C "$(dirname "$(readlink -f
 .spool/deps/tls)")/native" artifact` for coil-tls), or point the project's own
 `[ffi] search_paths` at a sibling build. Until then, `spool build` fails with
 coil's `expected library at <checkout>/native/libtls.so`.
+
+## Packaging mode
+
+`spool build` and `spool run` make one of two kinds of executable:
+
+- **native** (the default): `coil package` compiles the program to machine
+  code and links it with coil's runtime (`libcoil_rt.a`, beside `coil`) using
+  the host C compiler (`cc`, or `$CC`). It builds for the host only. When the
+  host cannot link one, coil warns and packages the JIT runner instead.
+- **jit**: the JIT runner with the compiled program inside (`coil package
+  --no-aot`). It compiles to machine code when it starts and needs no linker.
+
+`[build] mode = "native"` or `"jit"` in `coil.toml` sets the project's mode;
+`--native` or `--jit` on `spool build` / `spool run` overrides it for one
+build. `spool doctor` reports whether the runtime and `cc` are there.
+
+### Static natives
+
+A native executable can link a native library into itself instead of
+loading a shared library at run time. Give the `[[ffi.native]]` row a
+`static` archive, relative to the package that declares it (the project, or
+the dependency's checkout):
+
+```toml
+[[ffi.native]]
+name = "sdl"                     # the extern "sdl" block's stem
+version = "0.1.0"
+path = "./native"                # libsdl.so, for `jit` builds and spool test
+static = "./native/libsdl.a"     # linked into native builds
+link_args = ["-lSDL2", "-lm"]    # the archive's own libraries, after it
+```
+
+- A native build passes `--link-static sdl=<abs>/native/libsdl.a` and each
+  `link_args` item as `--link-arg`, and no `--ffi-native` for that stem: its
+  functions resolve from the executable, with nothing in the natives cache
+  and no file to ship. `[ffi] allow` (the `--allow-dload` grant) is still
+  needed.
+- A JIT build ignores `static` and `link_args` and loads the shared library at
+  `path`. A row with `static` and no `path` builds natively only; a `jit` build
+  of it fails and says so.
+- coil links only the functions an `extern "STEM"` block declares. A library
+  reached only through `dload("STEM")` is not linked statically; keep it
+  shared.
+- The archive comes from one of two places, prebuilt first:
+  - `static_url = "https://…/{target}/libsdl.a"` with its `static_sha256`
+    (required: coil pins no linked archive, so this hash is its only check).
+    `{target}` is the host triple (`x86_64-unknown-linux-gnu`,
+    `x86_64-unknown-linux-musl`, `aarch64-apple-darwin`, …). spool fetches it
+    once into `~/.coil/natives/static/<package>/<version>/<sha256_16>/lib<name>.a`
+    and links it from there. `spool download` (and `spool install
+    --with-natives`) fetches every one the project and its dependencies
+    declare ahead of time, so the build needs no network; otherwise the
+    build fetches it. An entry whose sha256 no longer matches is fetched
+    again, never linked. `spool cache gc` removes the ones no project declares
+    (see [Cache](#cache)).
+  - `static`, a file in the declaring checkout that its build script (or
+    `make`) produces, as for shared natives below. spool checks it exists
+    before running coil.
+- Native builds are for the host only, and the executable still links libc,
+  libdl and pthread dynamically.
 
 ## Engine range
 
@@ -746,6 +809,13 @@ clone whose lock is held is kept, so an install in progress is safe. A
 project spool has not run in since recording began is unknown to gc; if its
 checkouts go, `spool install` there fetches them again. `spool cache clean`
 removes everything, including checkouts other projects link to.
+
+gc also prunes prebuilt static natives (`~/.coil/natives/static`, see
+[Static natives](#static-natives)): it keeps each entry a recorded project or
+its linked dependencies declare with `static_url`, plus anything inside the
+grace period, and removes the rest. When a recorded project's natives cannot
+be read (a broken `coil.toml`, or dependencies not installed), it keeps every
+static entry and says which project stopped it.
 
 ## Private git
 
