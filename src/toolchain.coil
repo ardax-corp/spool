@@ -524,10 +524,10 @@ fn package_native_rows(string root) -> Result<Vec<string>, string> {
 // `coil package` builds a native executable by default and the JIT runner
 // with `--no-aot`. A native package links each row's `static` archive
 // (`--link-static STEM=PATH`, its `link_args` as `--link-arg`) and loads
-// only the other rows' shared libraries; a vm package loads every row's
+// only the other rows' shared libraries; a jit package loads every row's
 // shared library and links nothing.
 
-/// "native" or "vm": `cli` (from `--vm` / `--native`) when set, else
+/// "native" or "jit": `cli` (from `--jit` / `--native`) when set, else
 /// `[build] mode`, else "native".
 fn package_mode(string root, string cli) -> Result<string, string> {
     if cli.len() > 0 {
@@ -538,14 +538,14 @@ fn package_mode(string root, string cli) -> Result<string, string> {
     if m.len() == 0 {
         return "native";
     }
-    if m != "native" && m != "vm" {
-        raise format("[build] mode must be \"native\" or \"vm\", got \"%s\"", m);
+    if m != "native" && m != "jit" {
+        raise format("[build] mode must be \"native\" or \"jit\", got \"%s\"", m);
     }
     return m;
 }
 
 /// The package_native_rows a `mode` package loads at run time: in native
-/// mode the rows without a static archive; in vm mode every row, which
+/// mode the rows without a static archive; in jit mode every row, which
 /// then needs a shared library `path`.
 fn packaged_shared_rows(string root, string mode) -> Result<Vec<string>, string> {
     let rows = package_native_rows(root)?;
@@ -569,11 +569,11 @@ fn packaged_shared_rows(string root, string mode) -> Result<Vec<string>, string>
 }
 
 /// The `coil package` flags for shared natives in `mode`: `--no-aot` for
-/// vm and `--ffi-native SPEC` for each shared row (the static link flags
+/// jit and `--ffi-native SPEC` for each shared row (the static link flags
 /// come from natives::package_link_flags).
 fn package_native_flags(string root, string mode) -> Result<Vec<string>, string> {
     let out: Vec<string> = Vec::new();
-    if mode == "vm" {
+    if mode == "jit" {
         out.push("--no-aot");
     }
     let rows = packaged_shared_rows(root, mode)?;

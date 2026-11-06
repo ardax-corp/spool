@@ -33,10 +33,10 @@ Project:
   new <name> [--lib] [--no-git]     create a project in ./<name>
   init [--name N] [--lib] [--no-git]
                                     create a project in the current directory
-  build [-o PATH] [-O LEVEL] [--vm | --native]
+  build [-o PATH] [-O LEVEL] [--jit | --native]
                                     package [entry].file into target/<name>
-                                    (a native executable; --vm: the JIT runner)
-  run [-O LEVEL] [--vm | --native] [-- ARGS...]
+                                    (a native executable; --jit: the JIT runner)
+  run [-O LEVEL] [--jit | --native] [-- ARGS...]
                                     build, then run target/<name> ARGS
   check                             compile without packaging
   clean [--all]                     remove target/ (--all: also .spool/)
@@ -53,7 +53,7 @@ Language tools (flags go to coil unchanged; see `spool <cmd> --help`):
     own text report); --json prints coil's raw NDJSON events
   fmt [--check] [PATHS...]          format sources (default: src tests)
   debug [FILE] [FLAGS...]           debugger REPL on [entry].file (--dap: IDE)
-  dissect [FILE] [FLAGS...]         dump bytecode / IL / AST of [entry].file
+  dissect [FILE] [FLAGS...]         dump MIR / HIR / AST of [entry].file
   lsp                               start the language server on stdio
   coil [ARGS...]                    run coil as-is from the project root
 
@@ -218,7 +218,7 @@ fn push_all(Vec<string> dst, Vec<string> src) -> Vec<string> {
 }
 
 /// `coil package` the project into `output`; `mode` is "native" (an AOT
-/// executable) or "vm" (the JIT runner, `--no-aot`), see package_mode.
+/// executable) or "jit" (the JIT runner, `--no-aot`), see package_mode.
 fn build_to(string root, string output, string opt_level, string mode) -> Result<int, string> {
     ensure_installed(root)?;
     let entry = entry_of(root)?;
@@ -249,13 +249,13 @@ fn default_output(string root) -> string {
     return join2(root, "target/" + project_name(root));
 }
 
-/// "vm" for `--vm`, "native" for `--native`, else "" (the manifest decides).
+/// "jit" for `--jit`, "native" for `--native`, else "" (the manifest decides).
 fn mode_flag(Vec<string> p) -> Result<string, string> {
-    if has(p, "--vm") && has(p, "--native") {
-        raise "pass only one of --vm and --native";
+    if has(p, "--jit") && has(p, "--native") {
+        raise "pass only one of --jit and --native";
     }
-    if has(p, "--vm") {
-        return "vm";
+    if has(p, "--jit") {
+        return "jit";
     }
     if has(p, "--native") {
         return "native";
@@ -264,8 +264,8 @@ fn mode_flag(Vec<string> p) -> Result<string, string> {
 }
 
 fn cmd_build(Vec<string> rest) -> Result<int, string> {
-    let p = parse_args(rest, strs4("-o", "--output", "-O", "--opt-level"), strs2("--vm", "--native"))?;
-    at_most(positionals(p), 0, "spool build [-o PATH] [-O LEVEL] [--vm | --native]")?;
+    let p = parse_args(rest, strs4("-o", "--output", "-O", "--opt-level"), strs2("--jit", "--native"))?;
+    at_most(positionals(p), 0, "spool build [-o PATH] [-O LEVEL] [--jit | --native]")?;
     let root = find_project()?;
     let o = opt(p, "-o");
     if o.len() == 0 {
@@ -284,7 +284,7 @@ fn cmd_build(Vec<string> rest) -> Result<int, string> {
 }
 
 fn cmd_run(Vec<string> rest) -> Result<int, string> {
-    let p = parse_args(rest, strs2("-O", "--opt-level"), strs2("--vm", "--native"))?;
+    let p = parse_args(rest, strs2("-O", "--opt-level"), strs2("--jit", "--native"))?;
     let root = find_project()?;
     let o = default_output(root);
     let lvl = opt(p, "-O");
@@ -946,7 +946,7 @@ fn cmd_doctor(Vec<string> rest) -> Result<int, string> {
     let coil = find_coil();
     if coil.len() > 0 {
         good = doctor_line("coil", coil + " (" + coil_version_output(coil) + ")", true) && good;
-        // Native packages (spool build without --vm) link with the runtime
+        // Native packages (spool build without --jit) link with the runtime
         // and the host C compiler; without them coil packages the JIT runner.
         let rt = coil_runtime_lib(coil);
         if rt.len() > 0 {

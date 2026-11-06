@@ -649,7 +649,7 @@ fn prefetch_static(string project_root) -> Result<(int, int), string> {
 }
 
 /// `--link-static STEM=PATH` and `--link-arg ARG` for each static row of a
-/// native package (none in vm mode), preparing each archive first.
+/// native package (none in jit mode), preparing each archive first.
 fn package_link_flags(string root, string mode) -> Result<Vec<string>, string> {
     let out: Vec<string> = Vec::new();
     if mode != "native" {

@@ -1,7 +1,7 @@
 // Native packaging (feature/native): `coil package` builds a native
 // executable by default and the JIT runner with `--no-aot`. A native package
 // links each `[[ffi.native]]` row's `static` archive (`--link-static`) and
-// loads the other rows' shared libraries; a vm package loads only shared
+// loads the other rows' shared libraries; a jit package loads only shared
 // libraries and links nothing.
 use tests::assert;
 use roots::link_all;
@@ -95,14 +95,14 @@ test("[[ffi.native]] needs path or static, and link_args only with static") {
 }
 
 test("[build] mode picks the packaging; flags override it") {
-    let base = fixture("natpkg_mode", head() + "\n[build]\nmode = \"vm\"\n")?;
+    let base = fixture("natpkg_mode", head() + "\n[build]\nmode = \"jit\"\n")?;
     let proj = join2(base, "proj");
-    manifest_validate(head() + "\n[build]\nmode = \"vm\"\n")?;
-    assert!((package_mode(proj, "")?) == "vm");
+    manifest_validate(head() + "\n[build]\nmode = \"jit\"\n")?;
+    assert!((package_mode(proj, "")?) == "jit");
     assert!((package_mode(proj, "native")?) == "native");
     let other = fixture("natpkg_mode_default", head())?;
     assert!((package_mode(join2(other, "proj"), "")?) == "native");
-    let bad = fixture("natpkg_mode_bad", head() + "\n[build]\nmode = \"jit\"\n")?;
+    let bad = fixture("natpkg_mode_bad", head() + "\n[build]\nmode = \"vm\"\n")?;
     let e = match package_mode(join2(bad, "proj"), "") {
         Result::Ok(_) => "",
         Result::Err(e) => e,
@@ -127,22 +127,22 @@ test("a native package links static rows and loads only the shared ones") {
     assert!(f.contains("--link-arg -lm"));
 }
 
-test("a vm package passes --no-aot, the shared libraries and no static links") {
+test("a jit package passes --no-aot, the shared libraries and no static links") {
     let base = fixture("natpkg_vm", head())?;
     let proj = join2(base, "proj");
-    let flags = package_native_flags(proj, "vm")?;
+    let flags = package_native_flags(proj, "jit")?;
     assert!(flags[0] == "--no-aot");
     let f = flags.join(" ");
     assert!(f.contains("--ffi-native name=nat,version=0.1.0,path=" + join2(base, "nat/native")));
     assert!(f.contains("--link-static") == false);
     assert!(f.contains("--link-arg") == false);
-    assert!((package_link_flags(proj, "vm")?).len() == 0);
-    assert!((packaged_shared_rows(proj, "vm")?).len() == 1);
+    assert!((package_link_flags(proj, "jit")?).len() == 0);
+    assert!((packaged_shared_rows(proj, "jit")?).len() == 1);
 }
 
-test("a vm package refuses a native that has only a static library") {
+test("a jit package refuses a native that has only a static library") {
     let base = fixture("natpkg_vm_static_only", static_only())?;
-    let e = match package_native_flags(join2(base, "proj"), "vm") {
+    let e = match package_native_flags(join2(base, "proj"), "jit") {
         Result::Ok(_) => "",
         Result::Err(e) => e,
     };
