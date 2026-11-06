@@ -184,8 +184,8 @@ way the library resolves them itself.
 | Command | What it does |
 |---|---|
 | `new <name> [--lib] [--no-git]` / `init` | scaffold `coil.toml`, `src/`, `tests/`, `.gitignore` (and `git init`) |
-| `build [-o PATH] [-O LEVEL] [--vm \| --native]` | `coil package` of `[entry].file` (default `src/main.coil`) into `target/<name>`: a native executable, or the JIT runner with `--vm` (see [Packaging mode](#packaging-mode)); the shared natives it pins go into the natives cache |
-| `run [-O LEVEL] [--vm \| --native] [-- ARGS]` | build, then exec `target/<name>` with ARGS and its exit code |
+| `build [-o PATH] [-O LEVEL] [--jit \| --native]` | `coil package` of `[entry].file` (default `src/main.coil`) into `target/<name>`: a native executable, or the JIT runner with `--jit` (see [Packaging mode](#packaging-mode)); the shared natives it pins go into the natives cache |
+| `run [-O LEVEL] [--jit \| --native] [-- ARGS]` | build, then exec `target/<name>` with ARGS and its exit code |
 | `check` | `coil compile` without packaging |
 | `clean [--all]` | remove `target/` (`--all`: also `.spool/`) |
 | `test [PATH] [FLAGS]` | `coil test` (default `./tests`): `--coverage`, `--seed N`, `-j N`, `--fail-fast`, … |
@@ -292,7 +292,7 @@ spool runs `coil` from the project root with:
   [Dependency natives](#dependency-natives)); `coil natives dump` gets the
   project's only. A native build passes a row with `static` as
   `--link-static STEM=PATH` (plus one `--link-arg` per `link_args` item)
-  instead of `--ffi-native`; a `vm` build passes `--no-aot` (see
+  instead of `--ffi-native`; a `jit` build passes `--no-aot` (see
   [Packaging mode](#packaging-mode))
 
 `coil.toml.example` lists every key spool reads.
@@ -470,12 +470,11 @@ coil's `expected library at <checkout>/native/libtls.so`.
   code and links it with coil's runtime (`libcoil_rt.a`, beside `coil`) using
   the host C compiler (`cc`, or `$CC`). It builds for the host only. When the
   host cannot link one, coil warns and packages the JIT runner instead.
-- **vm**: the JIT runner with the compiled program inside (`coil package
-  --no-aot`). It compiles to machine code when it starts, needs no linker and,
-  despite the mode's name, holds no VM.
+- **jit**: the JIT runner with the compiled program inside (`coil package
+  --no-aot`). It compiles to machine code when it starts and needs no linker.
 
-`[build] mode = "native"` or `"vm"` in `coil.toml` sets the project's mode;
-`--native` or `--vm` on `spool build` / `spool run` overrides it for one
+`[build] mode = "native"` or `"jit"` in `coil.toml` sets the project's mode;
+`--native` or `--jit` on `spool build` / `spool run` overrides it for one
 build. `spool doctor` reports whether the runtime and `cc` are there.
 
 ### Static natives
@@ -489,7 +488,7 @@ the dependency's checkout):
 [[ffi.native]]
 name = "sdl"                     # the extern "sdl" block's stem
 version = "0.1.0"
-path = "./native"                # libsdl.so, for `vm` builds and spool test
+path = "./native"                # libsdl.so, for `jit` builds and spool test
 static = "./native/libsdl.a"     # linked into native builds
 link_args = ["-lSDL2", "-lm"]    # the archive's own libraries, after it
 ```
@@ -499,8 +498,8 @@ link_args = ["-lSDL2", "-lm"]    # the archive's own libraries, after it
   functions resolve from the executable, with nothing in the natives cache
   and no file to ship. `[ffi] allow` (the `--allow-dload` grant) is still
   needed.
-- A VM build ignores `static` and `link_args` and loads the shared library at
-  `path`. A row with `static` and no `path` builds natively only; a `vm` build
+- A JIT build ignores `static` and `link_args` and loads the shared library at
+  `path`. A row with `static` and no `path` builds natively only; a `jit` build
   of it fails and says so.
 - coil links only the functions an `extern "STEM"` block declares. A library
   reached only through `dload("STEM")` is not linked statically; keep it

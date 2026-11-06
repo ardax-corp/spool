@@ -2,7 +2,7 @@
 # Native packaging: a dependency's `[[ffi.native]]` row with a shared library
 # (`path`) and a static archive (`static`). `spool build` links the archive
 # into a native executable that runs with no shared library anywhere;
-# `spool build --vm` packages the JIT runner, which loads the shared one.
+# `spool build --jit` packages the JIT runner, which loads the shared one.
 #
 #   stat: src/stat.coil declares `extern "stat" { fn stat_add(...) }`;
 #         native/ holds the C source, built in the checkout into
@@ -140,15 +140,15 @@ GOT="$(cd / && "$APP/target/app")"
 [[ "$GOT" == "$WANT" ]] || fail "native target/app printed '$GOT'"
 [[ ! -e "$HOME/.coil/natives/cache/stat" ]] || fail "a static native was put in the natives cache"
 
-# 2. VM: --vm (and [build] mode = "vm") load the shared library instead.
+# 2. JIT: --jit (and [build] mode = "jit") load the shared library instead.
 "$CC" -shared -fPIC -o "$NATIVE/$LIB" "$NATIVE/stat.c"
-(cd "$APP" && "$SPOOL" build --vm) >/dev/null || fail "vm build"
+(cd "$APP" && "$SPOOL" build --jit) >/dev/null || fail "jit build"
 GOT="$(cd / && "$APP/target/app")"
-[[ "$GOT" == "$WANT" ]] || fail "vm target/app printed '$GOT'"
-ls "$HOME/.coil/natives/cache/stat/0.1.0/"*/"$LIB" >/dev/null || fail "vm build did not cache the shared native"
-printf '\n[build]\nmode = "vm"\n' >> "$APP/coil.toml"
+[[ "$GOT" == "$WANT" ]] || fail "jit target/app printed '$GOT'"
+ls "$HOME/.coil/natives/cache/stat/0.1.0/"*/"$LIB" >/dev/null || fail "jit build did not cache the shared native"
+printf '\n[build]\nmode = "jit"\n' >> "$APP/coil.toml"
 GOT="$(cd "$APP" && "$SPOOL" run)"
-[[ "$GOT" == "$WANT" ]] || fail "spool run ([build] mode = vm) printed '$GOT'"
+[[ "$GOT" == "$WANT" ]] || fail "spool run ([build] mode = jit) printed '$GOT'"
 # --native overrides the manifest; the shared library is not needed.
 rm -f "$NATIVE/$LIB"
 GOT="$(cd "$APP" && "$SPOOL" run --native)"
