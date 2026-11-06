@@ -193,7 +193,7 @@ way the library resolves them itself.
 | `infect [PATH] [FLAGS]` | mutation testing (`coil mutate`): `--files GLOB`, `--operators`, `--min-score P`, `--json`, … |
 | `fmt [--check] [PATHS]` | `coil fmt` (default `src tests`) |
 | `debug [FILE] [FLAGS]` | `coil debug` on `[entry].file` (`--dap` for an IDE adapter) |
-| `dissect [FILE] [FLAGS]` | `coil dissect` of `[entry].file` (`--fn`, `--il`, `--ast`, …) |
+| `dissect [FILE] [FLAGS]` | `coil dissect` of `[entry].file` (`--fn`, `--hir`, `--ast`, …) |
 | `lsp` | `coil lsp` on stdio, started from the project root |
 | `coil [ARGS]` | plain `coil ARGS` from the project root (no flags added) |
 | `install [--locked] [--with-natives]` | fetch, resolve, prune and link dependencies |

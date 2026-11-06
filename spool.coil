@@ -53,7 +53,7 @@ Language tools (flags go to coil unchanged; see `spool <cmd> --help`):
     own text report); --json prints coil's raw NDJSON events
   fmt [--check] [PATHS...]          format sources (default: src tests)
   debug [FILE] [FLAGS...]           debugger REPL on [entry].file (--dap: IDE)
-  dissect [FILE] [FLAGS...]         dump bytecode / IL / AST of [entry].file
+  dissect [FILE] [FLAGS...]         dump MIR / HIR / AST of [entry].file
   lsp                               start the language server on stdio
   coil [ARGS...]                    run coil as-is from the project root
 
