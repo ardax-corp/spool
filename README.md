@@ -266,10 +266,12 @@ spool runs `coil` from the project root with:
 - `--root <checkout>/src` for each linked dependency, after the stdlib (see
   [Linking](#linking))
 - grants the manifest records: `[permissions]` (`read`, `write`, `net`,
-  `env`, `exec`, `exit`, `attach` set to `true` give `--allow-<name>`, and
+  `env`, `exec`, `exit` set to `true` give `--allow-<name>`, and
   `all = true` gives `--allow-all`), the older `[env]
-  allow_exit/allow_ffi_exec` and `[ffi] allow_attach`, `[ffi]
-  allow` (`--allow-dload`), and `[ffi] search_paths` (`--ffi-search-path`)
+  allow_exit/allow_ffi_exec`, `[ffi] allow` (`--allow-dload`), and `[ffi]
+  search_paths` (`--ffi-search-path`). `[permissions] attach` and `[ffi]
+  allow_attach` are accepted and ignored with a note: `Stream.attach` is gone,
+  and streams are `io::Read` / `io::Write` values
 - `--ffi-search-path` for each linked dependency's own `[ffi] search_paths`,
   after the project's (see [Dependency natives](#dependency-natives))
 - `dload` integrity, which coil no longer reads from `coil.toml` /

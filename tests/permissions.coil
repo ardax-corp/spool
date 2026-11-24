@@ -38,3 +38,13 @@ test("exec left out is denied") {
     )?;
     assert!((grant_flags(proj)?).join(" ").contains("--allow-exec") == false);
 }
+
+test("attach grants are ignored: Stream.attach is gone") {
+    let proj = project(
+        "perm_attach",
+        "[package]\nname = \"p\"\nversion = \"0.0.1\"\n\n[permissions]\nread = true\nattach = true\n\n[ffi]\nallow_attach = true\n",
+    )?;
+    let flags = (grant_flags(proj)?).join(" ");
+    assert!(flags.contains("--allow-read"));
+    assert!(flags.contains("--allow-attach") == false);
+}
