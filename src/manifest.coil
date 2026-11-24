@@ -637,6 +637,9 @@ fn manifest_section_keys(string section) -> string {
     if section == "comptime" {
         return ",read,write,env,net,cache,";
     }
+    if section == "build" {
+        return ",mode,";
+    }
     return "";
 }
 
@@ -787,8 +790,14 @@ fn trusted_deps_parse(string body) -> Result<Vec<string>, string> {
 
 // `[[ffi.native]]` rows as tab-separated records:
 //   name \t package \t version \t path \t url \t requires (`;`-joined) \t requires_hint \t sha256
+//   \t static \t link_args (`;`-joined) \t static_url \t static_sha256
 // `package` defaults to `name`. `url` and `sha256` (64 hex digits, stored
-// lowercase) are optional and only used by `spool download`.
+// lowercase) are optional and only used by `spool download`. `static` is a
+// `lib<name>.a` (`<name>.lib`) that native packages link instead of loading
+// the shared library at `path`; `link_args` go to the linker after it.
+// `static_url` (https, `{target}` = the host triple) is a prebuilt archive
+// with its required `static_sha256`; it takes precedence over `static`, which
+// a build script makes. A row needs `path`, a static archive or both.
 
 fn native_name(string r) -> string {
     return dep_field(r, 0);
@@ -822,6 +831,32 @@ fn native_sha256(string r) -> string {
     return dep_field(r, 7);
 }
 
+fn native_static(string r) -> string {
+    return dep_field(r, 8);
+}
+
+fn native_static_url(string r) -> string {
+    return dep_field(r, 10);
+}
+
+fn native_static_sha256(string r) -> string {
+    return dep_field(r, 11);
+}
+
+/// Whether native builds link this row (`static` or `static_url`).
+fn native_is_static(string r) -> bool {
+    return native_static(r).len() > 0 || native_static_url(r).len() > 0;
+}
+
+fn native_link_args(string r) -> Vec<string> {
+    let joined = dep_field(r, 9);
+    let out: Vec<string> = Vec::new();
+    if joined.len() == 0 {
+        return out;
+    }
+    return joined.split(";");
+}
+
 /// `s` lowercased when it is 64 hex digits, else an error naming row `name`.
 fn native_sha256_value(string name, string s) -> Result<string, string> {
     let low = s.to_lower();
@@ -840,6 +875,30 @@ fn native_sha256_value(string name, string s) -> Result<string, string> {
     return low;
 }
 
+/// An `[[ffi.native]]` string array `k`, `;`-joined (no item may hold `;`).
+fn native_string_list(TomlValue v, string k) -> Result<string, string> {
+    if v.is_array() == false {
+        raise format("[[ffi.native]] %s must be an array of strings", k);
+    }
+    let out = "";
+    let j = 0;
+    while j < v.array_len() {
+        let item = v.child(j);
+        j = j + 1;
+        if item.is_string() == false {
+            raise format("[[ffi.native]] %s must be an array of strings", k);
+        }
+        if item.s.contains(";") || item.s.contains("\t") {
+            raise format("[[ffi.native]] %s items cannot contain `;` or a tab", k);
+        }
+        if out.len() > 0 {
+            out = out + ";";
+        }
+        out = out + item.s;
+    }
+    return out;
+}
+
 fn ffi_native_row(TomlValue row, int idx) -> Result<string, string> {
     if row.is_table() == false {
         raise format("[[ffi.native]] #%i must be a table", idx);
@@ -852,6 +911,10 @@ fn ffi_native_row(TomlValue row, int idx) -> Result<string, string> {
     let sha = "";
     let requires = "";
     let hint = "";
+    let static_lib = "";
+    let link_args = "";
+    let static_url = "";
+    let static_sha = "";
     let i = 0;
     let n = row.table_len();
     while i < n {
@@ -859,21 +922,11 @@ fn ffi_native_row(TomlValue row, int idx) -> Result<string, string> {
         let v = row.child(i);
         i = i + 1;
         if k == "requires" {
-            if v.is_array() == false {
-                raise "[[ffi.native]] requires must be an array of strings";
-            }
-            let j = 0;
-            while j < v.array_len() {
-                let item = v.child(j);
-                j = j + 1;
-                if item.is_string() == false {
-                    raise "[[ffi.native]] requires must be an array of strings";
-                }
-                if requires.len() > 0 {
-                    requires = requires + ";";
-                }
-                requires = requires + item.s;
-            }
+            requires = native_string_list(v, k)?;
+            continue;
+        }
+        if k == "link_args" {
+            link_args = native_string_list(v, k)?;
             continue;
         }
         if v.is_string() == false {
@@ -910,6 +963,18 @@ fn ffi_native_row(TomlValue row, int idx) -> Result<string, string> {
             sha = v.s;
             continue;
         }
+        if k == "static" {
+            static_lib = v.s;
+            continue;
+        }
+        if k == "static_url" {
+            static_url = v.s;
+            continue;
+        }
+        if k == "static_sha256" {
+            static_sha = v.s;
+            continue;
+        }
         raise format("unknown key ffi.native.%s", k);
     }
     if name.len() == 0 {
@@ -918,8 +983,27 @@ fn ffi_native_row(TomlValue row, int idx) -> Result<string, string> {
     if version.len() == 0 {
         raise format("[[ffi.native]] %s missing required key version", name);
     }
-    if path.len() == 0 {
-        raise format("[[ffi.native]] %s missing required key path", name);
+    let is_static = static_lib.len() > 0 || static_url.len() > 0;
+    if path.len() == 0 && is_static == false {
+        raise format("[[ffi.native]] %s needs path (a shared library) or static / static_url (a .a archive)", name);
+    }
+    if link_args.len() > 0 && is_static == false {
+        raise format("[[ffi.native]] %s link_args needs static or static_url", name);
+    }
+    if static_url.len() > 0 {
+        if static_url.starts_with("https://") == false {
+            raise format("[[ffi.native]] %s static_url must be https://, got %s", name, static_url);
+        }
+        if static_sha.len() == 0 {
+            // coil pins no linked archive, so this hash is its only check.
+            raise format("[[ffi.native]] %s static_url needs static_sha256", name);
+        }
+    }
+    if static_sha.len() > 0 {
+        if static_url.len() == 0 {
+            raise format("[[ffi.native]] %s static_sha256 needs static_url", name);
+        }
+        static_sha = native_sha256_value(name, static_sha)?;
     }
     if package.len() == 0 {
         package = name;
@@ -928,7 +1012,8 @@ fn ffi_native_row(TomlValue row, int idx) -> Result<string, string> {
         sha = native_sha256_value(name, sha)?;
     }
     return name + "\t" + package + "\t" + version + "\t" + path + "\t" + url + "\t" + requires +
-           "\t" + hint + "\t" + sha;
+           "\t" + hint + "\t" + sha + "\t" + static_lib + "\t" + link_args + "\t" + static_url + "\t" +
+           static_sha;
 }
 
 /// `[[ffi.native]]` rows (see the record layout above). Unknown keys hard-error.
